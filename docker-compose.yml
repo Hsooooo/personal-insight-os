@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   postgres:
     image: ankane/pgvector:latest
@@ -73,12 +71,26 @@ services:
       dockerfile: Dockerfile
     container_name: pios-frontend
     ports:
-      - "3000:80"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot
     depends_on:
       - backend
     networks:
       - pios-network
     restart: unless-stopped
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: pios-certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - pios-network
 
 volumes:
   postgres_data:
