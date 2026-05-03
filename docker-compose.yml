@@ -68,9 +68,24 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: pios-frontend
+    depends_on:
+      - backend
+    networks:
+      - pios-network
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: pios-caddy
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
+      - frontend
       - backend
     networks:
       - pios-network
@@ -80,6 +95,8 @@ volumes:
   postgres_data:
   neo4j_data:
   neo4j_logs:
+  caddy_data:
+  caddy_config:
 
 networks:
   pios-network:
