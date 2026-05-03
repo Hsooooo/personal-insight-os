@@ -54,8 +54,6 @@ services:
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: pios1234
       JWT_SECRET: pios-jwt-secret-key-2026-change-in-production
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-    ports:
-      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,25 +70,11 @@ services:
     container_name: pios-frontend
     ports:
       - "80:80"
-      - "443:443"
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt:ro
-      - ./certbot/www:/var/www/certbot
     depends_on:
       - backend
     networks:
       - pios-network
     restart: unless-stopped
-
-  certbot:
-    image: certbot/certbot:latest
-    container_name: pios-certbot
-    volumes:
-      - ./certbot/conf:/etc/letsencrypt
-      - ./certbot/www:/var/www/certbot
-    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
-    networks:
-      - pios-network
 
 volumes:
   postgres_data:
