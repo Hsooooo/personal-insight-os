@@ -77,10 +77,11 @@ public class ActivityService {
                         Map<String, Object> setMap = new HashMap<>();
                         setMap.put("reps", s.getReps());
                         setMap.put("weightKg", s.getWeightKg());
+                        setMap.put("durationSeconds", s.getDurationSeconds());
                         setMaps.add(setMap);
 
                         totalSets++;
-                        totalReps += s.getReps() != null ? s.getReps() : 0;
+                        if (s.getReps() != null) { totalReps += s.getReps(); }
                         if (s.getWeightKg() != null && s.getReps() != null) {
                             totalVolume = totalVolume.add(s.getWeightKg().multiply(BigDecimal.valueOf(s.getReps())));
                         }
@@ -148,10 +149,11 @@ public class ActivityService {
                         Map<String, Object> setMap = new HashMap<>();
                         setMap.put("reps", s.getReps());
                         setMap.put("weightKg", s.getWeightKg());
+                        setMap.put("durationSeconds", s.getDurationSeconds());
                         setMaps.add(setMap);
 
                         totalSets++;
-                        totalReps += s.getReps() != null ? s.getReps() : 0;
+                        if (s.getReps() != null) { totalReps += s.getReps(); }
                         if (s.getWeightKg() != null && s.getReps() != null) {
                             totalVolume = totalVolume.add(s.getWeightKg().multiply(BigDecimal.valueOf(s.getReps())));
                         }

@@ -8,6 +8,7 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.Session;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.*;
 
 @Service
@@ -16,9 +17,11 @@ public class GraphService {
 
     private final Driver neo4jDriver;
 
-    public GraphDataDto getGraph(Long userId) {
+    public GraphDataDto getGraph(Long userId, int days) {
         List<GraphNodeDto> nodes = new ArrayList<>();
         List<GraphRelationshipDto> relationships = new ArrayList<>();
+
+        String cutoffDate = LocalDate.now().minusDays(days).toString() + "T00:00:00";
 
         try (Session session = neo4jDriver.session()) {
             // Person node
@@ -32,8 +35,9 @@ public class GraphService {
 
             // Activity nodes
             var activityResult = session.run(
-                "MATCH (p:Person {userId: $userId})-[:PERFORMED]->(a:Activity) RETURN a LIMIT 20",
-                Map.of("userId", userId)
+                "MATCH (p:Person {userId: $userId})-[:PERFORMED]->(a:Activity) " +
+                "WHERE a.date >= $cutoffDate RETURN a",
+                Map.of("userId", userId, "cutoffDate", cutoffDate)
             );
             while (activityResult.hasNext()) {
                 var record = activityResult.next();
@@ -55,7 +59,8 @@ public class GraphService {
 
             // Race nodes (via Activity-TAGGED_AS-Race)
             var raceResult = session.run(
-                "MATCH (p:Person {userId: $userId})-[:PERFORMED]->(:Activity)-[:TAGGED_AS]->(r:Race) RETURN DISTINCT r LIMIT 20",
+                "MATCH (p:Person {userId: $userId})-[:PERFORMED]->(:Activity)-[:TAGGED_AS]->(r:Race) " +
+                "RETURN DISTINCT r",
                 Map.of("userId", userId)
             );
             Map<String, String> raceIdMap = new HashMap<>();
@@ -74,7 +79,8 @@ public class GraphService {
 
             // TAGGED_AS relationships (Activity -> Race)
             var taggedResult = session.run(
-                "MATCH (p:Person {userId: $userId})-[:PERFORMED]->(a:Activity)-[:TAGGED_AS]->(r:Race) RETURN id(a) as actId, id(r) as raceId",
+                "MATCH (p:Person {userId: $userId})-[:PERFORMED]->(a:Activity)-[:TAGGED_AS]->(r:Race) " +
+                "RETURN id(a) as actId, id(r) as raceId",
                 Map.of("userId", userId)
             );
             while (taggedResult.hasNext()) {
@@ -91,8 +97,9 @@ public class GraphService {
 
             // Sleep nodes
             var sleepResult = session.run(
-                "MATCH (p:Person {userId: $userId})-[:HAS_SLEEP]->(s:Sleep) RETURN s LIMIT 14",
-                Map.of("userId", userId)
+                "MATCH (p:Person {userId: $userId})-[:HAS_SLEEP]->(s:Sleep) " +
+                "WHERE s.date >= $cutoffDate RETURN s",
+                Map.of("userId", userId, "cutoffDate", cutoffDate)
             );
             while (sleepResult.hasNext()) {
                 var record = sleepResult.next();
@@ -113,8 +120,9 @@ public class GraphService {
 
             // HealthMetric nodes
             var metricResult = session.run(
-                "MATCH (p:Person {userId: $userId})-[:HAS_METRIC]->(m:HealthMetric) RETURN m LIMIT 14",
-                Map.of("userId", userId)
+                "MATCH (p:Person {userId: $userId})-[:HAS_METRIC]->(m:HealthMetric) " +
+                "WHERE m.date >= $cutoffDate RETURN m",
+                Map.of("userId", userId, "cutoffDate", cutoffDate)
             );
             while (metricResult.hasNext()) {
                 var record = metricResult.next();

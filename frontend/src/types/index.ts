@@ -49,8 +49,9 @@ export interface ExerciseDetail {
 }
 
 export interface SetDetail {
-  reps: number;
-  weightKg: number;
+  reps?: number;
+  weightKg?: number;
+  durationSeconds?: number;
 }
 
 export interface WeightTrainingRequest {
@@ -63,8 +64,9 @@ export interface WeightTrainingRequest {
   exercises?: {
     name: string;
     sets: {
-      reps: number;
-      weightKg: number;
+      reps?: number;
+      weightKg?: number;
+  durationSeconds?: number;
     }[];
   }[];
 }

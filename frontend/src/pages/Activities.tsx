@@ -199,7 +199,7 @@ function FilterSelect({
 
 interface ExerciseForm {
   name: string;
-  sets: { reps: string; weightKg: string }[];
+  sets: { reps: string; weightKg: string; durationSeconds: string }[];
 }
 
 function WeightTrainingForm({
@@ -226,12 +226,12 @@ function WeightTrainingForm({
   const [exercises, setExercises] = useState<ExerciseForm[]>(
     detail?.exercises?.map((e) => ({
       name: e.name,
-      sets: e.sets.map((s) => ({ reps: String(s.reps), weightKg: String(s.weightKg) })),
-    })) || [{ name: '', sets: [{ reps: '', weightKg: '' }] }]
+      sets: e.sets.map((s) => ({ reps: String(s.reps || ''), weightKg: String(s.weightKg || ''), durationSeconds: String(s.durationSeconds || '') })),
+    })) || [{ name: '', sets: [{ reps: '', weightKg: '', durationSeconds: '' }] }]
   );
 
   const addExercise = () => {
-    setExercises([...exercises, { name: '', sets: [{ reps: '', weightKg: '' }] }]);
+    setExercises([...exercises, { name: '', sets: [{ reps: '', weightKg: '', durationSeconds: '' }] }]);
   };
 
   const removeExercise = (idx: number) => {
@@ -240,7 +240,7 @@ function WeightTrainingForm({
 
   const addSet = (exIdx: number) => {
     const next = [...exercises];
-    next[exIdx].sets.push({ reps: '', weightKg: '' });
+    next[exIdx].sets.push({ reps: '', weightKg: '', durationSeconds: '' });
     setExercises(next);
   };
 
@@ -256,7 +256,7 @@ function WeightTrainingForm({
     setExercises(next);
   };
 
-  const updateSet = (exIdx: number, setIdx: number, field: 'reps' | 'weightKg', value: string) => {
+  const updateSet = (exIdx: number, setIdx: number, field: 'reps' | 'weightKg' | 'durationSeconds', value: string) => {
     const next = [...exercises];
     next[exIdx].sets[setIdx][field] = value;
     setExercises(next);
@@ -292,7 +292,7 @@ function WeightTrainingForm({
     const durationSeconds = durationMin ? parseInt(durationMin) * 60 : 0;
     const payload: WeightTrainingRequest = {
       activityName: name || 'Weight Training',
-      startTime: startTime ? new Date(startTime).toISOString() : new Date().toISOString(),
+      startTime: startTime ? startTime + ":00" : new Date().toISOString(),
       durationSeconds,
       averageHeartRate: avgHr ? parseInt(avgHr) : undefined,
       calories: calories ? parseInt(calories) : undefined,
@@ -302,8 +302,12 @@ function WeightTrainingForm({
         .map((ex) => ({
           name: ex.name.trim(),
           sets: ex.sets
-            .filter((s) => s.reps && s.weightKg)
-            .map((s) => ({ reps: parseInt(s.reps), weightKg: parseFloat(s.weightKg) })),
+            .filter((s) => s.reps || s.durationSeconds)
+            .map((s) => ({
+              reps: s.reps ? parseInt(s.reps) : undefined,
+              weightKg: s.weightKg ? parseFloat(s.weightKg) : undefined,
+              durationSeconds: s.durationSeconds ? parseInt(s.durationSeconds) : undefined,
+            })),
         })),
     };
 
@@ -469,6 +473,14 @@ function WeightTrainingForm({
                         className="h-7 w-20 text-xs"
                       />
                       <span className="text-xs text-muted-foreground">kg</span>
+                      <Input
+                        type="number"
+                        value={set.durationSeconds}
+                        onChange={(e) => updateSet(exIdx, setIdx, 'durationSeconds', e.target.value)}
+                        placeholder="초"
+                        className="h-7 w-20 text-xs"
+                      />
+                      <span className="text-xs text-muted-foreground">초</span>
                       {ex.sets.length > 1 && (
                         <Button
                           type="button"

@@ -28,5 +28,6 @@ public class WeightTrainingRequest {
     public static class SetRequest {
         private Integer reps;
         private BigDecimal weightKg;
+        private Integer durationSeconds;
     }
 }
