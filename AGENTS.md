@@ -18,7 +18,7 @@
 - Garmin 데이터 연동 및 동기화 (Mock 데이터 생성)
 - 대시보드 (요약 카드, 7일 트렌드 차트, 최근 인사이트)
 - 활동/건강/수면 데이터 조회
-- 개인 지식 그래프 시각화 (React Flow)
+- 개인 지식 그래프 시각화 (Cytoscape)
 - 자연어 질의 (Ask My Data) + RAG 응답
 - 인사이트 저장 및 피드백
 - 목표 설정 및 관리
@@ -44,7 +44,7 @@
 - **Tailwind CSS 3.4** — 유틸리티 기반 스타일링
 - **shadcn/ui** (custom) — Radix UI 기반 컴포넌트 (button, card, input, badge, avatar, skeleton, separator, table, label, tabs, dialog, dropdown-menu, select, toast, tooltip 등)
 - **Recharts** — 차트 시각화
-- **React Flow (@xyflow/react)** — 인터랙티브 그래프 시각화
+- **Cytoscape.js + cytoscape-fcose** — 인터랙티브 그래프 시각화
 - **TanStack Query (@tanstack/react-query)** — 서버 상태 관리 및 캐싱
 - **Zustand** — 클라이언트 상태 관리 (Auth Store)
 - **React Router v6** — 라우팅
@@ -52,10 +52,10 @@
 
 ### Infrastructure
 - **PostgreSQL 16** + **pgvector** — 원천 데이터 및 벡터 저장
-- **Neo4j 5 Community** + APOC 플러그인 — 그래프 데이터베이스
-- **Docker Compose** — 4서비스 오케스트레이션
+- **Neo4j** (외부/클로드 인스턴스) — 그래프 데이터베이스
+- **Docker Compose** — 3서비스 오케스트레이션 (postgres, backend, frontend + caddy)
 - **Python 3 + garminconnect** — Garmin Connect 데이터 수집 (Docker에 포함)
-- **nginx:alpine** — 프론트엔드 정적 파일 서빙 + API 프록시
+- **Caddy** — 리버스 프록시 + 자동 HTTPS
 
 ---
 
@@ -63,8 +63,8 @@
 
 ```
 personal-insight-os/
-├── docker-compose.yml          # postgres, neo4j, backend, frontend
-├── .env.example                # OPENAI_API_KEY, JWT_SECRET
+├── docker-compose.yml          # postgres, backend, frontend, caddy
+├── .env.example                # OPENAI_API_KEY, JWT_SECRET, NEO4J_*
 ├── backend/                    # Spring Boot 3.3 + Java 21
 │   ├── pom.xml
 │   ├── Dockerfile              # Maven 멀티스테이지 빌드
@@ -120,7 +120,6 @@ docker-compose up --build
 ```
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
-- Neo4j Browser: http://localhost:7474 (neo4j / pios1234)
 - PostgreSQL: localhost:5432 (pios / pios123)
 
 ### Backend 단독 실행
@@ -211,7 +210,8 @@ mvn clean package -DskipTests
 | 활동 | `GET /api/activities` (이름/유형/거리/시간/심박/칼로리) |
 | 활동 | `GET /api/activities`, `GET /api/activities/{id}` |
 | 건강 | `GET /api/health/metrics`, `GET /api/health/sleep` |
-| 그래프 | `GET /api/graph` |
+| 그래프 | `GET /api/graph?days=&view=&raceCategory=` |
+| 관리자 | `POST /api/admin/backfill` | 그래프 투영 재실행 |
 | 질의 | `POST /api/ask` |
 | 인사이트 | `GET /api/insights`, `POST /api/insights/{id}/save`, `POST /api/insights/{id}/feedback`, `DELETE /api/insights/{id}` |
 | 목표 | `GET /api/goals`, `POST /api/goals`, `PATCH /api/goals/{id}`, `DELETE /api/goals/{id}` |
@@ -288,9 +288,9 @@ mvn clean package -DskipTests
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://localhost:5432/pios` | PostgreSQL 접속 URL |
 | `SPRING_DATASOURCE_USERNAME` | `pios` | PostgreSQL 사용자 |
 | `SPRING_DATASOURCE_PASSWORD` | `pios123` | PostgreSQL 비밀번호 |
-| `SPRING_NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt URI |
-| `SPRING_NEO4J_AUTHENTICATION_USERNAME` | `neo4j` | Neo4j 사용자 |
-| `SPRING_NEO4J_AUTHENTICATION_PASSWORD` | `pios1234` | Neo4j 비밀번호 |
+| `NEO4J_URI` | (없음) | Neo4j 접속 URI (예: `neo4j+s://xxxxx.databases.neo4j.io`) |
+| `NEO4J_USERNAME` | (없음) | Neo4j 사용자명 |
+| `NEO4J_PASSWORD` | (없음) | Neo4j 비밀번호 |
 | `JWT_SECRET` | `pios-jwt-secret-key-2026-change-in-production` | JWT 서명 키 |
 | `OPENAI_API_KEY` | (빈 문자열) | OpenAI API Key (선택) |
 

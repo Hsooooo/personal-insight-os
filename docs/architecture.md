@@ -57,7 +57,7 @@ flowchart TB
     subgraph 데이터["💾 데이터 계층"]
         direction TB
         PG[(PostgreSQL 16<br/>12개 테이블<br/>pgvector 확장)]
-        NEO[(Neo4j 5<br/>노드/관계 그래프)]
+        NEO[(Neo4j<br/>외부/클로드 인스턴스)]
     end
 
     subgraph 외부["🌐 외부 서비스"]
@@ -187,7 +187,7 @@ flowchart LR
             FE["🖥️ frontend<br/>nginx:alpine<br/>port 3000"]
             BE["⚙️ backend<br/>eclipse-temurin:21-jre<br/>port 8080"]
             PG["🐘 postgres<br/>ankane/pgvector<br/>port 5432"]
-            NEO["🕸️ neo4j<br/>neo4j:5-community<br/>port 7474/7687"]
+            NEO["🕸️ Neo4j<br/>외부 인스턴스<br/>neo4j+s://"]
         end
     end
 
@@ -207,4 +207,4 @@ flowchart LR
 | frontend | nginx:alpine | 3000 | React 빌드 결과물 정적 서빙 |
 | backend | eclipse-temurin:21-jre | 8080 | Spring Boot 애플리케이션 |
 | postgres | ankane/pgvector | 5432 | 원천 데이터 + 벡터 저장 |
-| neo4j | neo4j:5-community | 7474/7687 | 그래프 노드/관계 저장 |
+| caddy | caddy:2-alpine | 80/443 | 리버스 프록시 + 자동 HTTPS |

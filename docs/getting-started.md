@@ -32,18 +32,14 @@ docker-compose up --build
 flowchart LR
     사용자["👤 사용자"] -->|http://localhost:3000| FE["🖥️ Frontend<br/>React 19"]
     사용자 -->|http://localhost:8080| BE["⚙️ Backend API<br/>Spring Boot"]
-    사용자 -->|http://localhost:7474| NEO["🕸️ Neo4j Browser<br/>neo4j / pios1234"]
-
     style FE fill:#6366f1,color:#fff
     style BE fill:#10b981,color:#fff
-    style NEO fill:#06b6d4,color:#fff
 ```
 
 | 서비스 | URL | 기본 계정 |
 |--------|-----|----------|
 | 웹 앱 | http://localhost:3000 | 회원가입 후 사용 |
 | Backend API | http://localhost:8080 | JWT Bearer 필요 |
-| Neo4j Browser | http://localhost:7474 | neo4j / pios1234 |
 | PostgreSQL | localhost:5432 | pios / pios123 |
 
 ---
@@ -125,11 +121,6 @@ services:
     ports: 5432:5432
     volumes: postgres_data
 
-  neo4j:             # 그래프 관계 저장
-    image: neo4j:5-community
-    ports: 7474:7474, 7687:7687
-    volumes: neo4j_data, neo4j_logs
-
   backend:           # Spring Boot API
     build: ./backend
     ports: 8080:8080
@@ -161,6 +152,11 @@ services:
 # .env 파일 예시
 OPENAI_API_KEY=sk-your-openai-key-here
 JWT_SECRET=your-secret-key-change-in-production
+
+# Neo4j Cloud (또는 외부 인스턴스)
+NEO4J_URI=neo4j+s://xxxxx.databases.neo4j.io
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=your-neo4j-password
 ```
 
 | 변수 | 기본값 | 설명 |
@@ -168,4 +164,6 @@ JWT_SECRET=your-secret-key-change-in-production
 | `OPENAI_API_KEY` | (없음) | OpenAI API 호출용 (선택) |
 | `JWT_SECRET` | `pios-jwt-secret-key...` | JWT 서명 키 |
 | `SPRING_DATASOURCE_URL` | `jdbc:postgresql://postgres:5432/pios` | PostgreSQL 연결 |
-| `SPRING_NEO4J_URI` | `bolt://neo4j:7687` | Neo4j 연결 |
+| `NEO4J_URI` | (없음) | Neo4j 접속 URI |
+| `NEO4J_USERNAME` | (없음) | Neo4j 사용자명 |
+| `NEO4J_PASSWORD` | (없음) | Neo4j 비밀번호 |

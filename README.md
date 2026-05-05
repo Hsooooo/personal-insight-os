@@ -46,12 +46,10 @@ docker-compose up --build
 # 4. Open browser
 # Frontend: http://localhost:3000
 # Backend API: http://localhost:8080
-# Neo4j Browser: http://localhost:7474 (neo4j / pios1234)
 ```
 
 ### Default Accounts
 - PostgreSQL: `pios` / `pios123`
-- Neo4j: `neo4j` / `pios1234`
 
 ## MVP Features
 
@@ -62,7 +60,7 @@ docker-compose up --build
 - [x] 도메인 모델 변환
 - [x] Neo4j 노드/엣지 생성
 - [x] 기본 대시보드 (차트, 요약)
-- [x] 개인 그래프 조회 (React Flow)
+- [x] 개인 그래프 조회 (Cytoscape) — 날짜/뷰/레이스 필터 지원
 - [x] LLM Provider API Key 등록
 - [x] Ask My Data 자연어 질의
 - [x] 근거 기반 RAG 응답
@@ -85,15 +83,15 @@ docker-compose up --build
 - Tailwind CSS
 - shadcn/ui (custom)
 - Recharts (charts)
-- React Flow (graph visualization)
+- Cytoscape.js + cytoscape-fcose (graph visualization)
 - TanStack Query
 - Zustand
 - Pretendard (font)
 
 ### Infrastructure
 - PostgreSQL 16 + pgvector
-- Neo4j 5 Community
-- Docker Compose
+- Neo4j (외부/클로드 인스턴스)
+- Docker Compose + Caddy
 
 ## Project Structure
 
@@ -138,7 +136,7 @@ docker-compose up --build
 2. **Data Sources** — Garmin 연결/동기화
 3. **Activities** — 운등 목록 및 필터
 4. **Health Timeline** — 수면, 심박, 스트레스, 걸음수 차트
-5. **Personal Graph** — Neo4j 그래프 시각화 (React Flow)
+5. **Personal Graph** — Neo4j 그래프 시각화 (Cytoscape) — 날짜/활동/컨디션/레이스 필터
 6. **Ask My Data** — 자연어 질의 + 근거 기반 답변
 7. **Insights** — 인사이트 목록, 저장, 피드백
 8. **Goals** — 목표 설정 및 관리

@@ -205,8 +205,8 @@ POST /api/activities/weight
     {
       "name": "Bench Press",
       "sets": [
-        { "reps": 10, "weightKg": 60 },
-        { "reps": 8, "weightKg": 70 }
+        { "reps": 10, "weightKg": 60, "durationSeconds": 45 },
+        { "reps": 8, "weightKg": 70, "durationSeconds": 60 }
       ]
     }
   ]
@@ -260,7 +260,8 @@ PATCH /api/activities/123/tag
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| GET | `/api/graph` | 개인 지식 그래프 데이터 |
+| GET | `/api/graph?days=&view=&raceCategory=` | 개인 지식 그래프 데이터 |
+| POST | `/api/admin/backfill` | 그래프 투영 재실록 (관리자용) |
 
 **응답**
 ```json

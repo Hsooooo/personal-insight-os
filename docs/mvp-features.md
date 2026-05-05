@@ -229,17 +229,17 @@ const { data } = useQuery({
 | 항목 | 내용 |
 |------|------|
 | **구현 위치** | `GraphController`, `GraphService`, `Graph.tsx` |
-| **라이브러리** | `@xyflow/react` (React Flow) |
-| **구성** | 캔버스 + MiniMap + Controls + 필터 패널 + 노드 상세 패널 |
+| **라이브러리** | `cytoscape` + `cytoscape-fcose` |
+| **구성** | Cytoscape 캔버스 + 필터 패널(노드/관계 타입 토글) + 상단 필터 바 |
+| **필터** | 날짜(7/14/30/전체), 뷰(활동/컨디션/통합), 레이스 카테고리(5K/10K/하프/풀/커스텀) |
 | **노드 색상** | Person(Indigo), Activity(Emerald), Sleep(Purple), HealthMetric(Rose) |
 
 ```tsx
 // Graph.tsx
-<ReactFlow nodes={nodes} edges={edges} onNodeClick={onNodeClick} fitView>
-    <Background />
-    <Controls />
-    <MiniMap />
-</ReactFlow>
+const { data } = useQuery({
+    queryKey: ['graph', days, view, raceCategory],
+    queryFn: () => api.graph.get(days, view, raceCategory),
+});
 ```
 
 ---
