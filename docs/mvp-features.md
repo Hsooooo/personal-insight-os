@@ -200,7 +200,7 @@ session.run("""
 | **백엔드** | JPA Specification 동적 쿼리 (`ActivitySpecification.withFilter()`) |
 | **프론트엔드** | native `<select>` + shadcn `Input` 필터바, `Button` 이전/다음 페이징 |
 | **태그 관리** | 인라인 드롭다운으로 5K/10K/하프/풀 프리셋 태그 또는 직접 입력 |
-| **수동 입력** | 웨이트 트레이닝 전용 수동 등록/수정/삭제. 거리 없음. 세트/반복/무게 JSONB 저장 |
+| **수동 입력** | 웨이트 트레이닝 전용 수동 등록/수정/삭제. 거리 없음. 세트/반복/무게/시간 JSONB 저장. 기존 종목명 선택 또는 신규 입력 |
 | **거리 필터 호환** | 거리 범위 필터 적용 시 `distance_meters IS NOT NULL` 조건으로 웨이트 자동 제외 |
 
 ---
@@ -230,7 +230,9 @@ const { data } = useQuery({
 |------|------|
 | **구현 위치** | `GraphController`, `GraphService`, `Graph.tsx` |
 | **라이브러리** | `cytoscape` + `cytoscape-fcose` |
+| **필터** | 날짜(7/14/30/전체), 뷰(활동/컨디션/통합), 레이스 카테고리 |
 | **구성** | Cytoscape 캔버스 + 필터 패널(노드/관계 타입 토글) + 상단 필터 바 |
+| **필터** | 날짜(7/14/30/전체), 뷰(활동/컨디션/통합), 레이스 카테고리 |
 | **필터** | 날짜(7/14/30/전체), 뷰(활동/컨디션/통합), 레이스 카테고리(5K/10K/하프/풀/커스텀) |
 | **노드 색상** | Person(Indigo), Activity(Emerald), Sleep(Purple), HealthMetric(Rose) |
 
@@ -298,7 +300,18 @@ private String callLlm(String question, List<?> health, List<?> sleep, List<?> a
 
 ---
 
-## ✅ 13. 인사이트 저장
+## ✅ 13. AI 운등 요약 (Ask My Data 확장)
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `AskService` |
+| **키워드** | "이번주 운등", "운등 정리", "훈련 일지", "weekly summary" |
+| **동작** | 최근 7일 활동 수집 → Garmin 랩 테이블 + 웨이트 세트 테이블 포맷팅 → LLM 프롬프트 주입 |
+| **출력** | 날짜별 활동 요약(랩/세트 표) + 주간 총평 |
+
+---
+
+## ✅ 14. 인사이트 저장
 
 | 항목 | 내용 |
 |------|------|

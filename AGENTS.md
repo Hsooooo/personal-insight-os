@@ -18,7 +18,7 @@
 - Garmin 데이터 연동 및 동기화 (Mock 데이터 생성)
 - 대시보드 (요약 카드, 7일 트렌드 차트, 최근 인사이트)
 - 활동/건강/수면 데이터 조회
-- 개인 지식 그래프 시각화 (Cytoscape)
+- 개인 지식 그래프 시각화 (Cytoscape) — 날짜/뷰/레이스 필터
 - 자연어 질의 (Ask My Data) + RAG 응답
 - 인사이트 저장 및 피드백
 - 목표 설정 및 관리
@@ -54,6 +54,7 @@
 - **PostgreSQL 16** + **pgvector** — 원천 데이터 및 벡터 저장
 - **Neo4j** (외부/클로드 인스턴스) — 그래프 데이터베이스
 - **Docker Compose** — 3서비스 오케스트레이션 (postgres, backend, frontend + caddy)
+- **exercises 테이블** — 사용자 정의 웨이트 트레이닝 종목 관리
 - **Python 3 + garminconnect** — Garmin Connect 데이터 수집 (Docker에 포함)
 - **Caddy** — 리버스 프록시 + 자동 HTTPS
 
@@ -65,6 +66,8 @@
 personal-insight-os/
 ├── docker-compose.yml          # postgres, backend, frontend, caddy
 ├── .env.example                # OPENAI_API_KEY, JWT_SECRET, NEO4J_*
+├── docs/                       # 기획/설계 문서 (architecture, api-spec, etc.)
+├── CHANGELOG.md                # 변경 이력
 ├── backend/                    # Spring Boot 3.3 + Java 21
 │   ├── pom.xml
 │   ├── Dockerfile              # Maven 멀티스테이지 빌드
@@ -209,6 +212,7 @@ mvn clean package -DskipTests
 | 데이터 소스 | `GET /api/data-sources`, `POST /api/data-sources/garmin/connect`, `POST /api/data-sources/garmin/sync`, `GET /api/data-sources/garmin/sync-logs`, `POST /api/data-sources/garmin/mock`, `DELETE /api/data-sources/garmin` |
 | 활동 | `GET /api/activities` (이름/유형/거리/시간/심박/칼로리) |
 | 활동 | `GET /api/activities`, `GET /api/activities/{id}` |
+| 활동 | `GET /api/activities/exercises` | 웨이트 트레이닝 종목 목록 |
 | 건강 | `GET /api/health/metrics`, `GET /api/health/sleep` |
 | 그래프 | `GET /api/graph?days=&view=&raceCategory=` |
 | 관리자 | `POST /api/admin/backfill` | 그래프 투영 재실행 |

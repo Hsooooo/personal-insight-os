@@ -20,6 +20,15 @@
   - 프론트엔드: `Activities.tsx` 세트 입력 UI, `types/index.ts`
 - Admin 백필 엔드포인트 (`POST /api/admin/backfill`)
   - `AdminController` + `GraphProjectorService` 연동
+- **웨이트 트레이닝 종목명 선택 (Exercise 테이블)**
+  - `V8__add_exercises_table.sql` — `exercises` 테이블 생성 + 기존 데이터 마이그레이션
+  - `GET /api/activities/exercises` — 사용자별 종목명 목록
+  - `Activities.tsx` — 기존 종목 `<select>` 또는 새 종목 직접 입력
+- **AI 운등 요약 (WORKOUT_SUMMARY)**
+  - `AskService` — "이번주 운등", "훈련 일지" 등 키워드 감지
+  - `GarminActivityLapRepository` — 랩 데이터 조회
+  - Garmin 활동은 랩 단위, 웨이트는 종목/세트 단위로 표 형태 포맷팅
+  - LLM 프롬프트: 주간 운등 요약 + 총평
 
 ### Changed
 - Neo4j 인프라: 로컬 Docker 컨테이너 → 외부/클로드 인스턴스
@@ -34,5 +43,5 @@
 
 ### Docs
 - `README.md`, `AGENTS.md`, `docs/getting-started.md`, `docs/architecture.md`,
-  `docs/api-specification.md`, `docs/mvp-features.md` 최신화
+  `docs/api-specification.md`, `docs/mvp-features.md`, `docs/database-schema.md` 최신화
 - `CHANGELOG.md` 신규 생성

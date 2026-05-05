@@ -61,6 +61,8 @@ docker-compose up --build
 - [x] Neo4j 노드/엣지 생성
 - [x] 기본 대시보드 (차트, 요약)
 - [x] 개인 그래프 조회 (Cytoscape) — 날짜/뷰/레이스 필터 지원
+- [x] 웨이트 트레이닝 종목명 선택 (기존 목록 + 신규 입력)
+- [x] AI 운등 요약 (이번주 운등 정리)
 - [x] LLM Provider API Key 등록
 - [x] Ask My Data 자연어 질의
 - [x] 근거 기반 RAG 응답

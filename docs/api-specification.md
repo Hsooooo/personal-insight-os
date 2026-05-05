@@ -254,6 +254,13 @@ PATCH /api/activities/123/tag
 }
 ```
 
+**특수 질문 — 운등 요약**
+
+키워드: "이번주 운등", "운등 정리", "훈련 일지", "weekly summary" 등
+
+- Garmin 활동은 랩(lap) 단위로, 수동 웨이트 트레이닝은 종목/세트 단위로 표 형태로 정리
+- 마지막에 전체 주간 요약(총 활동 횟수, 총 거리, 총 볼륨 등) 추가
+
 ---
 
 ### 🕸️ Graph API
@@ -261,6 +268,12 @@ PATCH /api/activities/123/tag
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
 | GET | `/api/graph?days=&view=&raceCategory=` | 개인 지식 그래프 데이터 |
+
+### 🛠️ Admin API
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| POST | `/api/admin/backfill` | 그래프 투영 재실행 |
 | POST | `/api/admin/backfill` | 그래프 투영 재실록 (관리자용) |
 
 **응답**

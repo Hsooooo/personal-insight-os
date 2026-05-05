@@ -12,6 +12,7 @@ erDiagram
     USERS ||--o{ LLM_PROVIDERS : configures
     USERS ||--o{ QUESTIONS : asks
     USERS ||--o{ INSIGHTS : receives
+    USERS ||--o{ EXERCISES : defines
     USERS ||--o{ GRAPH_NODE_MAPPINGS : owns
 
     ACTIVITIES ||--o{ GARMIN_ACTIVITY_LAPS : contains
@@ -56,6 +57,15 @@ erDiagram
         varchar user_tag
         jsonb raw_payload
         jsonb weight_training_detail
+    }
+
+    EXERCISES {
+        bigint id PK
+        bigint user_id FK
+        varchar name UK
+        varchar body_part
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     GARMIN_ACTIVITY_LAPS {
@@ -179,6 +189,7 @@ erDiagram
 | 11 | `insight_evidences` | 인사이트 근거 데이터 | 3~10 / 인사이트 |
 | 12 | `graph_node_mappings` | PostgreSQL-Neo4j 매핑 | 1000~5000 / 사용자 |
 | 13 | `sync_logs` | 동기화 이력 (상태, 기간, 레코드 수, 에러) | 100~500 / 사용자 |
+| 14 | `exercises` | 사용자 정의 웨이트 트레이닝 종목 | 20~100 / 사용자 |
 
 ---
 
