@@ -7,7 +7,13 @@ import com.pios.domain.Question;
 import com.pios.domain.User;
 import com.pios.dto.AskRequest;
 import com.pios.dto.AskResponse;
-import com.pios.repository.*;
+import com.pios.repository.ActivityRepository;
+import com.pios.repository.GarminActivityLapRepository;
+import com.pios.repository.GarminDailyHealthMetricRepository;
+import com.pios.repository.GarminSleepSessionRepository;
+import com.pios.repository.InsightEvidenceRepository;
+import com.pios.repository.InsightRepository;
+import com.pios.repository.QuestionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -32,6 +38,7 @@ public class AskService {
     private final GarminDailyHealthMetricRepository healthRepo;
     private final GarminSleepSessionRepository sleepRepo;
     private final ActivityRepository activityRepo;
+    private final GarminActivityLapRepository lapRepo;
     private final RestTemplate restTemplate;
 
     @Value("${openai.api-key:}")
@@ -51,6 +58,8 @@ public class AskService {
                 .build();
         question = questionRepo.save(question);
 
+        boolean isWorkoutSummary = isWorkoutSummaryQuestion(request.getQuestion());
+
         // 2. 데이터 수집
         LocalDate today = LocalDate.now();
         var recentHealth = healthRepo.findByUserIdAndMetricDateBetweenOrderByMetricDateDesc(
@@ -59,6 +68,10 @@ public class AskService {
                 userId, today.minusDays(7), today);
         var recentActivities = activityRepo.findRecentByUserId(userId,
                 today.minusDays(7).atStartOfDay());
+
+        if (isWorkoutSummary) {
+            return handleWorkoutSummary(userId, question, request, recentActivities);
+        }
 
         // 3. 태그 기반 retrieval
         List<Activity> taggedActivities = retrieveByTag(userId, request.getQuestion());
@@ -243,6 +256,174 @@ public class AskService {
             // OpenAI 실패 시 폴백
         }
         return generateFallbackResponse(question, health, sleep, recentActivities, taggedActivities);
+    }
+
+    private boolean isWorkoutSummaryQuestion(String question) {
+        String lowered = question.toLowerCase();
+        return lowered.contains("이번주 운등") || lowered.contains("이번 주 운등")
+                || lowered.contains("운등 정리") || lowered.contains("훈련 일지")
+                || lowered.contains("weekly summary") || lowered.contains("workout summary")
+                || lowered.contains("수행한 운등") || lowered.contains("이번주 훈련")
+                || lowered.contains("이번 주 훈련") || lowered.contains("training log");
+    }
+
+    private AskResponse handleWorkoutSummary(Long userId, Question question, AskRequest request,
+                                              List<Activity> recentActivities) {
+        LocalDate today = LocalDate.now();
+        LocalDate since = today.minusDays(7);
+
+        // Collect Garmin laps
+        List<Long> garminIds = recentActivities.stream()
+                .filter(a -> "GARMIN".equals(a.getSourceType()))
+                .map(Activity::getId)
+                .toList();
+        Map<Long, List<com.pios.domain.GarminActivityLap>> lapsByActivity = new java.util.HashMap<>();
+        if (!garminIds.isEmpty()) {
+            lapsByActivity = lapRepo.findByActivityIdIn(garminIds).stream()
+                    .collect(java.util.stream.Collectors.groupingBy(l -> l.getActivity().getId()));
+        }
+
+        String dataContext = buildWorkoutSummaryContext(recentActivities, lapsByActivity, since, today);
+        String conclusion = callLlmForWorkoutSummary(request.getQuestion(), dataContext);
+
+        Insight insight = Insight.builder()
+                .user(User.builder().id(userId).build())
+                .question(question)
+                .category("WORKOUT_SUMMARY")
+                .title("Q: " + request.getQuestion())
+                .summary(conclusion)
+                .confidence(new BigDecimal("0.85"))
+                .modelProvider("OpenAI")
+                .modelName(openaiModel)
+                .isSaved(false)
+                .build();
+        insight = insightRepo.save(insight);
+
+        for (var a : recentActivities) {
+            evidenceRepo.save(InsightEvidence.builder()
+                    .insight(insight)
+                    .evidenceType("ACTIVITY")
+                    .sourceTable("activities")
+                    .sourceId(a.getId())
+                    .evidenceSummary(a.getActivityName() + " (" + a.getActivityType() + ")")
+                    .weight(new BigDecimal("0.5"))
+                    .build());
+        }
+
+        return AskResponse.builder()
+                .questionId(question.getId())
+                .insightId(insight.getId())
+                .conclusion(conclusion)
+                .evidenceSummary(List.of("활동 기록 " + recentActivities.size() + "개"))
+                .relatedData(List.of())
+                .confidence("높음")
+                .followUpQuestion("특정 운동의 상세 분석이나 다음 주 훈련 계획이 필요하신가요?")
+                .build();
+    }
+
+    private String buildWorkoutSummaryContext(List<Activity> activities,
+                                               Map<Long, List<com.pios.domain.GarminActivityLap>> lapsByActivity,
+                                               LocalDate since, LocalDate today) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("기간: %s - %s%n%n", since, today));
+
+        int idx = 1;
+        for (Activity a : activities) {
+            String date = a.getStartTime() != null ? a.getStartTime().toLocalDate().toString() : "";
+            sb.append(String.format("%d. %s %s (%s)%n", idx++, date,
+                    a.getActivityName() != null ? a.getActivityName() : "활동",
+                    a.getActivityType() != null ? a.getActivityType() : "UNKNOWN"));
+
+            if ("GARMIN".equals(a.getSourceType()) && lapsByActivity.containsKey(a.getId())) {
+                var laps = lapsByActivity.get(a.getId());
+                if (!laps.isEmpty()) {
+                    sb.append("랩 | 시간 | 거리(m) | 평균심박 | 최대심박%n");
+                    for (int i = 0; i < laps.size(); i++) {
+                        var lap = laps.get(i);
+                        sb.append(String.format("%d | %s | %s | %s | %s%n",
+                                i + 1,
+                                formatDuration(lap.getDurationSeconds()),
+                                lap.getDistanceMeters() != null ? lap.getDistanceMeters() : "-",
+                                lap.getAverageHeartRate() != null ? lap.getAverageHeartRate() : "-",
+                                lap.getMaxHeartRate() != null ? lap.getMaxHeartRate() : "-"
+                        ));
+                    }
+                }
+            } else if ("MANUAL".equals(a.getSourceType()) && a.getWeightTrainingDetail() != null) {
+                var exercises = (java.util.List<Map<String, Object>>) a.getWeightTrainingDetail().get("exercises");
+                if (exercises != null && !exercises.isEmpty()) {
+                    sb.append("종목 | 세트 | 반복 | 무게(kg) | 시간(초)%n");
+                    for (Map<String, Object> ex : exercises) {
+                        String exName = ex.get("name") != null ? ex.get("name").toString() : "";
+                        var sets = (java.util.List<Map<String, Object>>) ex.get("sets");
+                        if (sets != null) {
+                            for (int i = 0; i < sets.size(); i++) {
+                                var s = sets.get(i);
+                                sb.append(String.format("%s | %d | %s | %s | %s%n",
+                                        exName,
+                                        i + 1,
+                                        s.get("reps") != null ? s.get("reps") : "-",
+                                        s.get("weightKg") != null ? s.get("weightKg") : "-",
+                                        s.get("durationSeconds") != null ? s.get("durationSeconds") : "-"
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+            sb.append("%n");
+        }
+        return sb.toString();
+    }
+
+    private String callLlmForWorkoutSummary(String question, String dataContext) {
+        if (openaiApiKey == null || openaiApiKey.isBlank()) {
+            return dataContext;
+        }
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(openaiApiKey);
+
+            String systemPrompt = """
+                당신은 Personal Insight OS의 운동 데이터 정리 도우미입니다.
+                사용자의 Garmin 활동과 수동 웨이트 트레이닝 데이터를 날짜별로 정리해주세요.
+                
+                규칙:
+                1. Garmin 활동은 랩(lap) 단위로 표 형태로 정리하세요.
+                2. 웨이트 트레이닝은 종목/세트 단위로 표 형태로 정리하세요.
+                3. 각 운동 후 간단한 코멘트(강도, 특이사항 등)를 추가하세요.
+                4. 마지막에 전체 주간 요약(총 활동 횟수, 총 거리, 총 볼륨 등)을 달아주세요.
+                5. 답변은 한국어로 작성하세요.
+                """;
+
+            Map<String, Object> body = Map.of(
+                    "model", openaiModel,
+                    "messages", List.of(
+                            Map.of("role", "system", "content", systemPrompt),
+                            Map.of("role", "user", "content", "질문: " + question + "\n\n" + dataContext)
+                    ),
+                    "max_tokens", 1500,
+                    "temperature", 0.3
+            );
+
+            var response = restTemplate.postForObject(
+                    "https://api.openai.com/v1/chat/completions",
+                    new HttpEntity<>(body, headers),
+                    Map.class
+            );
+
+            if (response != null) {
+                var choices = (List<Map<String, Object>>) response.get("choices");
+                if (choices != null && !choices.isEmpty()) {
+                    var message = (Map<String, String>) choices.get(0).get("message");
+                    return message.get("content").trim();
+                }
+            }
+        } catch (Exception e) {
+            // OpenAI 실패 시 raw data 반환
+        }
+        return dataContext;
     }
 
     private String generateFallbackResponse(String question, List<?> health, List<?> sleep,

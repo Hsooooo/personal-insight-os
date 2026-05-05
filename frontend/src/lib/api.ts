@@ -103,6 +103,8 @@ export const api = {
       fetchApi(`/api/activities/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteWeightTraining: (id: number): Promise<void> =>
       fetchApi(`/api/activities/${id}`, { method: 'DELETE' }),
+    getExerciseNames: (): Promise<string[]> =>
+      fetchApi('/api/activities/exercises'),
   },
   health: {
     metrics: (start: string, end: string): Promise<HealthMetric[]> =>

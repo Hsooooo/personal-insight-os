@@ -1,7 +1,9 @@
 package com.pios.service;
 
 import com.pios.domain.Activity;
+import com.pios.domain.Exercise;
 import com.pios.domain.User;
+import com.pios.repository.ExerciseRepository;
 import com.pios.dto.ActivityDto;
 import com.pios.dto.ActivityFilterRequest;
 import com.pios.dto.WeightTrainingRequest;
@@ -25,6 +27,7 @@ import java.util.Map;
 public class ActivityService {
 
     private final ActivityRepository activityRepo;
+    private final ExerciseRepository exerciseRepo;
     private final GraphProjectorService graphProjectorService;
 
     public Page<ActivityDto> getActivities(Long userId, ActivityFilterRequest filter, Pageable pageable) {
@@ -59,6 +62,12 @@ public class ActivityService {
         graphProjectorService.updateActivityTag(userId, activityId, normalizedTag);
 
         return toDto(saved);
+    }
+
+    public List<String> getExerciseNames(Long userId) {
+        return exerciseRepo.findByUserIdOrderByNameAsc(userId).stream()
+                .map(Exercise::getName)
+                .toList();
     }
 
     @Transactional
@@ -117,6 +126,9 @@ public class ActivityService {
                 .build();
 
         Activity saved = activityRepo.save(activity);
+
+        // Upsert exercises
+        upsertExercises(userId, request);
 
         // Project to Neo4j graph
         graphProjectorService.projectActivity(userId, saved);
@@ -184,9 +196,30 @@ public class ActivityService {
         activity.setWeightTrainingDetail(detail);
 
         Activity saved = activityRepo.save(activity);
+
+        // Upsert exercises
+        upsertExercises(userId, request);
+
         graphProjectorService.projectActivity(userId, saved);
 
         return toDto(saved);
+    }
+
+    private void upsertExercises(Long userId, WeightTrainingRequest request) {
+        if (request.getExercises() == null) return;
+        for (WeightTrainingRequest.ExerciseRequest ex : request.getExercises()) {
+            if (ex.getName() == null || ex.getName().isBlank()) continue;
+            String trimmed = ex.getName().trim();
+            exerciseRepo.findByUserIdAndName(userId, trimmed)
+                    .orElseGet(() -> {
+                        Exercise e = Exercise.builder()
+                                .user(User.builder().id(userId).build())
+                                .name(trimmed)
+                                .bodyPart(request.getBodyPart())
+                                .build();
+                        return exerciseRepo.save(e);
+                        });
+        }
     }
 
     @Transactional

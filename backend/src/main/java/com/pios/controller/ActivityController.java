@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import java.util.List;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -19,6 +20,12 @@ import org.springframework.web.bind.annotation.*;
 public class ActivityController {
 
     private final ActivityService activityService;
+
+    @GetMapping("/exercises")
+    public ApiResponse<List<String>> getExerciseNames(
+            @AuthenticationPrincipal Long userId) {
+        return ApiResponse.ok(activityService.getExerciseNames(userId));
+    }
 
     @GetMapping
     public ApiResponse<Page<ActivityDto>> list(

@@ -223,6 +223,15 @@ function WeightTrainingForm({
   const [avgHr, setAvgHr] = useState(editActivity?.averageHeartRate ? String(editActivity.averageHeartRate) : '');
   const [calories, setCalories] = useState(editActivity?.calories ? String(editActivity.calories) : '');
   const [bodyPart, setBodyPart] = useState(detail?.bodyPart || 'CHEST');
+
+  const { data: exerciseNames } = useQuery({
+    queryKey: ['exercise-names'],
+    queryFn: api.activities.getExerciseNames,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const [customNames, setCustomNames] = useState<Record<number, boolean>>({});
+
   const [exercises, setExercises] = useState<ExerciseForm[]>(
     detail?.exercises?.map((e) => ({
       name: e.name,
@@ -254,6 +263,10 @@ function WeightTrainingForm({
     const next = [...exercises];
     next[idx].name = value;
     setExercises(next);
+  };
+
+  const toggleCustomName = (idx: number) => {
+    setCustomNames((prev) => ({ ...prev, [idx]: !prev[idx] }));
   };
 
   const updateSet = (exIdx: number, setIdx: number, field: 'reps' | 'weightKg' | 'durationSeconds', value: string) => {
@@ -433,12 +446,55 @@ function WeightTrainingForm({
             {exercises.map((ex, exIdx) => (
               <div key={exIdx} className="rounded-md border bg-background p-3 space-y-2">
                 <div className="flex items-center gap-2">
-                  <Input
-                    value={ex.name}
-                    onChange={(e) => updateExerciseName(exIdx, e.target.value)}
-                    placeholder="종목명 (예: Bench Press)"
-                    className="h-8 text-xs flex-1"
-                  />
+                  {customNames[exIdx] ? (
+                    <>
+                      <Input
+                        value={ex.name}
+                        onChange={(e) => updateExerciseName(exIdx, e.target.value)}
+                        placeholder="새 종목명 입력"
+                        className="h-8 text-xs flex-1"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs px-2"
+                        onClick={() => toggleCustomName(exIdx)}
+                      >
+                        목록에서 선택
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <select
+                        value={ex.name}
+                        onChange={(e) => {
+                          if (e.target.value === '__custom__') {
+                            toggleCustomName(exIdx);
+                            updateExerciseName(exIdx, '');
+                          } else {
+                            updateExerciseName(exIdx, e.target.value);
+                          }
+                        }}
+                        className="h-8 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                      >
+                        <option value="">종목 선택</option>
+                        {(exerciseNames || []).map((n) => (
+                          <option key={n} value={n}>{n}</option>
+                        ))}
+                        <option value="__custom__">➕ 새 종목 입력</option>
+                      </select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 text-xs px-2"
+                        onClick={() => toggleCustomName(exIdx)}
+                      >
+                        직접 입력
+                      </Button>
+                    </>
+                  )}
                   {exercises.length > 1 && (
                     <Button
                       type="button"
