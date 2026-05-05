@@ -111,7 +111,14 @@ export const api = {
       fetchApi(`/api/health/sleep?start=${start}&end=${end}`),
   },
   graph: {
-    get: (): Promise<GraphData> => fetchApi('/api/graph'),
+    get: (days?: number, view?: string, raceCategory?: string): Promise<GraphData> => {
+      const params = new URLSearchParams();
+      if (days !== undefined) params.append('days', String(days));
+      if (view) params.append('view', view);
+      if (raceCategory) params.append('raceCategory', raceCategory);
+      const qs = params.toString();
+      return fetchApi(`/api/graph${qs ? '?' + qs : ''}`);
+    },
   },
   ask: {
     ask: (question: string): Promise<AskResponse> =>

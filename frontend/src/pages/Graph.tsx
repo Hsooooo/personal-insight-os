@@ -230,9 +230,13 @@ function EdgeFilterCheckbox({
 }
 
 export default function Graph() {
+  const [days, setDays] = useState<number>(30);
+  const [view, setView] = useState<string>('all');
+  const [raceCategory, setRaceCategory] = useState<string>('');
+
   const { data, isLoading } = useQuery({
-    queryKey: ['graph'],
-    queryFn: api.graph.get,
+    queryKey: ['graph', days, view, raceCategory],
+    queryFn: () => api.graph.get(days, view, raceCategory || undefined),
   });
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -430,6 +434,67 @@ export default function Graph() {
       <div>
         <h2 className="text-3xl font-bold tracking-tight">Personal Graph</h2>
         <p className="text-muted-foreground">Explore connections in your health data</p>
+      </div>
+
+      {/* Filter bar */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Days */}
+        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+          {[7, 14, 30].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                days === d ? 'bg-background shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {d}일
+            </button>
+          ))}
+          <button
+            onClick={() => setDays(0)}
+            className={`px-3 py-1 text-sm rounded-md transition-colors ${
+              days === 0 ? 'bg-background shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            전체
+          </button>
+        </div>
+
+        {/* View tabs */}
+        <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+          {[
+            { key: 'activities', label: '활동' },
+            { key: 'condition', label: '컨디션' },
+            { key: 'all', label: '통합' },
+          ].map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setView(v.key)}
+              className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                view === v.key ? 'bg-background shadow-sm text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Race category */}
+        {view !== 'condition' && (
+          <select
+            value={raceCategory}
+            onChange={(e) => setRaceCategory(e.target.value)}
+            className="h-8 px-2 text-sm rounded-md border border-input bg-background"
+          >
+            <option value="">모든 레이스</option>
+            <option value="5K">5K</option>
+            <option value="10K">10K</option>
+            <option value="HALF">하프</option>
+            <option value="FULL">풀</option>
+            <option value="CUSTOM">커스텀</option>
+          </select>
+        )}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-4">

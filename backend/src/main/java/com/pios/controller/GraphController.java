@@ -20,7 +20,9 @@ public class GraphController {
     @GetMapping
     public ApiResponse<GraphDataDto> getGraph(
             @AuthenticationPrincipal Long userId,
-            @RequestParam(defaultValue = "30") int days) {
-        return ApiResponse.ok(graphService.getGraph(userId, days));
+            @RequestParam(defaultValue = "30") int days,
+            @RequestParam(defaultValue = "all") String view,
+            @RequestParam(required = false) String raceCategory) {
+        return ApiResponse.ok(graphService.getGraph(userId, days, view, raceCategory));
     }
 }
