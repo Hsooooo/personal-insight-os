@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -114,7 +115,38 @@ export default function Ask() {
             <div key={msg.id} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
               <Card className={`max-w-[80%] ${msg.type === 'user' ? 'bg-indigo-50 border-indigo-100' : ''}`}>
                 <CardContent className="p-4">
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                  <div className="text-sm leading-relaxed">
+                    <ReactMarkdown
+                      components={{
+                        table: ({ children }) => (
+                          <table className="w-full text-sm border-collapse my-2">{children}</table>
+                        ),
+                        thead: ({ children }) => (
+                          <thead className="bg-muted">{children}</thead>
+                        ),
+                        th: ({ children }) => (
+                          <th className="border px-2 py-1 text-left font-medium">{children}</th>
+                        ),
+                        td: ({ children }) => (
+                          <td className="border px-2 py-1">{children}</td>
+                        ),
+                        h3: ({ children }) => (
+                          <h3 className="text-base font-semibold mt-3 mb-1">{children}</h3>
+                        ),
+                        ul: ({ children }) => (
+                          <ul className="list-disc pl-4 my-1">{children}</ul>
+                        ),
+                        ol: ({ children }) => (
+                          <ol className="list-decimal pl-4 my-1">{children}</ol>
+                        ),
+                        p: ({ children }) => (
+                          <p className="my-1">{children}</p>
+                        ),
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
 
                   {msg.type === 'system' && (
                     <>

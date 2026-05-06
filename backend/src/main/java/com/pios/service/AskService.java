@@ -325,22 +325,23 @@ public class AskService {
                                                Map<Long, List<com.pios.domain.GarminActivityLap>> lapsByActivity,
                                                LocalDate since, LocalDate today) {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("기간: %s - %s%n%n", since, today));
+        sb.append(String.format("기간: %s - %s\n\n", since, today));
 
         int idx = 1;
         for (Activity a : activities) {
             String date = a.getStartTime() != null ? a.getStartTime().toLocalDate().toString() : "";
-            sb.append(String.format("%d. %s %s (%s)%n", idx++, date,
+            sb.append(String.format("### %d. %s %s (%s)\n", idx++, date,
                     a.getActivityName() != null ? a.getActivityName() : "활동",
                     a.getActivityType() != null ? a.getActivityType() : "UNKNOWN"));
 
             if ("GARMIN".equals(a.getSourceType()) && lapsByActivity.containsKey(a.getId())) {
                 var laps = lapsByActivity.get(a.getId());
                 if (!laps.isEmpty()) {
-                    sb.append("랩 | 시간 | 거리(m) | 평균심박 | 최대심박%n");
+                    sb.append("| 랩 | 시간 | 거리(m) | 평균심박 | 최대심박 |\n");
+                    sb.append("|---|---|---|---|---|\n");
                     for (int i = 0; i < laps.size(); i++) {
                         var lap = laps.get(i);
-                        sb.append(String.format("%d | %s | %s | %s | %s%n",
+                        sb.append(String.format("| %d | %s | %s | %s | %s |\n",
                                 i + 1,
                                 formatDuration(lap.getDurationSeconds()),
                                 lap.getDistanceMeters() != null ? lap.getDistanceMeters() : "-",
@@ -352,14 +353,15 @@ public class AskService {
             } else if ("MANUAL".equals(a.getSourceType()) && a.getWeightTrainingDetail() != null) {
                 var exercises = (java.util.List<Map<String, Object>>) a.getWeightTrainingDetail().get("exercises");
                 if (exercises != null && !exercises.isEmpty()) {
-                    sb.append("종목 | 세트 | 반복 | 무게(kg) | 시간(초)%n");
+                    sb.append("| 종목 | 세트 | 반복 | 무게(kg) | 시간(초) |\n");
+                    sb.append("|---|---|---|---|---|\n");
                     for (Map<String, Object> ex : exercises) {
                         String exName = ex.get("name") != null ? ex.get("name").toString() : "";
                         var sets = (java.util.List<Map<String, Object>>) ex.get("sets");
                         if (sets != null) {
                             for (int i = 0; i < sets.size(); i++) {
                                 var s = sets.get(i);
-                                sb.append(String.format("%s | %d | %s | %s | %s%n",
+                                sb.append(String.format("| %s | %d | %s | %s | %s |\n",
                                         exName,
                                         i + 1,
                                         s.get("reps") != null ? s.get("reps") : "-",
@@ -371,7 +373,7 @@ public class AskService {
                     }
                 }
             }
-            sb.append("%n");
+            sb.append("\n");
         }
         return sb.toString();
     }
