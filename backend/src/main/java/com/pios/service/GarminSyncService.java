@@ -190,7 +190,7 @@ public class GarminSyncService {
         if (lapsNode == null || !lapsNode.isArray()) return;
 
         // 기존 랩 삭제 후 재삽입 (랩 데이터는 불변으로 가정)
-        lapRepo.deleteByActivity(activity);
+        lapRepo.deleteByActivityId(activity.getId());
 
         List<GarminActivityLap> laps = new ArrayList<>();
         for (JsonNode lapNode : lapsNode) {

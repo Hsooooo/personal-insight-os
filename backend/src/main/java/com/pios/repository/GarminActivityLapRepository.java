@@ -11,5 +11,5 @@ import java.util.List;
 public interface GarminActivityLapRepository extends JpaRepository<GarminActivityLap, Long> {
     List<GarminActivityLap> findByActivityIdIn(List<Long> activityIds);
 
-    void deleteByActivity(Activity activity);
+    void deleteByActivityId(Long activityId);
 }
