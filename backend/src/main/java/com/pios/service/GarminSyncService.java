@@ -191,6 +191,7 @@ public class GarminSyncService {
 
         // 기존 랩 삭제 후 재삽입 (랩 데이터는 불변으로 가정)
         lapRepo.deleteByActivityId(activity.getId());
+        lapRepo.flush(); // DELETE 즉시 실행 (INSERT보다 먼저 실행되어야 함)
 
         List<GarminActivityLap> laps = new ArrayList<>();
         for (JsonNode lapNode : lapsNode) {
@@ -209,6 +210,7 @@ public class GarminSyncService {
         }
         if (!laps.isEmpty()) {
             lapRepo.saveAll(laps);
+            lapRepo.flush(); // INSERT 즉시 실행
         }
     }
 
