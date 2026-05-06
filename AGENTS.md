@@ -179,6 +179,7 @@ mvn clean package -DskipTests
 3. `GarminPythonClient`가 ProcessBuilder로 Python 스크립트 실행
 4. Python `garminconnect` 라이브러리가 Garmin Connect API 호출
 5. 30일 청크 단위로 Raw JSON 수신 → UPSERT 저장 (PostgreSQL)
+   - activities 저장 시 각 activity에 포함된 `laps` 배열을 `garmin_activity_laps` 테이블에 저장 (기존 랩 삭제 후 재삽입)
 6. GraphProjector 실행 → Neo4j 노드/엣지 생성
 7. `graph_node_mappings` 테이블에 매핑 정보 저장
 8. `sync_logs` COMPLETED/FAILED 상태 업데이트

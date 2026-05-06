@@ -27,6 +27,7 @@ public class GarminSyncService {
     private final ActivityRepository activityRepo;
     private final GarminDailyHealthMetricRepository healthRepo;
     private final GarminSleepSessionRepository sleepRepo;
+    private final GarminActivityLapRepository lapRepo;
     private final GarminPythonClient pythonClient;
     private final GraphProjectorService graphProjector;
 
@@ -176,10 +177,39 @@ public class GarminSyncService {
             activity.setElevationGainMeters(getDecimal(node, "elevation_gain_meters"));
             activity.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
 
-            activityRepo.save(activity);
+            Activity savedActivity = activityRepo.save(activity);
             count++;
+
+            // 랩 저장
+            saveActivityLaps(savedActivity, node.get("laps"));
         }
         return count;
+    }
+
+    private void saveActivityLaps(Activity activity, JsonNode lapsNode) {
+        if (lapsNode == null || !lapsNode.isArray()) return;
+
+        // 기존 랩 삭제 후 재삽입 (랩 데이터는 불변으로 가정)
+        lapRepo.deleteByActivity(activity);
+
+        List<GarminActivityLap> laps = new ArrayList<>();
+        for (JsonNode lapNode : lapsNode) {
+            GarminActivityLap lap = GarminActivityLap.builder()
+                    .activity(activity)
+                    .lapIndex(getInt(lapNode, "lap_index"))
+                    .startTime(parseInstant(getText(lapNode, "start_time")))
+                    .durationSeconds(getInt(lapNode, "duration_seconds"))
+                    .distanceMeters(getDecimal(lapNode, "distance_meters"))
+                    .averagePaceSeconds(getDecimal(lapNode, "average_pace_seconds"))
+                    .averageHeartRate(getInt(lapNode, "average_heart_rate"))
+                    .maxHeartRate(getInt(lapNode, "max_heart_rate"))
+                    .rawPayload(jsonNodeToMap(lapNode.get("raw_payload")))
+                    .build();
+            laps.add(lap);
+        }
+        if (!laps.isEmpty()) {
+            lapRepo.saveAll(laps);
+        }
     }
 
     private int saveHealthMetrics(Long userId, JsonNode healthNode) {

@@ -156,10 +156,11 @@ sequenceDiagram
 
     loop 30일 청크 단위
         BE->>PY: ProcessBuilder 실행<br/>(email, password, chunk_from, chunk_to)
-        PY->>GC: garminconnect API 호출
+        PY->>GC: garminconnect API 호출<br/>(activities + splits per activity)
         GC-->>PY: Raw JSON
-        PY-->>BE: activities + health + sleep
-        BE->>PG: UPSERT 저장 (ON CONFLICT DO UPDATE)
+        PY-->>BE: activities + health + sleep<br/>(activities에 laps 포함)
+        BE->>PG: UPSERT 저장 (activities, health, sleep)
+        BE->>PG: 랩 데이터 저장<br/>(garmin_activity_laps, delete-insert)
     end
 
     BE->>PG: sync_log 완료 (status: COMPLETED)

@@ -29,6 +29,11 @@
   - `GarminActivityLapRepository` — 랩 데이터 조회
   - Garmin 활동은 랩 단위, 웨이트는 종목/세트 단위로 표 형태 포맷팅
   - LLM 프롬프트: 주간 운등 요약 + 총평
+- **Garmin 랩(lap) 데이터 동기화 저장**
+  - Python `garmin_sync.py` — `get_activity_splits()` 호출, 랩 데이터를 activity JSON에 `laps` 키로 첨부
+  - Java `GarminSyncService` — `GarminActivityLapRepository` 주입, activity 저장 후 랩 데이터 delete-insert 저장
+  - `GarminActivityLapRepository` — `deleteByActivity(Activity)` 메서드 추가
+  - 랩 없는 활동(수면 등)은 예외 처리 후 빈 배열 반환
 
 ### Changed
 - Neo4j 인프라: 로컬 Docker 컨테이너 → 외부/클로드 인스턴스

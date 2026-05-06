@@ -20,8 +20,37 @@ from datetime import datetime, timedelta, timezone
 def parse_date(s):
     return datetime.strptime(s, "%Y-%m-%d").date()
 
+def _parse_laps(client, activity_id):
+    """활동의 랩(splits) 데이터를 조회. 랩이 없거나 오류 발생 시 빈 리스트 반환."""
+    try:
+        splits = client.get_activity_splits(activity_id)
+        lap_dtos = splits.get("lapDTOs", [])
+        laps = []
+        for lap in lap_dtos:
+            duration = lap.get("duration")
+            distance = lap.get("distance")
+            avg_speed = lap.get("averageSpeed")
+            # Garmin API의 averageSpeed는 m/s 단위. pace(sec/m) = 1 / speed (0이면 None)
+            avg_pace = None
+            if avg_speed and avg_speed > 0:
+                avg_pace = round(1.0 / avg_speed, 4)
+            laps.append({
+                "lap_index": lap.get("lapIndex"),
+                "start_time": lap.get("startTimeLocal") or lap.get("startTimeGMT"),
+                "duration_seconds": duration,
+                "distance_meters": distance,
+                "average_pace_seconds": avg_pace,
+                "average_heart_rate": lap.get("averageHR"),
+                "max_heart_rate": lap.get("maxHR"),
+                "raw_payload": lap
+            })
+        return laps
+    except Exception:
+        return []
+
+
 def fetch_activities(client, start_date, end_date):
-    """Garmin 활동 목록 조회"""
+    """Garmin 활동 목록 조회 (랩 데이터 포함)"""
     results = []
     try:
         # get_activities_by_date는 start, end 순서로 받음
@@ -30,8 +59,10 @@ def fetch_activities(client, start_date, end_date):
             end_date.strftime("%Y-%m-%d")
         )
         for a in activities:
+            activity_id = a.get("activityId")
+            laps = _parse_laps(client, activity_id) if activity_id else []
             results.append({
-                "garmin_activity_id": str(a.get("activityId", "")),
+                "garmin_activity_id": str(activity_id or ""),
                 "activity_type": a.get("activityType", {}).get("typeKey", ""),
                 "activity_name": a.get("activityName", ""),
                 "start_time": a.get("startTimeLocal", ""),
@@ -42,7 +73,8 @@ def fetch_activities(client, start_date, end_date):
                 "max_heart_rate": a.get("maxHR", 0),
                 "calories": a.get("calories", 0),
                 "elevation_gain_meters": a.get("elevationGain", 0),
-                "raw_payload": a
+                "raw_payload": a,
+                "laps": laps
             })
     except Exception as e:
         raise RuntimeError(f"activities fetch failed: {e}")
