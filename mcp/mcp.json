@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pios-coach": {
+      "command": "python",
+      "args": ["mcp/server.py", "--transport", "stdio"],
+      "env": {
+        "PIOS_API_URL": "http://localhost:8080/api",
+        "PIOS_API_KEY": "<your-jwt-token-here>"
+      }
+    }
+  }
+}

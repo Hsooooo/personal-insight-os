@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -117,6 +118,7 @@ export default function Ask() {
                 <CardContent className="p-4">
                   <div className="text-sm leading-relaxed">
                     <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
                       components={{
                         table: ({ children }) => (
                           <table className="w-full text-sm border-collapse my-2">{children}</table>
@@ -243,5 +245,8 @@ export default function Ask() {
         </form>
       </div>
     </div>
+  );
+}
+</div>
   );
 }

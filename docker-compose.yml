@@ -39,6 +39,22 @@ services:
       - pios-network
     restart: unless-stopped
 
+  mcp:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile
+    container_name: pios-mcp
+    environment:
+      PIOS_API_URL: http://backend:8080/api
+      PIOS_API_KEY: ${PIOS_MCP_API_KEY:-}
+    ports:
+      - "8001:8001"
+    depends_on:
+      - backend
+    networks:
+      - pios-network
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend

@@ -23,6 +23,7 @@
 - 인사이트 저장 및 피드백
 - 목표 설정 및 관리
 - LLM Provider 설정
+- MCP(Model Context Protocol) 연동 — 외부 LLM이 PIOS 데이터를 읽을 수 있도록 생체스포츠 코치 페르소나 제공
 
 ---
 
@@ -53,10 +54,11 @@
 ### Infrastructure
 - **PostgreSQL 16** + **pgvector** — 원천 데이터 및 벡터 저장
 - **Neo4j** (외부/클로드 인스턴스) — 그래프 데이터베이스
-- **Docker Compose** — 3서비스 오케스트레이션 (postgres, backend, frontend + caddy)
+- **Docker Compose** — 4서비스 오케스트레이션 (postgres, backend, frontend, mcp + caddy)
 - **exercises 테이블** — 사용자 정의 웨이트 트레이닝 종목 관리
 - **Python 3 + garminconnect** — Garmin Connect 데이터 수집 (Docker에 포함)
 - **Caddy** — 리버스 프록시 + 자동 HTTPS
+- **MCP Server** — Python + FastMCP 기반 Thin Proxy. 외부 LLM이 PIOS API를 호출할 수 있도록 제공
 
 ---
 
@@ -64,10 +66,15 @@
 
 ```
 personal-insight-os/
-├── docker-compose.yml          # postgres, backend, frontend, caddy
-├── .env.example                # OPENAI_API_KEY, JWT_SECRET, NEO4J_*
-├── docs/                       # 기획/설계 문서 (architecture, api-spec, etc.)
+├── docker-compose.yml          # postgres, backend, frontend, mcp, caddy
+├── .env.example                # OPENAI_API_KEY, JWT_SECRET, NEO4J_*, PIOS_MCP_API_KEY
+├── docs/                       # 기획/설계 문서 (architecture, api-spec, mcp-integration, etc.)
 ├── CHANGELOG.md                # 변경 이력
+├── mcp/                        # MCP Server (Python + FastMCP)
+│   ├── server.py               # FastMCP 엔트리포인트
+│   ├── requirements.txt        # Python 의존성
+│   ├── Dockerfile              # MCP 컨테이너
+│   └── mcp.json                # 클라이언트 연동 설정 예시
 ├── backend/                    # Spring Boot 3.3 + Java 21
 │   ├── pom.xml
 │   ├── Dockerfile              # Maven 멀티스테이지 빌드
@@ -123,6 +130,7 @@ docker-compose up --build
 ```
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8080
+- MCP Server: http://localhost:8001 (streamable-http)
 - PostgreSQL: localhost:5432 (pios / pios123)
 
 ### Backend 단독 실행
@@ -156,9 +164,9 @@ mvn clean package -DskipTests
 ```
 [React 19 + Vite] ←──HTTP──→ [Spring Boot 3.3] ←──JDBC──→ [PostgreSQL + pgvector]
                                     │
-                                    └──Bolt──→ [Neo4j 5]
-                                    │
-                                    └──HTTPS──→ [OpenAI API] (선택)
+                                    ├──Bolt──→ [Neo4j 5]
+                                    ├──HTTPS──→ [OpenAI API] (선택)
+                                    └──HTTP──→ [MCP Server :8001] ←──MCP──→ [외부 LLM 클라이언트]
 ```
 
 ### 핵심 데이터 흐름
@@ -298,6 +306,7 @@ mvn clean package -DskipTests
 | `NEO4J_PASSWORD` | (없음) | Neo4j 비밀번호 |
 | `JWT_SECRET` | `pios-jwt-secret-key-2026-change-in-production` | JWT 서명 키 |
 | `OPENAI_API_KEY` | (빈 문자열) | OpenAI API Key (선택) |
+| `PIOS_MCP_API_KEY` | (없음) | MCP Server용 JWT 토큰 (외부 LLM 연동 시 필요) |
 
 ---
 
@@ -346,4 +355,5 @@ mvn clean package -DskipTests
 - `docs/mvp-features.md` — MVP 기능 목록
 - `docs/ui-screens.md` — 화면별 스토리보드
 - `docs/getting-started.md` — 개발 환경 설정
+- `docs/mcp-integration.md` — MCP 연동 가이드 (아키텍처, 도구 목록, 클라이언트 설정)
 - `personal_insight_os_mvp_deliverables.md` — 1차 기획 산출물 (도메인 모델, RAG 파이프라인 등)
