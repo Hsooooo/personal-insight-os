@@ -8,6 +8,7 @@ import type {
   AskResponse,
   AuthResponse,
   DashboardSummary,
+  GarminActivityLap,
   Goal,
   GraphData,
   HealthMetric,
@@ -96,6 +97,7 @@ export const api = {
       return fetchApi(`/api/activities?${params.toString()}`);
     },
     get: (id: number): Promise<Activity> => fetchApi(`/api/activities/${id}`),
+    getLaps: (id: number): Promise<GarminActivityLap[]> => fetchApi(`/api/activities/${id}/laps`),
     updateTag: (id: number, userTag: string): Promise<Activity> =>
       fetchApi(`/api/activities/${id}/tag`, { method: 'PATCH', body: JSON.stringify({ userTag }) }),
     createWeightTraining: (data: WeightTrainingRequest): Promise<Activity> =>

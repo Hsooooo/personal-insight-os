@@ -2,12 +2,15 @@ package com.pios.service;
 
 import com.pios.domain.Activity;
 import com.pios.domain.Exercise;
+import com.pios.domain.GarminActivityLap;
 import com.pios.domain.User;
-import com.pios.repository.ExerciseRepository;
 import com.pios.dto.ActivityDto;
 import com.pios.dto.ActivityFilterRequest;
+import com.pios.dto.GarminActivityLapDto;
 import com.pios.dto.WeightTrainingRequest;
 import com.pios.repository.ActivityRepository;
+import com.pios.repository.ExerciseRepository;
+import com.pios.repository.GarminActivityLapRepository;
 import com.pios.spec.ActivitySpecification;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,6 +31,7 @@ public class ActivityService {
 
     private final ActivityRepository activityRepo;
     private final ExerciseRepository exerciseRepo;
+    private final GarminActivityLapRepository lapRepo;
     private final GraphProjectorService graphProjectorService;
 
     public Page<ActivityDto> getActivities(Long userId, ActivityFilterRequest filter, Pageable pageable) {
@@ -263,6 +267,17 @@ public class ActivityService {
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(direction, property));
     }
 
+    public List<GarminActivityLapDto> getActivityLaps(Long userId, Long activityId) {
+        var activity = activityRepo.findById(activityId)
+                .orElseThrow(() -> new IllegalArgumentException("Activity not found"));
+        if (!activity.getUser().getId().equals(userId)) {
+            throw new IllegalArgumentException("Access denied");
+        }
+        return lapRepo.findByActivityIdOrderByLapIndexAsc(activityId).stream()
+                .map(this::toLapDto)
+                .toList();
+    }
+
     private ActivityDto toDto(Activity a) {
         return ActivityDto.builder()
                 .id(a.getId())
@@ -280,6 +295,19 @@ public class ActivityService {
                 .elevationGainMeters(a.getElevationGainMeters())
                 .userTag(a.getUserTag())
                 .weightTrainingDetail(a.getWeightTrainingDetail())
+                .build();
+    }
+
+    private GarminActivityLapDto toLapDto(GarminActivityLap lap) {
+        return GarminActivityLapDto.builder()
+                .id(lap.getId())
+                .lapIndex(lap.getLapIndex())
+                .startTime(lap.getStartTime())
+                .durationSeconds(lap.getDurationSeconds())
+                .distanceMeters(lap.getDistanceMeters())
+                .averagePaceSeconds(lap.getAveragePaceSeconds())
+                .averageHeartRate(lap.getAverageHeartRate())
+                .maxHeartRate(lap.getMaxHeartRate())
                 .build();
     }
 }

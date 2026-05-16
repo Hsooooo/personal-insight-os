@@ -232,6 +232,17 @@ export interface ApiKey {
   createdAt: string;
 }
 
+export interface GarminActivityLap {
+  id: number;
+  lapIndex: number;
+  startTime: string;
+  durationSeconds: number;
+  distanceMeters: number;
+  averagePaceSeconds: number | null;
+  averageHeartRate: number | null;
+  maxHeartRate: number | null;
+}
+
 export interface Page<T> {
   content: T[];
   totalElements: number;

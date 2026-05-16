@@ -231,6 +231,51 @@ def register_tools(mcp: FastMCP):
             return "".join(lines)
 
     @mcp.tool()
+    async def pios_get_activity_laps(activity_id: int) -> str:
+        """특정 활동의 구간(lap/split) 데이터를 조회합니다.
+
+        각 구간별 거리, 시간, 페이스, 심박수 등을 반환합니다.
+        훈련 구간 분석이나 인터벌 세션 리뷰에 유용합니다.
+        """
+        async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+            resp = await client.get(
+                f"/activities/{activity_id}/laps",
+                headers=_get_headers("pios_get_activity_laps"),
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if not payload.get("success"):
+                return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
+
+            laps = payload.get("data", [])
+            if not laps:
+                return "📭 이 활동에는 구간(lap) 데이터가 없습니다."
+
+            lines = [f"🏃 구간 데이터 ({len(laps)}개)\n"]
+            for lap in laps:
+                idx = lap.get("lapIndex", "-")
+                duration = lap.get("durationSeconds", 0)
+                dur_m, dur_s = divmod(duration, 60) if duration else (0, 0)
+                dist = lap.get("distanceMeters")
+                pace = lap.get("averagePaceSeconds")
+                pace_str = "-"
+                if pace:
+                    pace_sec = float(pace)
+                    pm = int(pace_sec) // 60
+                    ps = int(pace_sec) % 60
+                    pace_str = f"{pm}:{ps:02d} /km"
+                hr = lap.get("averageHeartRate", "-")
+                max_hr = lap.get("maxHeartRate", "-")
+                lines.append(
+                    f"\n[구간 {idx}]\n"
+                    f"  시간: {dur_m}m {dur_s}s | "
+                    f"거리: {dist} m | "
+                    f"페이스: {pace_str}\n"
+                    f"  심박수: 평균 {hr} bpm | 최대 {max_hr} bpm\n"
+                )
+            return "".join(lines)
+
+    @mcp.tool()
     async def pios_get_health_metrics(
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,

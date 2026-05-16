@@ -3,6 +3,7 @@ package com.pios.controller;
 import com.pios.dto.ActivityDto;
 import com.pios.dto.ActivityFilterRequest;
 import com.pios.dto.ApiResponse;
+import com.pios.dto.GarminActivityLapDto;
 import com.pios.dto.WeightTrainingRequest;
 import com.pios.service.ActivityService;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +41,13 @@ public class ActivityController {
             @AuthenticationPrincipal Long userId,
             @PathVariable Long activityId) {
         return ApiResponse.ok(activityService.getActivity(userId, activityId));
+    }
+
+    @GetMapping("/{activityId}/laps")
+    public ApiResponse<List<GarminActivityLapDto>> laps(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long activityId) {
+        return ApiResponse.ok(activityService.getActivityLaps(userId, activityId));
     }
 
     @PostMapping("/weight")

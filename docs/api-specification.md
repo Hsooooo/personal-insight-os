@@ -194,6 +194,7 @@ POST /api/auth/api-keys
 |--------|-----------|------|
 | GET | `/api/activities?page=&size=&activityType=&userTag=&activityName=&startTimeFrom=&startTimeTo=&minDistance=&maxDistance=&sortBy=&sortDir=` | 활동 목록 (페이징 + 필터 + 정렬) |
 | GET | `/api/activities/{id}` | 활동 상세 |
+| GET | `/api/activities/{id}/laps` | 활동 구간(lap) 목록 |
 | POST | `/api/activities/weight` | 웨이트 트레이닝 수동 등록 |
 | PATCH | `/api/activities/{id}` | 수동 웨이트 트레이닝 수정 (MANUAL만) |
 | DELETE | `/api/activities/{id}` | 수동 웨이트 트레이닝 삭제 (MANUAL만) |
