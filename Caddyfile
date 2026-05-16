@@ -7,6 +7,14 @@ personal-insight.kro.kr {
             header_up X-Forwarded-Proto {scheme}
         }
     }
+    handle /mcp* {
+        reverse_proxy mcp:8001 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
     handle {
         reverse_proxy frontend:80
     }
