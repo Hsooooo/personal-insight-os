@@ -18,6 +18,7 @@ Personal Insight OS의 건강/욏동/수면 데이터를 외부 LLM(Claude, Copi
 """
 
 import argparse
+import contextlib
 import contextvars
 import os
 from typing import Optional
