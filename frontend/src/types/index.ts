@@ -224,6 +224,14 @@ export interface ActivityFilter {
   sortDir?: string;
 }
 
+export interface ApiKey {
+  id: number;
+  name: string;
+  key?: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
 export interface Page<T> {
   content: T[];
   totalElements: number;

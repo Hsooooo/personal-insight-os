@@ -2,6 +2,7 @@ import { useAuthStore } from '@/stores/authStore';
 import type {
   Activity,
   ActivityFilter,
+  ApiKey,
   ApiResponse,
   AskRequest,
   AskResponse,
@@ -156,5 +157,11 @@ export const api = {
     update: (id: number, provider: Partial<LlmProvider>): Promise<LlmProvider> =>
       fetchApi(`/api/settings/llm-providers/${id}`, { method: 'PATCH', body: JSON.stringify(provider) }),
     delete: (id: number): Promise<void> => fetchApi(`/api/settings/llm-providers/${id}`, { method: 'DELETE' }),
+  },
+  apiKeys: {
+    list: (): Promise<ApiKey[]> => fetchApi('/api/auth/api-keys'),
+    create: (name: string): Promise<ApiKey> =>
+      fetchApi('/api/auth/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
+    delete: (id: number): Promise<void> => fetchApi(`/api/auth/api-keys/${id}`, { method: 'DELETE' }),
   },
 };

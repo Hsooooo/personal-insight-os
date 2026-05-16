@@ -9,6 +9,7 @@ import {
   Lightbulb,
   Target,
   Settings,
+  Bot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/ask', icon: MessageSquare, label: 'Ask My Data' },
   { to: '/insights', icon: Lightbulb, label: 'Insights' },
   { to: '/goals', icon: Target, label: 'Goals' },
+  { to: '/mcp-settings', icon: Bot, label: 'MCP 연동' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];
 

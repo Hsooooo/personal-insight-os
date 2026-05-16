@@ -98,6 +98,9 @@ flowchart LR
 | POST | `/api/auth/register` | 회원가입 | ❌ |
 | POST | `/api/auth/login` | 로그인 | ❌ |
 | GET | `/api/auth/me` | 내 정보 조회 | ✅ |
+| GET | `/api/auth/api-keys` | API 키 목록 조회 | ✅ |
+| POST | `/api/auth/api-keys` | API 키 발급 | ✅ |
+| DELETE | `/api/auth/api-keys/{id}` | API 키 삭제 | ✅ |
 
 **로그인 요청**
 ```json
@@ -119,6 +122,27 @@ POST /api/auth/login
       "email": "user@example.com",
       "displayName": "User"
     }
+  }
+}
+```
+
+**API 키 발급 요청**
+```json
+POST /api/auth/api-keys
+{
+  "name": "내 노트북 Kimi"
+}
+```
+
+**API 키 발급 응답** (생성 시에만 `key` 필드 포함)
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "내 노트북 Kimi",
+    "key": "pios_xxxxxxxxxxxxxxxx",
+    "createdAt": "2026-05-13T10:00:00"
   }
 }
 ```

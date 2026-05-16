@@ -39,7 +39,11 @@ def _get_headers(tool_name=None):
     headers = {"Content-Type": "application/json"}
     api_key = api_key_var.get() or ENV_API_KEY
     if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+        # X-API-Key 형식이면 그대로, 아니면 Bearer JWT로 가정
+        if api_key.startswith("pios_"):
+            headers["X-API-Key"] = api_key
+        else:
+            headers["Authorization"] = f"Bearer {api_key}"
     client_ip = client_ip_var.get()
     if client_ip:
         headers["X-MCP-Client-IP"] = client_ip
@@ -510,8 +514,10 @@ def main():
                     method = scope.get("method", "")
                     path = scope.get("path", "")
                     headers = dict(scope.get("headers", []))
+                    api_key = headers.get(b"x-api-key", b"")
                     auth = headers.get(b"authorization", b"")
-                    print(f"[MCP] >>> {method} {path} | Auth={'set' if auth else 'none'}", flush=True)
+                    has_key = bool(api_key or auth)
+                    print(f"[MCP] >>> {method} {path} | Key={'set' if has_key else 'none'}", flush=True)
 
                     async def wrapped_send(message):
                         if message.get("type") == "http.response.start":
@@ -531,13 +537,18 @@ def main():
             async def __call__(self, scope, receive, send):
                 if scope["type"] == "http":
                     headers = dict(scope.get("headers", []))
-                    auth = headers.get(b"authorization", b"").decode()
+                    # X-API-Key 우선, 없으면 Authorization Bearer
+                    api_key = headers.get(b"x-api-key", b"").decode()
+                    if not api_key:
+                        auth = headers.get(b"authorization", b"").decode()
+                        if auth.startswith("Bearer "):
+                            api_key = auth[7:]
                     client_ip = scope.get("client", (None, None))[0]
                 else:
-                    auth = ""
+                    api_key = ""
                     client_ip = None
 
-                api_token = api_key_var.set(auth or self.fallback_key)
+                api_token = api_key_var.set(api_key or self.fallback_key)
                 ip_token = client_ip_var.set(client_ip)
                 try:
                     await self.app(scope, receive, send)

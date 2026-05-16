@@ -11,6 +11,7 @@ import Ask from '@/pages/Ask';
 import Insights from '@/pages/Insights';
 import Goals from '@/pages/Goals';
 import Settings from '@/pages/Settings';
+import McpSettings from '@/pages/McpSettings';
 
 function App() {
   const { isAuthenticated } = useAuthStore();
@@ -27,6 +28,7 @@ function App() {
         <Route path="/ask" element={<Ask />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/goals" element={<Goals />} />
+        <Route path="/mcp-settings" element={<McpSettings />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>
