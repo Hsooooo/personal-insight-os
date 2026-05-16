@@ -215,7 +215,10 @@ def register_tools(mcp: FastMCP):
                 lines.append(f"- 거리: {dist} m\n")
             pace = act.get("averagePaceSeconds")
             if pace:
-                lines.append(f"- 평균 페이스: {pace} sec/km\n")
+                pace_sec = float(pace)
+                m = int(pace_sec) // 60
+                s = int(pace_sec) % 60
+                lines.append(f"- 평균 페이스: {m}:{s:02d} /km\n")
             elev = act.get("elevationGainMeters")
             if elev:
                 lines.append(f"- 고도 상승: {elev} m\n")

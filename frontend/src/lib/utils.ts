@@ -36,3 +36,10 @@ export function formatDateTime(dateStr: string | null): string {
   if (!ymd || !hm) return '-';
   return `${ymd} ${hm}`;
 }
+
+export function formatPace(secondsPerKm: number | null): string {
+  if (!secondsPerKm) return '-';
+  const m = Math.floor(secondsPerKm / 60);
+  const s = Math.floor(secondsPerKm % 60);
+  return `${m}:${s.toString().padStart(2, '0')} /km`;
+}

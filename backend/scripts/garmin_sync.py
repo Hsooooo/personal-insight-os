@@ -30,10 +30,10 @@ def _parse_laps(client, activity_id):
             duration = lap.get("duration")
             distance = lap.get("distance")
             avg_speed = lap.get("averageSpeed")
-            # Garmin API의 averageSpeed는 m/s 단위. pace(sec/m) = 1 / speed (0이면 None)
+            # Garmin API의 averageSpeed는 m/s 단위. pace(sec/km) = 1000 / speed (0이면 None)
             avg_pace = None
             if avg_speed and avg_speed > 0:
-                avg_pace = round(1.0 / avg_speed, 4)
+                avg_pace = round(1000.0 / avg_speed, 4)
             laps.append({
                 "lap_index": lap.get("lapIndex"),
                 "start_time": lap.get("startTimeLocal") or lap.get("startTimeGMT"),
@@ -68,7 +68,7 @@ def fetch_activities(client, start_date, end_date):
                 "start_time": a.get("startTimeLocal", ""),
                 "duration_seconds": a.get("duration", 0),
                 "distance_meters": a.get("distance", 0),
-                "average_pace_seconds": a.get("averageSpeed", 0),
+                "average_pace_seconds": round(1000.0 / a.get("averageSpeed"), 4) if a.get("averageSpeed") and a.get("averageSpeed") > 0 else None,
                 "average_heart_rate": a.get("averageHR", 0),
                 "max_heart_rate": a.get("maxHR", 0),
                 "calories": a.get("calories", 0),

@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X } from 'lucide-react';
-import { formatDateTime, formatDistance, formatDuration } from '@/lib/utils';
+import { formatDateTime, formatDistance, formatDuration, formatPace } from '@/lib/utils';
 import type { Activity as ActivityType, ActivityFilter, WeightTrainingRequest } from '@/types';
 
 const TAG_PRESETS = ['5K / 레이스', '10K / 레이스', '하프 / 레이스', '풀 / 레이스'];
@@ -743,6 +743,7 @@ export default function Activities() {
                     <TableHead>Tag</TableHead>
                     <TableHead>Distance</TableHead>
                     <TableHead>Duration</TableHead>
+                    <TableHead>Pace</TableHead>
                     <TableHead>Avg HR</TableHead>
                     <TableHead>Calories</TableHead>
                   </TableRow>
@@ -765,13 +766,14 @@ export default function Activities() {
                         <ActivityTagCell activity={activity} />
                         <TableCell>{formatDistance(activity.distanceMeters)}</TableCell>
                         <TableCell>{formatDuration(activity.durationSeconds)}</TableCell>
+                        <TableCell>{formatPace(activity.averagePaceSeconds)}</TableCell>
                         <TableCell>{activity.averageHeartRate || '-'} bpm</TableCell>
                         <TableCell>{activity.calories || '-'} kcal</TableCell>
                       </TableRow>
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                         {hasActiveFilter
                           ? '조건에 맞는 활동이 없습니다. 필터를 조정해 보세요.'
                           : 'No activities found. Connect your Garmin to sync data or add a manual workout.'}
