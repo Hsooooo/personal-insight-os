@@ -9,9 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X } from 'lucide-react';
+import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X, ClipboardPaste } from 'lucide-react';
 import { formatDateTime, formatDistance, formatDuration, formatPace } from '@/lib/utils';
 import type { Activity as ActivityType, ActivityFilter, WeightTrainingRequest } from '@/types';
+import HevyImportDialog from '@/components/HevyImportDialog';
 
 const TAG_PRESETS = ['5K / 레이스', '10K / 레이스', '하프 / 레이스', '풀 / 레이스'];
 
@@ -581,11 +582,17 @@ export default function Activities() {
   const [filter, setFilter] = useState<ActivityFilter>({});
   const [draft, setDraft] = useState<ActivityFilter>({});
   const [showForm, setShowForm] = useState(false);
+  const [showHevyDialog, setShowHevyDialog] = useState(false);
   const [editActivity, setEditActivity] = useState<ActivityType | undefined>();
 
   const { data, isLoading } = useQuery({
     queryKey: ['activities', page, filter],
     queryFn: () => api.activities.list(page, 20, filter),
+  });
+
+  const { data: exerciseNames } = useQuery({
+    queryKey: ['exerciseNames'],
+    queryFn: api.activities.getExerciseNames,
   });
 
   const applyFilter = () => {
@@ -628,20 +635,37 @@ export default function Activities() {
           <h2 className="text-3xl font-bold tracking-tight">Activities</h2>
           <p className="text-muted-foreground">Your workout and activity history</p>
         </div>
-        <Button
-          size="sm"
-          className="h-9 gap-1"
-          onClick={() => {
-            setEditActivity(undefined);
-            setShowForm((s) => !s);
-          }}
-        >
-          {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-          {showForm ? '닫기' : '웨이트 기록'}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1"
+            onClick={() => setShowHevyDialog(true)}
+          >
+            <ClipboardPaste className="h-4 w-4" />
+            Hevy 불러오기
+          </Button>
+          <Button
+            size="sm"
+            className="h-9 gap-1"
+            onClick={() => {
+              setEditActivity(undefined);
+              setShowForm((s) => !s);
+            }}
+          >
+            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+            {showForm ? '닫기' : '웨이트 기록'}
+          </Button>
+        </div>
       </div>
 
       {showForm && <WeightTrainingForm onClose={handleCloseForm} editActivity={editActivity} />}
+
+      <HevyImportDialog
+        open={showHevyDialog}
+        onOpenChange={setShowHevyDialog}
+        exerciseNames={exerciseNames || []}
+      />
 
       <Card>
         <CardHeader className="flex flex-row items-center gap-2 pb-3">
