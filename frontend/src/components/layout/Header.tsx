@@ -1,10 +1,22 @@
 import { useAuthStore } from '@/stores/authStore';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { LogOut } from 'lucide-react';
 
 export function Header() {
   const { user, logout } = useAuthStore();
+
+  const handleLogout = async () => {
+    try {
+      await api.auth.logout();
+    } catch {
+      // ignore server errors on logout
+    } finally {
+      logout();
+      window.location.href = '/login';
+    }
+  };
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-card px-8">
@@ -26,7 +38,7 @@ export function Header() {
                 <p className="text-xs text-muted-foreground">{user.email}</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={logout}>
+            <Button variant="ghost" size="icon" onClick={handleLogout}>
               <LogOut className="h-4 w-4" />
             </Button>
           </>

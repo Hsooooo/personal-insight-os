@@ -97,6 +97,8 @@ flowchart LR
 |--------|-----------|------|------|
 | POST | `/api/auth/register` | 회원가입 | ❌ |
 | POST | `/api/auth/login` | 로그인 | ❌ |
+| POST | `/api/auth/refresh` | Access Token 갱신 (Refresh Token 쿠키 기반) | ❌ |
+| POST | `/api/auth/logout` | 로그아웃 (서버측 Refresh Token 폐기) | ✅ |
 | GET | `/api/auth/me` | 내 정보 조회 | ✅ |
 | GET | `/api/auth/api-keys` | API 키 목록 조회 | ✅ |
 | POST | `/api/auth/api-keys` | API 키 발급 | ✅ |
@@ -125,6 +127,44 @@ POST /api/auth/login
   }
 }
 ```
+> **Set-Cookie**: `refresh_token=<jwt_refresh_token>; HttpOnly; Secure; SameSite=Strict; Max-Age=604800`
+>
+> Refresh Token은 응답 body가 아닌 **HttpOnly Cookie**로 전달된다.
+
+**Refresh 요청**
+```
+POST /api/auth/refresh
+Cookie: refresh_token=...
+```
+> `credentials: include`로 호출 시 쿠키가 자동 전송된다.
+
+**Refresh 응답**
+```json
+{
+  "success": true,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiJ9...",
+    "user": { ... }
+  }
+}
+```
+> **Set-Cookie**: 새로운 `refresh_token` 쿠키 (Rotation 적용 — 기존 토큰 폐지 후 재발급)
+
+**Logout 요청**
+```
+POST /api/auth/logout
+Authorization: Bearer <access_token>
+Cookie: refresh_token=...
+```
+
+**Logout 응답**
+```json
+{
+  "success": true,
+  "data": null
+}
+```
+> **Set-Cookie**: `refresh_token=; Max-Age=0` (쿠키 만료)
 
 **API 키 발급 요청**
 ```json

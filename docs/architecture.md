@@ -86,7 +86,8 @@ flowchart TB
     GraphP --> NEO
     Python --> Garmin[Garmin Connect API]
 
-    Zustand -->|Bearer Token| JWT
+    Zustand -->|Bearer Access Token| JWT
+    Zustand -->|Cookie Refresh Token| AuthC
     RQ --> API
 
     style 클라이언트 fill:#6366f1,color:#fff
@@ -94,6 +95,51 @@ flowchart TB
     style 데이터 fill:#f59e0b,color:#fff
     style 외부 fill:#f43f5e,color:#fff
 ```
+
+---
+
+## 인증 흐름 (JWT + Refresh Token)
+
+```mermaid
+sequenceDiagram
+    actor U as 사용자
+    participant FE as React Frontend
+    participant BE as Spring Boot
+    participant PG as PostgreSQL
+
+    U->>FE: 로그인 (email, password)
+    FE->>BE: POST /api/auth/login
+    BE->>PG: Refresh Token SHA-256 hash 저장
+    BE-->>FE: Access Token (json) + Refresh Token (HttpOnly Cookie)
+    FE->>FE: Zustand에 access token 저장
+
+    U->>FE: API 호출
+    FE->>BE: Authorization: Bearer <access>
+    BE-->>FE: 200 OK
+
+    alt Access Token 만료 (401)
+        FE->>BE: POST /api/auth/refresh (withCredentials)
+        BE->>BE: Cookie의 refresh_token 검증
+        BE->>PG: 기존 Refresh Token 삭제 (Rotation)
+        BE->>PG: 새 Refresh Token 저장
+        BE-->>FE: 새 Access Token + 새 Refresh Token Cookie
+        FE->>BE: 원래 요청 재시도
+    end
+
+    U->>FE: 로그아웃
+    FE->>BE: POST /api/auth/logout
+    BE->>PG: 해당 사용자 Refresh Token 전부 삭제
+    BE-->>FE: Set-Cookie: refresh_token=; Max-Age=0
+    FE->>FE: Zustand 상태 초기화
+```
+
+| 구성 요소 | 설명 |
+|-----------|------|
+| **Access Token** | JWT (HS256), 만료 24h, `Authorization: Bearer` 헤더로 전송 |
+| **Refresh Token** | JWT (HS256), 만료 7일, `HttpOnly; Secure; SameSite=Strict` 쿠키로 저장 |
+| **Rotation** | Refresh 시 기존 토큰 DB에서 삭제 후 새로 발급 (재사용 공격 방지) |
+| **Revoke** | 로그아웃 시 DB에서 해당 사용자의 모든 refresh token 삭제 |
+| **Silent Refresh** | 프론트에서 401 수신 시 `/api/auth/refresh` 자동 호출, 성공하면 대기 중인 요청 재시도 |
 
 ---
 

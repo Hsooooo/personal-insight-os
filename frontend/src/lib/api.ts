@@ -24,6 +24,31 @@ import type {
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
+let isRefreshing = false;
+let refreshSubscribers: Array<() => void> = [];
+
+function onRefreshed() {
+  refreshSubscribers.forEach((cb) => cb());
+  refreshSubscribers = [];
+}
+
+async function doRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as ApiResponse<AuthResponse>;
+    if (!data.success || !data.data) return false;
+    useAuthStore.getState().setAuth(data.data.token, data.data.user);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token;
   const url = `${API_BASE}${path}`;
@@ -40,12 +65,39 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
   const response = await fetch(url, {
     ...options,
     headers,
+    credentials: 'include',
   });
 
   if (response.status === 401) {
-    useAuthStore.getState().logout();
-    window.location.href = '/login';
-    throw new Error('Unauthorized');
+    // Avoid infinite loop on refresh endpoint itself
+    if (path === '/api/auth/refresh') {
+      useAuthStore.getState().logout();
+      window.location.href = '/login';
+      throw new Error('Unauthorized');
+    }
+
+    if (!isRefreshing) {
+      isRefreshing = true;
+      const success = await doRefresh();
+      isRefreshing = false;
+
+      if (success) {
+        onRefreshed();
+        // Retry original request with new token
+        return fetchApi(path, options);
+      } else {
+        refreshSubscribers = [];
+        useAuthStore.getState().logout();
+        window.location.href = '/login';
+        throw new Error('Session expired');
+      }
+    } else {
+      // Wait for refresh to complete then retry
+      await new Promise<void>((resolve) => {
+        refreshSubscribers.push(resolve);
+      });
+      return fetchApi(path, options);
+    }
   }
 
   const data = (await response.json()) as ApiResponse<T>;
@@ -64,6 +116,7 @@ export const api = {
     register: (email: string, password: string, displayName?: string): Promise<AuthResponse> =>
       fetchApi('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName }) }),
     me: (): Promise<User> => fetchApi('/api/auth/me'),
+    logout: (): Promise<void> => fetchApi('/api/auth/logout', { method: 'POST' }),
   },
   dashboard: {
     summary: (): Promise<DashboardSummary> => fetchApi('/api/dashboard/summary'),
