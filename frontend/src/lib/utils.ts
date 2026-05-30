@@ -43,3 +43,45 @@ export function formatPace(secondsPerKm: number | null): string {
   const s = Math.floor(secondsPerKm % 60);
   return `${m}:${s.toString().padStart(2, '0')} /km`;
 }
+
+export function formatLapCopyText(
+  activity: {
+    activityName: string;
+    startTime: string;
+    distanceMeters: number | null;
+    durationSeconds: number;
+    averagePaceSeconds: number | null;
+    averageHeartRate: number | null;
+    calories: number | null;
+  },
+  laps: Array<{
+    lapIndex: number;
+    distanceMeters: number;
+    durationSeconds: number;
+    averagePaceSeconds: number | null;
+    averageHeartRate: number | null;
+    maxHeartRate: number | null;
+  }>
+): string {
+  const date = formatDateTime(activity.startTime);
+  const dist = formatDistance(activity.distanceMeters);
+  const dur = formatDuration(activity.durationSeconds);
+  const pace = formatPace(activity.averagePaceSeconds);
+  const hr = activity.averageHeartRate ? `${activity.averageHeartRate} bpm` : '-';
+  const cal = activity.calories ? `${activity.calories} kcal` : '-';
+
+  let text = `🏃 ${activity.activityName} — ${date}\n`;
+  text += `📍 Total: ${dist} | ${dur} | ${pace} | Avg HR ${hr} | ${cal}\n\n`;
+  text += `Splits:\n`;
+
+  for (const lap of laps) {
+    const lDist = formatDistance(lap.distanceMeters);
+    const lDur = formatDuration(lap.durationSeconds);
+    const lPace = formatPace(lap.averagePaceSeconds);
+    const lAvgHr = lap.averageHeartRate ? `${lap.averageHeartRate}bpm` : '-';
+    const lMaxHr = lap.maxHeartRate ? `${lap.maxHeartRate}bpm` : '-';
+    text += `#${lap.lapIndex}  ${lDist}  ${lDur}  ${lPace}  Avg ${lAvgHr}  Max ${lMaxHr}\n`;
+  }
+
+  return text;
+}

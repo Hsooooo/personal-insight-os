@@ -9,9 +9,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X, ClipboardPaste } from 'lucide-react';
-import { formatDateTime, formatDistance, formatDuration, formatPace } from '@/lib/utils';
-import type { Activity as ActivityType, ActivityFilter, WeightTrainingRequest } from '@/types';
+import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X, ClipboardPaste, Copy, Footprints } from 'lucide-react';
+import { formatDateTime, formatDistance, formatDuration, formatPace, formatLapCopyText } from '@/lib/utils';
+import type { Activity as ActivityType, ActivityFilter, WeightTrainingRequest, GarminActivityLap } from '@/types';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import HevyImportDialog from '@/components/HevyImportDialog';
 
 const TAG_PRESETS = ['5K / 레이스', '10K / 레이스', '하프 / 레이스', '풀 / 레이스'];
@@ -56,6 +64,12 @@ function getTagColor(tag: string | null): string {
   if (tag.includes('하프')) return 'bg-purple-100 text-purple-700 hover:bg-purple-100';
   if (tag.includes('풀')) return 'bg-orange-100 text-orange-700 hover:bg-orange-100';
   return 'bg-slate-100 text-slate-700 hover:bg-slate-100';
+}
+
+function isRunningType(type: string | null): boolean {
+  if (!type) return false;
+  const t = type.toLowerCase();
+  return t === 'running' || t.includes('run') || t.includes('treadmill') || t.includes('track');
 }
 
 function getTypeBadge(type: string | null, sourceType: string) {
@@ -584,6 +598,9 @@ export default function Activities() {
   const [showForm, setShowForm] = useState(false);
   const [showHevyDialog, setShowHevyDialog] = useState(false);
   const [editActivity, setEditActivity] = useState<ActivityType | undefined>();
+  const [runningModalOpen, setRunningModalOpen] = useState(false);
+  const [selectedRunningId, setSelectedRunningId] = useState<number | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ['activities', page, filter],
@@ -616,17 +633,41 @@ export default function Activities() {
 
   const currentSortValue = draft.sortBy ? `${draft.sortBy},${draft.sortDir || 'desc'}` : 'startTime,desc';
 
-  const handleEdit = (activity: ActivityType) => {
-    if (activity.sourceType !== 'MANUAL') return;
-    setEditActivity(activity);
-    setShowForm(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const handleRowClick = (activity: ActivityType) => {
+    if (isRunningType(activity.activityType)) {
+      setSelectedRunningId(activity.id);
+      setRunningModalOpen(true);
+      return;
+    }
+    if (activity.sourceType === 'MANUAL') {
+      setEditActivity(activity);
+      setShowForm(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleCloseForm = () => {
     setShowForm(false);
     setEditActivity(undefined);
   };
+
+  const handleCloseRunningModal = () => {
+    setRunningModalOpen(false);
+    setSelectedRunningId(null);
+    setCopied(false);
+  };
+
+  const { data: runningDetail, isLoading: runningDetailLoading } = useQuery({
+    queryKey: ['activity', selectedRunningId],
+    queryFn: () => api.activities.get(selectedRunningId!),
+    enabled: !!selectedRunningId,
+  });
+
+  const { data: runningLaps, isLoading: runningLapsLoading } = useQuery({
+    queryKey: ['activity-laps', selectedRunningId],
+    queryFn: () => api.activities.getLaps(selectedRunningId!),
+    enabled: !!selectedRunningId,
+  });
 
   return (
     <div className="space-y-6">
@@ -777,8 +818,12 @@ export default function Activities() {
                     data.content.map((activity) => (
                       <TableRow
                         key={activity.id}
-                        className={activity.sourceType === 'MANUAL' ? 'cursor-pointer hover:bg-amber-50/50' : ''}
-                        onClick={() => handleEdit(activity)}
+                        className={
+                          isRunningType(activity.activityType) || activity.sourceType === 'MANUAL'
+                            ? 'cursor-pointer hover:bg-muted/40'
+                            : ''
+                        }
+                        onClick={() => handleRowClick(activity)}
                       >
                         <TableCell className="font-medium">
                           {formatDateTime(activity.startTime)}
@@ -836,6 +881,122 @@ export default function Activities() {
           )}
         </CardContent>
       </Card>
+
+      {/* Running Detail Modal */}
+      <Dialog open={runningModalOpen} onOpenChange={setRunningModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Footprints className="h-5 w-5 text-emerald-500" />
+              {runningDetail?.activityName || 'Running Detail'}
+            </DialogTitle>
+            <DialogDescription>
+              {runningDetail ? formatDateTime(runningDetail.startTime) : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          {runningDetailLoading || runningLapsLoading ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-20" />
+              <Skeleton className="h-32" />
+            </div>
+          ) : runningDetail ? (
+            <div className="space-y-5 py-2">
+              {/* Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Distance</div>
+                  <div className="text-sm font-semibold">{formatDistance(runningDetail.distanceMeters)}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Duration</div>
+                  <div className="text-sm font-semibold">{formatDuration(runningDetail.durationSeconds)}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Pace</div>
+                  <div className="text-sm font-semibold">{formatPace(runningDetail.averagePaceSeconds)}</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Avg HR</div>
+                  <div className="text-sm font-semibold">{runningDetail.averageHeartRate || '-'} bpm</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Max HR</div>
+                  <div className="text-sm font-semibold">{runningDetail.maxHeartRate || '-'} bpm</div>
+                </div>
+                <div className="rounded-lg border bg-muted/30 p-3">
+                  <div className="text-xs text-muted-foreground">Calories</div>
+                  <div className="text-sm font-semibold">{runningDetail.calories || '-'} kcal</div>
+                </div>
+              </div>
+
+              {/* Laps */}
+              {runningLaps && runningLaps.length > 0 && (
+                <div>
+                  <div className="text-sm font-semibold mb-2">Splits ({runningLaps.length})</div>
+                  <div className="rounded-md border overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-12">#</TableHead>
+                          <TableHead>Distance</TableHead>
+                          <TableHead>Time</TableHead>
+                          <TableHead>Pace</TableHead>
+                          <TableHead>Avg HR</TableHead>
+                          <TableHead>Max HR</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {runningLaps.map((lap: GarminActivityLap) => (
+                          <TableRow key={lap.id}>
+                            <TableCell className="font-medium">{lap.lapIndex}</TableCell>
+                            <TableCell>{formatDistance(lap.distanceMeters)}</TableCell>
+                            <TableCell>{formatDuration(lap.durationSeconds)}</TableCell>
+                            <TableCell>{formatPace(lap.averagePaceSeconds)}</TableCell>
+                            <TableCell>{lap.averageHeartRate || '-'} bpm</TableCell>
+                            <TableCell>{lap.maxHeartRate || '-'} bpm</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-muted-foreground text-sm">Activity not found.</div>
+          )}
+
+          <DialogFooter className="gap-2">
+            {runningDetail && runningLaps && runningLaps.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-1"
+                onClick={() => {
+                  const text = formatLapCopyText(runningDetail, runningLaps);
+                  navigator.clipboard.writeText(text).then(() => {
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 2000);
+                  });
+                }}
+              >
+                {copied ? (
+                  <>Copied!</>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    Copy as Text
+                  </>
+                )}
+              </Button>
+            )}
+            <Button size="sm" onClick={handleCloseRunningModal}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

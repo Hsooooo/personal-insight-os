@@ -162,8 +162,9 @@ flowchart LR
 | **태그 편집** | 태그 셀 클릭 → 프리셋 선택(5K/10K/하프/풀) 또는 직접 입력 / 제거 |
 | **수동 웨이트 입력** | "+ 웨이트 기록" 버튼 → 운�� 이름/시간/부위/종목/세트/반복/무게 입력 → JSONB 저장 |
 | **수동 웨이트 수정/삭제** | MANUAL 타입 행 클릭 → 폼 열림 → 수정 또는 삭제 가능 |
+| **러닝 상세 / 스플릿 복사** | 러닝 타입 행 클릭 → Dialog 모달 열림. 활동 요약(6개 카드: 거리/시간/페이스/평균심박/최대심박/칼로리) + Lap 테이블(구간/거리/시간/페이스/심박). 하단 "Copy as Text" 버튼으로 클립보드 복사 |
 | **거리 필터 호환** | 거리 범위 필터 적용 시 웨이트 항목(distance=null) 자동 제외 |
-| **API 호출** | `GET /api/activities`, `POST /api/activities/weight`, `PATCH /api/activities/{id}`, `DELETE /api/activities/{id}`, `PATCH /api/activities/{id}/tag` |
+| **API 호출** | `GET /api/activities`, `POST /api/activities/weight`, `PATCH /api/activities/{id}`, `DELETE /api/activities/{id}`, `PATCH /api/activities/{id}/tag`, `GET /api/activities/{id}/laps` |
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
