@@ -105,9 +105,10 @@ flowchart LR
 | 항목 | 내용 |
 |------|------|
 | **목적** | 오늘의 몸 상태, 최근 흐름, 인사이트 요약 |
-| **구성** | 4개 요약 카드 + 7일 트렌드 차트 + 인사이트 + 빠른 질문 |
+| **구성** | 4개 요약 카드 + 7일 트렌드 차트 + 인사이트 + 빠른 질문 + 주간 회고 복사 버튼 |
 | **차트** | Recharts AreaChart (RHR + Stress) |
-| **API 호출** | `GET /api/dashboard/summary` |
+| **주간 회고 복사** | "Copy Weekly Report" 버튼 → 최근 7일 건강+수면+활동을 마크다운 테이블로 클립보드 복사 |
+| **API 호출** | `GET /api/dashboard/summary`, `GET /api/health/sleep?start=&end=`, `GET /api/activities?startTimeFrom=&startTimeTo=` |
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐

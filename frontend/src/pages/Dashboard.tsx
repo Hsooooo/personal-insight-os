@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,9 @@ import {
   TrendingUp,
   Lightbulb,
   MessageSquare,
+  Copy,
+  Check,
+  FileText,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -22,14 +26,56 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { formatDate, formatDistance, formatDuration } from '@/lib/utils';
+import { formatDate, formatDistance, formatDuration, formatWeeklyReport } from '@/lib/utils';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const [copied, setCopied] = useState(false);
+  const [copying, setCopying] = useState(false);
+
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard'],
     queryFn: api.dashboard.summary,
   });
+
+  const handleCopyWeeklyReport = async () => {
+    if (!data || copying) return;
+    setCopying(true);
+    try {
+      // Calculate last 7 days range
+      const end = new Date();
+      const start = new Date();
+      start.setDate(end.getDate() - 6);
+      const startStr = start.toISOString().slice(0, 10);
+      const endStr = end.toISOString().slice(0, 10);
+
+      const [sleepRes, activitiesRes] = await Promise.all([
+        api.health.sleep(startStr, endStr),
+        api.activities.list(0, 100, {
+          startTimeFrom: startStr,
+          startTimeTo: endStr,
+          sortBy: 'startTime',
+          sortDir: 'desc',
+        }),
+      ]);
+
+      const report = formatWeeklyReport(
+        data.last7DaysHealth || [],
+        sleepRes,
+        activitiesRes.content || [],
+        startStr,
+        endStr
+      );
+
+      await navigator.clipboard.writeText(report);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy weekly report', err);
+    } finally {
+      setCopying(false);
+    }
+  };
 
   if (isLoading) {
     return <DashboardSkeleton />;
@@ -43,9 +89,25 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-        <p className="text-muted-foreground">Overview of your health and activity data</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-muted-foreground">Overview of your health and activity data</p>
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-1"
+          onClick={handleCopyWeeklyReport}
+          disabled={copying || isLoading}
+        >
+          {copied ? (
+            <Check className="h-4 w-4" />
+          ) : (
+            <FileText className="h-4 w-4" />
+          )}
+          {copied ? 'Copied!' : 'Copy Weekly Report'}
+        </Button>
       </div>
 
       {/* Summary Cards */}
