@@ -44,6 +44,12 @@ export function formatPace(secondsPerKm: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')} /km`;
 }
 
+export function isRunningType(type: string | null): boolean {
+  if (!type) return false;
+  const t = type.toLowerCase();
+  return t === 'running' || t.includes('run') || t.includes('treadmill') || t.includes('track');
+}
+
 export function formatSleepDurationShort(seconds: number | null): string {
   if (!seconds) return '-';
   const h = Math.floor(seconds / 3600);
@@ -90,6 +96,14 @@ export function formatWeeklyReport(
         }>;
       }>;
     } | null;
+    laps?: Array<{
+      lapIndex: number;
+      distanceMeters: number;
+      durationSeconds: number;
+      averagePaceSeconds: number | null;
+      averageHeartRate: number | null;
+      maxHeartRate: number | null;
+    }>;
   }>,
   startDate: string,
   endDate: string
@@ -127,29 +141,42 @@ export function formatWeeklyReport(
   if (activities.length === 0) {
     md += `_No activities this week._\n`;
   } else {
-    md += `| Date | Type | Name | Distance | Duration | Pace | Avg HR | Calories |\n`;
-    md += `|------|------|------|----------|----------|------|--------|----------|\n`;
     for (const a of activities) {
-      const d = fmtDate(a.startTime);
-      const type = a.activityType;
-      const name = a.activityName;
+      const d = formatDateTime(a.startTime);
       const dist = formatDistance(a.distanceMeters);
       const dur = formatDuration(a.durationSeconds);
       const pace = formatPace(a.averagePaceSeconds);
-      const hr = a.averageHeartRate ? `${a.averageHeartRate}` : '-';
-      const cal = a.calories ?? '-';
-      md += `| ${d} | ${type} | ${name} | ${dist} | ${dur} | ${pace} | ${hr} | ${cal} |\n`;
-    }
+      const hr = a.averageHeartRate ? `${a.averageHeartRate} bpm` : '-';
+      const cal = a.calories ? `${a.calories} kcal` : '-';
 
-    // Weight training detail
-    const weightActivities = activities.filter((a) => a.activityType === 'WEIGHT_TRAINING' && a.weightTrainingDetail);
-    if (weightActivities.length > 0) {
-      md += `\n## Weight Training Detail\n`;
-      for (const a of weightActivities) {
-        const d = fmtDate(a.startTime);
-        const detail = a.weightTrainingDetail!;
-        const bodyPart = detail.bodyPart ? `(${detail.bodyPart})` : '';
-        md += `### ${d} ${a.activityName} ${bodyPart}\n`;
+      const typeLower = a.activityType.toLowerCase();
+      let emoji = '🏃';
+      if (typeLower.includes('weight') || typeLower.includes('웨이트')) emoji = '💪';
+      else if (typeLower.includes('cycle') || typeLower.includes('bike') || typeLower.includes('사이클')) emoji = '🚴';
+      else if (typeLower.includes('swim') || typeLower.includes('수영')) emoji = '🏊';
+      else if (typeLower.includes('walk') || typeLower.includes('걷기')) emoji = '🚶';
+      else if (typeLower.includes('hik') || typeLower.includes('등산')) emoji = '🥾';
+      else if (typeLower.includes('yoga') || typeLower.includes('요가')) emoji = '🧘';
+
+      md += `\n${emoji} ${a.activityName} — ${d}\n`;
+      md += `📍 Total: ${dist} | ${dur}${pace !== '-' ? ` | ${pace}` : ''}${hr !== '-' ? ` | Avg HR ${hr}` : ''}${cal !== '-' ? ` | ${cal}` : ''}\n`;
+
+      // Running laps
+      if (a.laps && a.laps.length > 0) {
+        md += `\nSplits:\n`;
+        for (const lap of a.laps) {
+          const lDist = formatDistance(lap.distanceMeters);
+          const lDur = formatDuration(lap.durationSeconds);
+          const lPace = formatPace(lap.averagePaceSeconds);
+          const lAvgHr = lap.averageHeartRate ? `${lap.averageHeartRate}bpm` : '-';
+          const lMaxHr = lap.maxHeartRate ? `${lap.maxHeartRate}bpm` : '-';
+          md += `#${lap.lapIndex}  ${lDist}  ${lDur}  ${lPace}  Avg ${lAvgHr}  Max ${lMaxHr}\n`;
+        }
+      }
+
+      // Weight training detail
+      if (a.weightTrainingDetail) {
+        const detail = a.weightTrainingDetail;
         if (detail.exercises) {
           for (const ex of detail.exercises) {
             const sets = ex.sets.map((s, i) => {

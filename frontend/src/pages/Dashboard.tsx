@@ -26,7 +26,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { formatDate, formatDistance, formatDuration, formatWeeklyReport } from '@/lib/utils';
+import { formatDate, formatDistance, formatDuration, formatWeeklyReport, isRunningType } from '@/lib/utils';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -59,10 +59,24 @@ export default function Dashboard() {
         }),
       ]);
 
+      // Fetch laps for running activities
+      const activities = activitiesRes.content || [];
+      const runningActivities = activities.filter((a) => isRunningType(a.activityType));
+      const lapsResults = await Promise.all(
+        runningActivities.map((a) => api.activities.getLaps(a.id).catch(() => []))
+      );
+      const lapsMap = new Map<number, typeof lapsResults[0]>();
+      runningActivities.forEach((a, i) => lapsMap.set(a.id, lapsResults[i]));
+
+      const activitiesWithLaps = activities.map((a) => ({
+        ...a,
+        laps: lapsMap.get(a.id),
+      }));
+
       const report = formatWeeklyReport(
         data.last7DaysHealth || [],
         sleepRes,
-        activitiesRes.content || [],
+        activitiesWithLaps,
         startStr,
         endStr
       );
