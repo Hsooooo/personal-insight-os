@@ -32,6 +32,10 @@ export interface Activity {
   elevationGainMeters: number | null;
   userTag: string | null;
   weightTrainingDetail: WeightTrainingDetail | null;
+  weatherTemperature: number | null;
+  weatherHumidity: number | null;
+  weatherWindSpeed: number | null;
+  weatherCondition: string | null;
 }
 
 export interface WeightTrainingDetail {

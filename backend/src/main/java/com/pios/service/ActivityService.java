@@ -295,6 +295,10 @@ public class ActivityService {
                 .elevationGainMeters(a.getElevationGainMeters())
                 .userTag(a.getUserTag())
                 .weightTrainingDetail(a.getWeightTrainingDetail())
+                .weatherTemperature(a.getWeatherTemperature())
+                .weatherHumidity(a.getWeatherHumidity())
+                .weatherWindSpeed(a.getWeatherWindSpeed())
+                .weatherCondition(a.getWeatherCondition())
                 .build();
     }
 

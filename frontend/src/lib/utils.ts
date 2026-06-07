@@ -104,6 +104,10 @@ export function formatWeeklyReport(
       averageHeartRate: number | null;
       maxHeartRate: number | null;
     }>;
+    weatherTemperature?: number | null;
+    weatherHumidity?: number | null;
+    weatherWindSpeed?: number | null;
+    weatherCondition?: string | null;
   }>,
   startDate: string,
   endDate: string
@@ -160,6 +164,14 @@ export function formatWeeklyReport(
 
       md += `\n${emoji} ${a.activityName} — ${d}\n`;
       md += `📍 Total: ${dist} | ${dur}${pace !== '-' ? ` | ${pace}` : ''}${hr !== '-' ? ` | Avg HR ${hr}` : ''}${cal !== '-' ? ` | ${cal}` : ''}\n`;
+
+      if (a.weatherCondition) {
+        const w = [];
+        if (a.weatherTemperature !== null) w.push(`${a.weatherTemperature}°C`);
+        if (a.weatherHumidity !== null) w.push(`습도 ${a.weatherHumidity}%`);
+        if (a.weatherWindSpeed !== null) w.push(`바람 ${a.weatherWindSpeed}km/h`);
+        md += `🌤️ ${a.weatherCondition}${w.length > 0 ? ' · ' + w.join(' · ') : ''}\n`;
+      }
 
       // Running laps
       if (a.laps && a.laps.length > 0) {

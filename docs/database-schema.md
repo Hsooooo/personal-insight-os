@@ -178,7 +178,7 @@ erDiagram
 |---|--------|------|---------------|
 | 1 | `users` | 서비스 사용자 | 1~N |
 | 2 | `provider_connections` | 외부 데이터 소스 연결 정보 + 동기화 설정 | 1~5 / 사용자 |
-| 3 | `activities` | 운등 기록 (Garmin + 수동 입력) | 100~500 / 사용자/년 |
+| 3 | `activities` | 운등 기록 (Garmin + 수동 입력). 날씨 정보(온도/습도/풍속/상태) 포함 | 100~500 / 사용자/년 |
 | 4 | `garmin_activity_laps` | 운등 랩(구간) 기록 | 500~2000 / 사용자/년 |
 | 5 | `garmin_daily_health_metrics` | 일일 건강 지표 | 365 / 사용자/년 |
 | 6 | `garmin_sleep_sessions` | 수면 기록 | 365 / 사용자/년 |

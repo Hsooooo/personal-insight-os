@@ -30,6 +30,7 @@ public class GarminSyncService {
     private final GarminActivityLapRepository lapRepo;
     private final GarminPythonClient pythonClient;
     private final GraphProjectorService graphProjector;
+    private final WeatherService weatherService;
 
     @Value("${sync.rate-limit-seconds:30}")
     private int rateLimitSeconds;
@@ -182,8 +183,44 @@ public class GarminSyncService {
 
             // 랩 저장
             saveActivityLaps(savedActivity, node.get("laps"));
+
+            // 러닝 날씨 저장
+            fetchAndSaveWeather(savedActivity, node.get("raw_payload"));
         }
         return count;
+    }
+
+    private void fetchAndSaveWeather(Activity activity, JsonNode rawPayload) {
+        if (activity.getStartTime() == null) return;
+        String type = activity.getActivityType();
+        if (type == null) return;
+        String t = type.toLowerCase();
+        boolean isRunning = t.equals("running") || t.contains("run") || t.contains("treadmill") || t.contains("track");
+        if (!isRunning) return;
+
+        JsonNode startLat = rawPayload != null ? rawPayload.get("startLatitude") : null;
+        JsonNode startLon = rawPayload != null ? rawPayload.get("startLongitude") : null;
+        if (startLat == null || startLat.isNull() || startLon == null || startLon.isNull()) {
+            return;
+        }
+
+        try {
+            double lat = startLat.asDouble();
+            double lon = startLon.asDouble();
+            if (lat == 0.0 && lon == 0.0) return;
+
+            WeatherService.WeatherData weather = weatherService.fetchWeather(lat, lon, activity.getStartTime());
+            if (weather != null) {
+                activity.setWeatherTemperature(weather.getTemperature());
+                activity.setWeatherHumidity(weather.getHumidity());
+                activity.setWeatherWindSpeed(weather.getWindSpeed());
+                activity.setWeatherCondition(weather.getCondition());
+                activity.setWeatherRaw(weather.getRaw());
+                activityRepo.save(activity);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch weather for activity {}: {}", activity.getId(), e.getMessage());
+        }
     }
 
     private void saveActivityLaps(Activity activity, JsonNode lapsNode) {

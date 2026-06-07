@@ -930,6 +930,21 @@ export default function Activities() {
                 </div>
               </div>
 
+              {runningDetail.weatherCondition && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>🌤️ {runningDetail.weatherCondition}</span>
+                  {runningDetail.weatherTemperature !== null && (
+                    <span>{runningDetail.weatherTemperature}°C</span>
+                  )}
+                  {runningDetail.weatherHumidity !== null && (
+                    <span>· 습도 {runningDetail.weatherHumidity}%</span>
+                  )}
+                  {runningDetail.weatherWindSpeed !== null && (
+                    <span>· 바람 {runningDetail.weatherWindSpeed}km/h</span>
+                  )}
+                </div>
+              )}
+
               {/* Laps */}
               {runningLaps && runningLaps.length > 0 && (
                 <div>

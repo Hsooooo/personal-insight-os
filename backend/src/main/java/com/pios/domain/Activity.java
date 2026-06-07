@@ -76,6 +76,22 @@ public class Activity {
     @Column(name = "weight_training_detail", columnDefinition = "jsonb")
     private Map<String, Object> weightTrainingDetail;
 
+    @Column(name = "weather_temperature", precision = 4, scale = 1)
+    private BigDecimal weatherTemperature;
+
+    @Column(name = "weather_humidity")
+    private Integer weatherHumidity;
+
+    @Column(name = "weather_wind_speed", precision = 4, scale = 1)
+    private BigDecimal weatherWindSpeed;
+
+    @Column(name = "weather_condition", length = 50)
+    private String weatherCondition;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "weather_raw", columnDefinition = "jsonb")
+    private Map<String, Object> weatherRaw;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

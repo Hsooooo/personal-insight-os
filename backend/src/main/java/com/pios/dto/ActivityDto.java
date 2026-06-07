@@ -26,4 +26,8 @@ public class ActivityDto {
     private BigDecimal elevationGainMeters;
     private String userTag;
     private Map<String, Object> weightTrainingDetail;
+    private BigDecimal weatherTemperature;
+    private Integer weatherHumidity;
+    private BigDecimal weatherWindSpeed;
+    private String weatherCondition;
 }
