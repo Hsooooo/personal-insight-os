@@ -10,7 +10,7 @@ import {
   Activity,
   HeartPulse,
   Moon,
-  TrendingUp,
+  Scale,
   Lightbulb,
   MessageSquare,
   Copy,
@@ -99,6 +99,7 @@ export default function Dashboard() {
     date: formatDate(h.metricDate),
     rhr: h.restingHeartRate,
     stress: h.stressAvg,
+    weight: h.weightKg,
   })) || [];
 
   return (
@@ -169,12 +170,14 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Total Activities</CardTitle>
-            <TrendingUp className="h-4 w-4 text-amber-500" />
+            <CardTitle className="text-sm font-medium">Weight</CardTitle>
+            <Scale className="h-4 w-4 text-sky-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{data?.totalActivities || 0}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
+            <div className="text-2xl font-bold">
+              {data?.latestHealth?.weightKg ?? '-'} <span className="text-sm font-normal text-muted-foreground">kg</span>
+            </div>
+            <p className="text-xs text-muted-foreground">Latest reading</p>
           </CardContent>
         </Card>
       </div>
@@ -184,7 +187,7 @@ export default function Dashboard() {
         <Card className="lg:col-span-4">
           <CardHeader>
             <CardTitle>7-Day Trends</CardTitle>
-            <CardDescription>Resting heart rate and stress level</CardDescription>
+            <CardDescription>Resting heart rate, stress level, and weight</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
@@ -212,6 +215,15 @@ export default function Dashboard() {
                   fillOpacity={0.1}
                   strokeWidth={2}
                   name="Stress"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="weight"
+                  stroke="#0ea5e9"
+                  fill="#0ea5e9"
+                  fillOpacity={0.1}
+                  strokeWidth={2}
+                  name="Weight"
                 />
               </AreaChart>
             </ResponsiveContainer>
