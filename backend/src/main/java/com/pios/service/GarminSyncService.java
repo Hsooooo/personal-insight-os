@@ -116,6 +116,7 @@ public class GarminSyncService {
         int totalActivities = 0;
         int totalHealth = 0;
         int totalSleep = 0;
+        int totalWeights = 0;
 
         // 청크 단위 처리
         List<DateRange> chunks = splitIntoChunks(fromDate, toDate, chunkDays);
@@ -128,18 +129,19 @@ public class GarminSyncService {
                         email, password, chunk.from, chunk.to, GarminPythonClient.DataType.ALL);
                 JsonNode data = result.data();
 
+                totalWeights += saveWeights(userId, data.get("weights"));
                 totalActivities += saveActivities(userId, data.get("activities"));
                 totalHealth += saveHealthMetrics(userId, data.get("health"));
                 totalSleep += saveSleepSessions(userId, data.get("sleep"));
             } catch (Exception e) {
                 log.error("Chunk sync failed: {} to {}", chunk.from, chunk.to, e);
-                markPartial(syncLog, totalActivities, totalHealth, totalSleep, e.getMessage());
+                markPartial(syncLog, totalActivities, totalHealth, totalSleep, totalWeights, e.getMessage());
                 return;
             }
         }
 
         // 완료 처리
-        markCompleted(syncLog, totalActivities, totalHealth, totalSleep);
+        markCompleted(syncLog, totalActivities, totalHealth, totalSleep, totalWeights);
         updateConnectionAfterSync(conn, toDate);
 
         // 그래프 투영
@@ -251,6 +253,30 @@ public class GarminSyncService {
         }
     }
 
+    private int saveWeights(Long userId, JsonNode weightsNode) {
+        if (weightsNode == null || !weightsNode.isArray()) return 0;
+        int count = 0;
+        User user = User.builder().id(userId).build();
+
+        for (JsonNode node : weightsNode) {
+            LocalDate date = parseDate(getText(node, "metric_date"));
+            if (date == null) continue;
+
+            Optional<GarminDailyHealthMetric> existing = healthRepo.findByUserIdAndMetricDate(userId, date);
+            GarminDailyHealthMetric metric = existing.orElseGet(() -> GarminDailyHealthMetric.builder()
+                    .user(user)
+                    .metricDate(date)
+                    .build());
+
+            metric.setWeightKg(getDecimal(node, "weight_kg"));
+            metric.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
+
+            healthRepo.save(metric);
+            count++;
+        }
+        return count;
+    }
+
     private int saveHealthMetrics(Long userId, JsonNode healthNode) {
         if (healthNode == null || !healthNode.isArray()) return 0;
         int count = 0;
@@ -354,11 +380,12 @@ public class GarminSyncService {
         throw new IllegalStateException("Garmin password not found");
     }
 
-    private void markCompleted(SyncLog syncLog, int activities, int health, int sleep) {
+    private void markCompleted(SyncLog syncLog, int activities, int health, int sleep, int weights) {
         syncLog.setStatus(SyncStatus.COMPLETED.name());
         syncLog.setActivitiesCount(activities);
         syncLog.setHealthMetricsCount(health);
         syncLog.setSleepCount(sleep);
+        syncLog.setWeightsCount(weights);
         syncLog.setCompletedAt(Instant.now());
         syncLogRepo.save(syncLog);
     }
@@ -370,11 +397,12 @@ public class GarminSyncService {
         syncLogRepo.save(syncLog);
     }
 
-    private void markPartial(SyncLog syncLog, int activities, int health, int sleep, String error) {
+    private void markPartial(SyncLog syncLog, int activities, int health, int sleep, int weights, String error) {
         syncLog.setStatus(SyncStatus.PARTIAL.name());
         syncLog.setActivitiesCount(activities);
         syncLog.setHealthMetricsCount(health);
         syncLog.setSleepCount(sleep);
+        syncLog.setWeightsCount(weights);
         syncLog.setErrorMessage(error);
         syncLog.setCompletedAt(Instant.now());
         syncLogRepo.save(syncLog);

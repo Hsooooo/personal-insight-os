@@ -35,7 +35,7 @@ public class HealthService {
                 .restingHeartRate(h.getRestingHeartRate()).hrvAvg(h.getHrvAvg())
                 .stressAvg(h.getStressAvg()).bodyBatteryMin(h.getBodyBatteryMin())
                 .bodyBatteryMax(h.getBodyBatteryMax()).steps(h.getSteps())
-                .caloriesTotal(h.getCaloriesTotal()).build();
+                .caloriesTotal(h.getCaloriesTotal()).weightKg(h.getWeightKg()).build();
     }
 
     private SleepDto toSleepDto(GarminSleepSession s) {

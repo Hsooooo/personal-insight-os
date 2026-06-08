@@ -19,4 +19,5 @@ public class HealthMetricDto {
     private Integer bodyBatteryMax;
     private Integer steps;
     private Integer caloriesTotal;
+    private BigDecimal weightKg;
 }

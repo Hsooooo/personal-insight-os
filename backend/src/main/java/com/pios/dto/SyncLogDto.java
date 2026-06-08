@@ -19,6 +19,7 @@ public class SyncLogDto {
     private Integer activitiesCount;
     private Integer healthMetricsCount;
     private Integer sleepCount;
+    private Integer weightsCount;
     private String errorMessage;
     private Instant startedAt;
     private Instant completedAt;

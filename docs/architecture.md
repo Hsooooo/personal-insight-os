@@ -202,17 +202,17 @@ sequenceDiagram
 
     loop 30일 청크 단위
         BE->>PY: ProcessBuilder 실행<br/>(email, password, chunk_from, chunk_to)
-        PY->>GC: garminconnect API 호출<br/>(activities + splits per activity)
+        PY->>GC: garminconnect API 호출<br/>(activities + splits + body_composition)
         GC-->>PY: Raw JSON
-        PY-->>BE: activities + health + sleep<br/>(activities에 laps 포함)
-        BE->>PG: UPSERT 저장 (activities, health, sleep)
+        PY-->>BE: activities + health + sleep + weights<br/>(activities에 laps 포함)
+        BE->>PG: UPSERT 저장 (activities, health, sleep, weights)
         BE->>PG: 랩 데이터 저장<br/>(garmin_activity_laps, delete-insert)
     end
 
     BE->>PG: sync_log 완료 (status: COMPLETED)
     BE->>BE: GraphProjector 실행
     BE->>NEO: Person 노드 생성/업데이트
-    BE->>NEO: Activity/Sleep/HealthMetric 노드 생성
+    BE->>NEO: Activity/Sleep/HealthMetric 노드 생성<br/>(HealthMetric에 weight 속성 포함)
     BE->>NEO: Race 노드 생성 (태그 기반 분류)
     BE->>NEO: 관계 엣지 생성<br/>(PERFORMED, HAS_SLEEP, HAS_METRIC, TAGGED_AS)
     BE->>PG: graph_node_mappings 저장

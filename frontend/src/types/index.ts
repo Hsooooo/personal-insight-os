@@ -85,6 +85,7 @@ export interface HealthMetric {
   bodyBatteryMax: number;
   steps: number;
   caloriesTotal: number;
+  weightKg: number | null;
 }
 
 export interface Sleep {

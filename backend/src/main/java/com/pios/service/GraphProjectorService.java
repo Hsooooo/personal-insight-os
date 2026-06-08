@@ -42,7 +42,7 @@ public class GraphProjectorService {
                         var result = session.run(
                             """
                             MERGE (n:HealthMetric {sourceId: $sourceId, userId: $userId})
-                            SET n.date = $date, n.rhr = $rhr, n.stress = $stress
+                            SET n.date = $date, n.rhr = $rhr, n.stress = $stress, n.weight = $weight
                             WITH n
                             MATCH (p:Person {userId: $userId})
                             MERGE (p)-[:HAS_METRIC]->(n)
@@ -53,7 +53,8 @@ public class GraphProjectorService {
                                 "userId", userId,
                                 "date", h.getMetricDate().toString(),
                                 "rhr", h.getRestingHeartRate() != null ? h.getRestingHeartRate() : 0,
-                                "stress", h.getStressAvg() != null ? h.getStressAvg().doubleValue() : 0.0
+                                "stress", h.getStressAvg() != null ? h.getStressAvg().doubleValue() : 0.0,
+                                "weight", h.getWeightKg() != null ? h.getWeightKg().doubleValue() : 0.0
                             )
                         );
                         if (result.hasNext()) {

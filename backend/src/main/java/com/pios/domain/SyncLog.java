@@ -44,6 +44,9 @@ public class SyncLog {
     @Column(name = "sleep_count")
     private Integer sleepCount = 0;
 
+    @Column(name = "weights_count")
+    private Integer weightsCount = 0;
+
     @Column(name = "error_message")
     private String errorMessage;
 

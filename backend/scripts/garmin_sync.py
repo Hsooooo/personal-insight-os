@@ -128,6 +128,31 @@ def fetch_sleep(client, date):
     except Exception as e:
         return None
 
+def fetch_body_composition(client, start_date, end_date):
+    """체중/신체조성 데이터 조회 (기간 단위)"""
+    try:
+        data = client.get_body_composition(
+            start_date.strftime("%Y-%m-%d"),
+            end_date.strftime("%Y-%m-%d")
+        )
+        weight_list = data.get("dateWeightList", [])
+        # 같은 날 여러 건이면 마지막 측정값 사용
+        date_map = {}
+        for entry in weight_list:
+            calendar_date = entry.get("calendarDate")
+            weight = entry.get("weight")
+            if calendar_date and weight is not None:
+                date_map[calendar_date] = {
+                    "metric_date": calendar_date,
+                    "weight_kg": weight,
+                    "bmi": entry.get("bmi"),
+                    "body_fat": entry.get("bodyFat"),
+                    "raw_payload": entry
+                }
+        return list(date_map.values())
+    except Exception as e:
+        return []
+
 def main():
     if len(sys.argv) < 6:
         print(json.dumps({"error": "Usage: garmin_sync.py <email> <password> <from_date> <to_date> <data_type>"}), file=sys.stderr)
@@ -152,7 +177,7 @@ def main():
         print(json.dumps({"error": f"login failed: {e}"}), file=sys.stderr)
         sys.exit(1)
 
-    result = {"activities": [], "health": [], "sleep": []}
+    result = {"activities": [], "health": [], "sleep": [], "weights": []}
 
     try:
         if data_type in ("activities", "all"):
@@ -170,6 +195,9 @@ def main():
                     if s:
                         result["sleep"].append(s)
                 current += timedelta(days=1)
+
+        if data_type in ("health", "all"):
+            result["weights"] = fetch_body_composition(client, from_date, to_date)
 
         print(json.dumps(result, ensure_ascii=False, default=str))
     except Exception as e:

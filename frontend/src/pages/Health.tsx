@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { HeartPulse } from 'lucide-react';
+import { HeartPulse, Scale } from 'lucide-react';
 import {
   LineChart,
   Line,
@@ -45,6 +45,11 @@ export default function Health() {
     rem: s.remSleepSeconds ? Math.round(s.remSleepSeconds / 3600 * 10) / 10 : 0,
     awake: s.awakeSeconds ? Math.round(s.awakeSeconds / 3600 * 10) / 10 : 0,
     score: s.sleepScore,
+  })) || [];
+
+  const weightData = metrics?.slice().reverse().map((m) => ({
+    date: formatDate(m.metricDate),
+    weight: m.weightKg,
   })) || [];
 
   return (
@@ -150,6 +155,31 @@ export default function Health() {
                   <Tooltip contentStyle={{ borderRadius: '8px' }} />
                   <Bar dataKey="steps" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                 </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center gap-2">
+            <Scale className="h-5 w-5 text-sky-500" />
+            <div>
+              <CardTitle>Weight</CardTitle>
+              <CardDescription>Daily weight change</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {metricsLoading ? (
+              <Skeleton className="h-64" />
+            ) : (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={weightData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis fontSize={12} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+                  <Tooltip contentStyle={{ borderRadius: '8px' }} formatter={(value: number) => [`${value} kg`, 'Weight']} />
+                  <Line type="monotone" dataKey="weight" stroke="#0ea5e9" strokeWidth={2} dot={false} connectNulls />
+                </LineChart>
               </ResponsiveContainer>
             )}
           </CardContent>

@@ -88,6 +88,7 @@ erDiagram
         int body_battery_max
         int steps
         int calories_total
+        numeric weight_kg
         jsonb raw_payload
     }
 
@@ -163,6 +164,7 @@ erDiagram
         int activities_count
         int health_metrics_count
         int sleep_count
+        int weights_count
         text error_message
         timestamptz started_at
         timestamptz completed_at
@@ -180,7 +182,7 @@ erDiagram
 | 2 | `provider_connections` | 외부 데이터 소스 연결 정보 + 동기화 설정 | 1~5 / 사용자 |
 | 3 | `activities` | 운등 기록 (Garmin + 수동 입력). 날씨 정보(온도/습도/풍속/상태) 포함 | 100~500 / 사용자/년 |
 | 4 | `garmin_activity_laps` | 운등 랩(구간) 기록 | 500~2000 / 사용자/년 |
-| 5 | `garmin_daily_health_metrics` | 일일 건강 지표 | 365 / 사용자/년 |
+| 5 | `garmin_daily_health_metrics` | 일일 건강 지표 (체중 포함) | 365 / 사용자/년 |
 | 6 | `garmin_sleep_sessions` | 수면 기록 | 365 / 사용자/년 |
 | 7 | `goals` | 사용자 목표 | 5~20 / 사용자 |
 | 8 | `llm_providers` | LLM Provider 설정 | 1~3 / 사용자 |
@@ -203,7 +205,7 @@ flowchart LR
         D["📅 Date<br/>{date}"]
         A["🏃 Activity<br/>{name, type, distance}"]
         S["😴 Sleep<br/>{date, score, duration}"]
-        H["❤️ HealthMetric<br/>{date, rhr, stress}"]
+        H["❤️ HealthMetric<br/>{date, rhr, stress, weight}"]
         G["🎯 Goal<br/>{title, type}"]
         I["💡 Insight<br/>{title, category}"]
         DS["📡 DataSource<br/>{type}"]

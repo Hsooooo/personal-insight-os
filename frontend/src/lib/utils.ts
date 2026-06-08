@@ -216,6 +216,10 @@ export function formatLapCopyText(
     averagePaceSeconds: number | null;
     averageHeartRate: number | null;
     calories: number | null;
+    weatherTemperature?: number | null;
+    weatherHumidity?: number | null;
+    weatherWindSpeed?: number | null;
+    weatherCondition?: string | null;
   },
   laps: Array<{
     lapIndex: number;
@@ -234,8 +238,17 @@ export function formatLapCopyText(
   const cal = activity.calories ? `${activity.calories} kcal` : '-';
 
   let text = `🏃 ${activity.activityName} — ${date}\n`;
-  text += `📍 Total: ${dist} | ${dur} | ${pace} | Avg HR ${hr} | ${cal}\n\n`;
-  text += `Splits:\n`;
+  text += `📍 Total: ${dist} | ${dur} | ${pace} | Avg HR ${hr} | ${cal}\n`;
+
+  if (activity.weatherCondition) {
+    const w = [];
+    if (activity.weatherTemperature !== null && activity.weatherTemperature !== undefined) w.push(`${activity.weatherTemperature}°C`);
+    if (activity.weatherHumidity !== null && activity.weatherHumidity !== undefined) w.push(`습도 ${activity.weatherHumidity}%`);
+    if (activity.weatherWindSpeed !== null && activity.weatherWindSpeed !== undefined) w.push(`바람 ${activity.weatherWindSpeed}km/h`);
+    text += `🌤️ ${activity.weatherCondition}${w.length > 0 ? ' · ' + w.join(' · ') : ''}\n`;
+  }
+
+  text += `\nSplits:\n`;
 
   for (const lap of laps) {
     const lDist = formatDistance(lap.distanceMeters);

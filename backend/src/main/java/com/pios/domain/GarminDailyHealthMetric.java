@@ -49,6 +49,9 @@ public class GarminDailyHealthMetric {
     @Column(name = "calories_total")
     private Integer caloriesTotal;
 
+    @Column(name = "weight_kg", precision = 5, scale = 2)
+    private BigDecimal weightKg;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_payload", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> rawPayload;

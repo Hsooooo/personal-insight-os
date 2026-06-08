@@ -198,7 +198,7 @@ POST /api/auth/api-keys
 **응답 예시**
 ```json
 {
-  "latestHealth": { "restingHeartRate": 58, "stressAvg": 32.5, ... },
+  "latestHealth": { "restingHeartRate": 58, "stressAvg": 32.5, "weightKg": 72.5, ... },
   "latestSleep": { "sleepScore": 78, "totalSleepSeconds": 25200, ... },
   "latestActivity": { "activityType": "RUNNING", "distanceMeters": 8200, ... },
   "totalActivities": 42,
@@ -221,7 +221,7 @@ POST /api/auth/api-keys
 |--------|-----------|------|
 | GET | `/api/data-sources` | 연결된 데이터 소스 목록 |
 | POST | `/api/data-sources/garmin/connect` | Garmin 계정 연결 |
-| POST | `/api/data-sources/garmin/sync` | Garmin 데이터 동기화 (body: syncType, dateFrom, dateTo) |
+| POST | `/api/data-sources/garmin/sync` | Garmin 데이터 동기화 — 활동, 건강지표, 수면, **체중** 포함 (body: syncType, dateFrom, dateTo) |
 | GET | `/api/data-sources/garmin/sync-logs` | 동기화 이력 조회 |
 | POST | `/api/data-sources/garmin/mock` | Mock 데이터 생성 |
 | DELETE | `/api/data-sources/garmin` | Garmin 연결 해제 |
