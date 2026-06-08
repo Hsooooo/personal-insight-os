@@ -142,9 +142,13 @@ def fetch_body_composition(client, start_date, end_date):
             calendar_date = entry.get("calendarDate")
             weight = entry.get("weight")
             if calendar_date and weight is not None:
+                # Garmin이 가끔 grams 단위로 반환할 수 있음 (500 이상이면 grams로 보정)
+                weight_kg = weight
+                if weight_kg > 500:
+                    weight_kg = round(weight_kg / 1000, 2)
                 date_map[calendar_date] = {
                     "metric_date": calendar_date,
-                    "weight_kg": weight,
+                    "weight_kg": weight_kg,
                     "bmi": entry.get("bmi"),
                     "body_fat": entry.get("bodyFat"),
                     "raw_payload": entry

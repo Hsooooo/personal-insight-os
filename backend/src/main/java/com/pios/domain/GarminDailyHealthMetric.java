@@ -49,7 +49,7 @@ public class GarminDailyHealthMetric {
     @Column(name = "calories_total")
     private Integer caloriesTotal;
 
-    @Column(name = "weight_kg", precision = 5, scale = 2)
+    @Column(name = "weight_kg", precision = 8, scale = 2)
     private BigDecimal weightKg;
 
     @JdbcTypeCode(SqlTypes.JSON)

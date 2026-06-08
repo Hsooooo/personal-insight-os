@@ -129,7 +129,11 @@ public class GarminSyncService {
                         email, password, chunk.from, chunk.to, GarminPythonClient.DataType.ALL);
                 JsonNode data = result.data();
 
-                totalWeights += saveWeights(userId, data.get("weights"));
+                try {
+                    totalWeights += saveWeights(userId, data.get("weights"));
+                } catch (Exception e) {
+                    log.warn("Weight sync failed for chunk {} to {}: {}", chunk.from, chunk.to, e.getMessage());
+                }
                 totalActivities += saveActivities(userId, data.get("activities"));
                 totalHealth += saveHealthMetrics(userId, data.get("health"));
                 totalSleep += saveSleepSessions(userId, data.get("sleep"));
