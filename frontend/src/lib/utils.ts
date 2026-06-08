@@ -66,6 +66,7 @@ export function formatWeeklyReport(
     stressAvg: number;
     steps: number;
     caloriesTotal: number;
+    weightKg: number | null;
   }>,
   sleepSessions: Array<{
     sleepDate: string;
@@ -123,8 +124,8 @@ export function formatWeeklyReport(
   let md = `# Weekly Report: ${startDate} ~ ${endDate}\n\n`;
 
   md += `## Daily Health & Sleep\n`;
-  md += `| Date | RHR | Stress | Steps | Calories | Sleep | Deep | Light | REM | Awake | Score |\n`;
-  md += `|------|-----|--------|-------|----------|-------|-------|-------|-----|-------|-------|\n`;
+  md += `| Date | RHR | Stress | Steps | Calories | Weight | Sleep | Deep | Light | REM | Awake | Score |\n`;
+  md += `|------|-----|--------|-------|----------|--------|-------|-------|-------|-----|-------|-------|\n`;
 
   for (const date of sortedDates) {
     const { health, sleep } = dateMap.get(date)!;
@@ -132,13 +133,14 @@ export function formatWeeklyReport(
     const stress = health?.stressAvg ?? '-';
     const steps = health?.steps ?? '-';
     const cal = health?.caloriesTotal ?? '-';
+    const weight = health?.weightKg ?? '-';
     const total = sleep ? formatSleepDurationShort(sleep.totalSleepSeconds) : '-';
     const deep = sleep ? formatSleepDurationShort(sleep.deepSleepSeconds) : '-';
     const light = sleep ? formatSleepDurationShort(sleep.lightSleepSeconds) : '-';
     const rem = sleep ? formatSleepDurationShort(sleep.remSleepSeconds) : '-';
     const awake = sleep ? formatSleepDurationShort(sleep.awakeSeconds) : '-';
     const score = sleep?.sleepScore ?? '-';
-    md += `| ${fmtDate(date)} | ${rhr} | ${stress} | ${steps} | ${cal} | ${total} | ${deep} | ${light} | ${rem} | ${awake} | ${score} |\n`;
+    md += `| ${fmtDate(date)} | ${rhr} | ${stress} | ${steps} | ${cal} | ${weight} | ${total} | ${deep} | ${light} | ${rem} | ${awake} | ${score} |\n`;
   }
 
   md += `\n## Activities (${activities.length})\n`;
