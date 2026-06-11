@@ -17,6 +17,8 @@ import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 
+import static java.time.ZoneId.of;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -41,6 +43,8 @@ public class GarminSyncService {
     @Value("${sync.default-full-sync-months:12}")
     private int defaultFullSyncMonths;
 
+    private static final ZoneId KST = of("Asia/Seoul");
+
     /**
      * Rate limit 체크 후 동기화 실행
      */
@@ -52,9 +56,9 @@ public class GarminSyncService {
         // Rate limit 체크
         checkRateLimit(userId);
 
-        // 동기화 기간 결정
+        // 동기화 기간 결정 (KST 기준)
         if (fromDate == null || toDate == null) {
-            LocalDate today = LocalDate.now();
+            LocalDate today = LocalDate.now(KST);
             if (syncType == SyncType.FULL) {
                 fromDate = today.minusMonths(defaultFullSyncMonths);
                 toDate = today;

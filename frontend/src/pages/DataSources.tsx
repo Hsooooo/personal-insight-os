@@ -126,7 +126,11 @@ export default function DataSources() {
 
   const syncMutation = useMutation({
     mutationFn: () => {
-      const today = new Date().toISOString().split('T')[0];
+      // 동기화 범위는 KST(Asia/Seoul) 기준으로 계산
+      const kstDate = (date: Date) =>
+        date.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+
+      const today = kstDate(new Date());
       let dateFrom: string | undefined;
       let dateTo = today;
       let syncType = 'INCREMENTAL';
@@ -139,12 +143,12 @@ export default function DataSources() {
         const months = parseInt(syncRange.replace('full-', ''), 10);
         const d = new Date();
         d.setMonth(d.getMonth() - months);
-        dateFrom = d.toISOString().split('T')[0];
+        dateFrom = kstDate(d);
       } else {
         // incremental: last 7 days
         const d = new Date();
         d.setDate(d.getDate() - 7);
-        dateFrom = d.toISOString().split('T')[0];
+        dateFrom = kstDate(d);
       }
 
       return api.dataSources.syncGarmin(syncType, dateFrom, dateTo);
