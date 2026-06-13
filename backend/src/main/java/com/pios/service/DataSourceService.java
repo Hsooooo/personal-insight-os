@@ -1,6 +1,7 @@
 package com.pios.service;
 
 import com.pios.domain.ProviderConnection;
+import com.pios.domain.SyncLog;
 import com.pios.domain.User;
 import com.pios.domain.enums.SyncType;
 import com.pios.dto.ProviderConnectionDto;
@@ -62,7 +63,7 @@ public class DataSourceService {
     }
 
     @Transactional
-    public ProviderConnectionDto syncGarmin(Long userId, String syncType, LocalDate dateFrom, LocalDate dateTo) {
+    public SyncLogDto syncGarmin(Long userId, String syncType, LocalDate dateFrom, LocalDate dateTo) {
         SyncType type;
         try {
             type = SyncType.valueOf(syncType != null ? syncType.toUpperCase() : "INCREMENTAL");
@@ -70,11 +71,8 @@ public class DataSourceService {
             type = SyncType.INCREMENTAL;
         }
 
-        garminSyncService.sync(userId, type, dateFrom, dateTo);
-
-        ProviderConnection conn = providerRepo.findByUserIdAndProviderType(userId, "GARMIN")
-                .orElseThrow(() -> new IllegalArgumentException("Garmin not connected"));
-        return toDto(conn);
+        SyncLog syncLog = garminSyncService.sync(userId, type, dateFrom, dateTo);
+        return toSyncLogDto(syncLog);
     }
 
     @Transactional
@@ -94,22 +92,14 @@ public class DataSourceService {
 
     public List<SyncLogDto> getSyncLogs(Long userId) {
         return syncLogRepo.findByUserIdOrderByStartedAtDesc(userId).stream()
-                .map(log -> SyncLogDto.builder()
-                        .id(log.getId())
-                        .providerType(log.getProviderType())
-                        .syncType(log.getSyncType())
-                        .status(log.getStatus())
-                        .dateFrom(log.getDateFrom())
-                        .dateTo(log.getDateTo())
-                        .activitiesCount(log.getActivitiesCount())
-                        .healthMetricsCount(log.getHealthMetricsCount())
-                        .sleepCount(log.getSleepCount())
-                        .errorMessage(log.getErrorMessage())
-                        .startedAt(log.getStartedAt())
-                        .completedAt(log.getCompletedAt())
-                        .createdAt(log.getCreatedAt())
-                        .build())
+                .map(this::toSyncLogDto)
                 .toList();
+    }
+
+    public SyncLogDto getSyncLog(Long userId, Long logId) {
+        SyncLog log = syncLogRepo.findByIdAndUserId(logId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Sync log not found"));
+        return toSyncLogDto(log);
     }
 
     private ProviderConnectionDto toDto(ProviderConnection c) {
@@ -122,6 +112,25 @@ public class DataSourceService {
                 .syncConfig(c.getSyncConfig())
                 .dataCount(count)
                 .createdAt(c.getCreatedAt())
+                .build();
+    }
+
+    private SyncLogDto toSyncLogDto(SyncLog log) {
+        return SyncLogDto.builder()
+                .id(log.getId())
+                .providerType(log.getProviderType())
+                .syncType(log.getSyncType())
+                .status(log.getStatus())
+                .dateFrom(log.getDateFrom())
+                .dateTo(log.getDateTo())
+                .activitiesCount(log.getActivitiesCount())
+                .healthMetricsCount(log.getHealthMetricsCount())
+                .sleepCount(log.getSleepCount())
+                .weightsCount(log.getWeightsCount())
+                .errorMessage(log.getErrorMessage())
+                .startedAt(log.getStartedAt())
+                .completedAt(log.getCompletedAt())
+                .createdAt(log.getCreatedAt())
                 .build();
     }
 }

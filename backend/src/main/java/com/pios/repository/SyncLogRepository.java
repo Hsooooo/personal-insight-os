@@ -23,4 +23,6 @@ public interface SyncLogRepository extends JpaRepository<SyncLog, Long> {
     Optional<SyncLog> findLatestByUserIdAndProviderType(
             @Param("userId") Long userId,
             @Param("providerType") String providerType);
+
+    Optional<SyncLog> findByIdAndUserId(Long id, Long userId);
 }

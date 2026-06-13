@@ -155,6 +155,7 @@ export interface SyncLog {
   activitiesCount: number;
   healthMetricsCount: number;
   sleepCount: number;
+  weightsCount: number;
   errorMessage: string | null;
   startedAt: string;
   completedAt: string | null;

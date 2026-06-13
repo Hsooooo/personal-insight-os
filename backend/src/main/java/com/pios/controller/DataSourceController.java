@@ -32,7 +32,7 @@ public class DataSourceController {
     }
 
     @PostMapping("/garmin/sync")
-    public ApiResponse<ProviderConnectionDto> syncGarmin(
+    public ApiResponse<SyncLogDto> syncGarmin(
             @AuthenticationPrincipal Long userId,
             @RequestBody(required = false) SyncRequestDto request) {
         if (request == null) {
@@ -46,6 +46,13 @@ public class DataSourceController {
     @GetMapping("/garmin/sync-logs")
     public ApiResponse<List<SyncLogDto>> getSyncLogs(@AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(dataSourceService.getSyncLogs(userId));
+    }
+
+    @GetMapping("/garmin/sync-logs/{logId}")
+    public ApiResponse<SyncLogDto> getSyncLog(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long logId) {
+        return ApiResponse.ok(dataSourceService.getSyncLog(userId, logId));
     }
 
     @PostMapping("/garmin/mock")

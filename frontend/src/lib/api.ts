@@ -49,6 +49,13 @@ async function doRefresh(): Promise<boolean> {
   }
 }
 
+function redirectToLogin() {
+  if (typeof window === 'undefined') return;
+  if (window.location.pathname === '/login') return;
+  useAuthStore.getState().logout();
+  window.location.href = '/login';
+}
+
 async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token;
   const url = `${API_BASE}${path}`;
@@ -62,17 +69,22 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch {
+    redirectToLogin();
+    throw new Error('Network error');
+  }
 
   if (response.status === 401) {
     // Avoid infinite loop on refresh endpoint itself
     if (path === '/api/auth/refresh') {
-      useAuthStore.getState().logout();
-      window.location.href = '/login';
+      redirectToLogin();
       throw new Error('Unauthorized');
     }
 
@@ -87,8 +99,7 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
         return fetchApi(path, options);
       } else {
         refreshSubscribers = [];
-        useAuthStore.getState().logout();
-        window.location.href = '/login';
+        redirectToLogin();
         throw new Error('Session expired');
       }
     } else {
@@ -125,12 +136,13 @@ export const api = {
     list: (): Promise<ProviderConnection[]> => fetchApi('/api/data-sources'),
     connectGarmin: (email: string, password: string): Promise<ProviderConnection> =>
       fetchApi('/api/data-sources/garmin/connect', { method: 'POST', body: JSON.stringify({ email, password }) }),
-    syncGarmin: (syncType?: string, dateFrom?: string, dateTo?: string): Promise<ProviderConnection> =>
+    syncGarmin: (syncType?: string, dateFrom?: string, dateTo?: string): Promise<SyncLog> =>
       fetchApi('/api/data-sources/garmin/sync', {
         method: 'POST',
         body: JSON.stringify({ syncType, dateFrom, dateTo }),
       }),
     getSyncLogs: (): Promise<SyncLog[]> => fetchApi('/api/data-sources/garmin/sync-logs'),
+    getSyncLog: (id: number): Promise<SyncLog> => fetchApi(`/api/data-sources/garmin/sync-logs/${id}`),
     generateMockData: (): Promise<ProviderConnection> =>
       fetchApi('/api/data-sources/garmin/mock', { method: 'POST' }),
     disconnectGarmin: (): Promise<void> => fetchApi('/api/data-sources/garmin', { method: 'DELETE' }),

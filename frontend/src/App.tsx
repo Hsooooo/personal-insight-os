@@ -1,6 +1,9 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
+import { api } from '@/lib/api';
 import { Layout } from '@/components/layout/Layout';
+import { Loader2 } from 'lucide-react';
 import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import DataSources from '@/pages/DataSources';
@@ -14,7 +17,48 @@ import Settings from '@/pages/Settings';
 import McpSettings from '@/pages/McpSettings';
 
 function App() {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, logout } = useAuthStore();
+  const location = useLocation();
+  const [isVerifying, setIsVerifying] = useState(isAuthenticated);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsVerifying(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    api.auth
+      .me()
+      .then(() => {
+        if (!cancelled) setIsVerifying(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          logout();
+          setIsVerifying(false);
+          if (location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, logout, location.pathname]);
+
+  if (isVerifying) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+          <p className="text-sm text-muted-foreground">Verifying session...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Routes>

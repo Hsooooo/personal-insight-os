@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
 
 import {
   Loader2,
@@ -18,12 +19,15 @@ import {
   Activity,
   Moon,
   Heart,
+  Scale,
   AlertTriangle,
 } from 'lucide-react';
 import type { SyncLog } from '@/types';
 
 const SYNC_COOLDOWN_SECONDS = 30;
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const POLL_INTERVAL_MS = 30 * 1000; // 30 seconds
+const ACTIVE_POLL_INTERVAL_MS = 2000; // 2 seconds
+const ACTIVE_POLL_MAX_MS = 5 * 60 * 1000; // 5 minutes
 
 function useCooldown() {
   const [cooldownRemaining, setCooldownRemaining] = useState(0);
@@ -87,6 +91,7 @@ export default function DataSources() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [syncRange, setSyncRange] = useState('incremental');
+  const [activeLogId, setActiveLogId] = useState<number | null>(null);
   const { cooldownRemaining, startCooldown } = useCooldown();
 
   const { data: connections, isLoading } = useQuery({
@@ -99,7 +104,6 @@ export default function DataSources() {
     queryFn: api.dataSources.getSyncLogs,
     refetchInterval: (query) => {
       const data = query.state.data as SyncLog[] | undefined;
-      // Poll every 5 min if any sync is running; otherwise disable auto-poll
       const hasRunning = data?.some((l) => l.status === 'RUNNING');
       return hasRunning ? POLL_INTERVAL_MS : false;
     },
@@ -116,11 +120,72 @@ export default function DataSources() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [queryClient]);
 
+  // Active sync log polling (fast, individual)
+  useEffect(() => {
+    if (!activeLogId) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    const maxAttempts = ACTIVE_POLL_MAX_MS / ACTIVE_POLL_INTERVAL_MS;
+
+    const poll = async () => {
+      try {
+        const log = await api.dataSources.getSyncLog(activeLogId);
+        if (cancelled) return;
+
+        queryClient.setQueryData(['syncLogs'], (old: SyncLog[] | undefined) => {
+          if (!old) return [log];
+          const filtered = old.filter((l) => l.id !== log.id);
+          return [log, ...filtered];
+        });
+
+        if (log.status === 'COMPLETED') {
+          toast.success(`Sync completed: ${log.activitiesCount} activities, ${log.healthMetricsCount} health metrics`);
+          setActiveLogId(null);
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+          queryClient.invalidateQueries({ queryKey: ['activities'] });
+          queryClient.invalidateQueries({ queryKey: ['health'] });
+          return;
+        }
+
+        if (log.status === 'FAILED' || log.status === 'PARTIAL') {
+          toast.error(`Sync ${log.status.toLowerCase()}${log.errorMessage ? ': ' + log.errorMessage : ''}`);
+          setActiveLogId(null);
+          return;
+        }
+
+        attempts++;
+        if (attempts >= maxAttempts) {
+          toast.info('Sync status polling timed out. Check sync history for results.');
+          setActiveLogId(null);
+          return;
+        }
+
+        setTimeout(poll, ACTIVE_POLL_INTERVAL_MS);
+      } catch (err) {
+        if (!cancelled) {
+          toast.error('Failed to check sync status');
+          setActiveLogId(null);
+        }
+      }
+    };
+
+    poll();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLogId, queryClient]);
+
   const connectMutation = useMutation({
     mutationFn: () => api.dataSources.connectGarmin(email, password),
     onSuccess: () => {
+      toast.success('Garmin connected successfully');
       queryClient.invalidateQueries({ queryKey: ['dataSources'] });
       queryClient.invalidateQueries({ queryKey: ['syncLogs'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to connect Garmin');
     },
   });
 
@@ -153,29 +218,42 @@ export default function DataSources() {
 
       return api.dataSources.syncGarmin(syncType, dateFrom, dateTo);
     },
-    onSuccess: () => {
+    onSuccess: (log) => {
       startCooldown();
-      queryClient.invalidateQueries({ queryKey: ['dataSources'] });
+      setActiveLogId(log.id);
+      toast.info(`Sync started (${log.syncType}, ${log.dateFrom} ~ ${log.dateTo})`);
       queryClient.invalidateQueries({ queryKey: ['syncLogs'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to start sync');
     },
   });
 
   const mockMutation = useMutation({
     mutationFn: api.dataSources.generateMockData,
     onSuccess: () => {
+      toast.success('Mock data generated');
       queryClient.invalidateQueries({ queryKey: ['dataSources'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to generate mock data');
     },
   });
 
   const disconnectMutation = useMutation({
     mutationFn: api.dataSources.disconnectGarmin,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dataSources'] }),
+    onSuccess: () => {
+      toast.success('Garmin disconnected');
+      queryClient.invalidateQueries({ queryKey: ['dataSources'] });
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Failed to disconnect Garmin');
+    },
   });
 
   const garminConn = connections?.find((c) => c.providerType === 'GARMIN');
-  const isSyncing = syncLogs?.some((l) => l.status === 'RUNNING');
+  const isSyncing = syncLogs?.some((l) => l.status === 'RUNNING') || activeLogId != null;
 
   return (
     <div className="space-y-6">
@@ -245,13 +323,13 @@ export default function DataSources() {
                   </select>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2 sm:flex-row">
                   <Button
                     onClick={() => syncMutation.mutate()}
-                    disabled={syncMutation.isPending || cooldownRemaining > 0 || isSyncing}
+                    disabled={cooldownRemaining > 0 || isSyncing}
                     className="flex-1"
                   >
-                    {syncMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isSyncing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     <RefreshCw className="mr-2 h-4 w-4" />
                     {cooldownRemaining > 0
                       ? `Wait ${cooldownRemaining}s`
@@ -341,7 +419,7 @@ export default function DataSources() {
                         {new Date(log.startedAt).toLocaleString('ko-KR')}
                       </span>
                     </div>
-                    <div className="flex gap-3 text-xs text-muted-foreground">
+                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <Activity className="h-3 w-3" />
                         {log.activitiesCount || 0}
@@ -353,6 +431,10 @@ export default function DataSources() {
                       <span className="flex items-center gap-1">
                         <Moon className="h-3 w-3" />
                         {log.sleepCount || 0}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Scale className="h-3 w-3" />
+                        {log.weightsCount || 0}
                       </span>
                     </div>
                     {log.errorMessage && (
@@ -376,7 +458,7 @@ export default function DataSources() {
             <CardDescription>More data sources on the roadmap</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {['Strava', 'Apple Health', 'Oura Ring', 'Withings', 'Fitbit'].map((name) => (
                 <div key={name} className="flex items-center justify-between rounded-lg border p-3">
                   <span className="text-sm font-medium">{name}</span>

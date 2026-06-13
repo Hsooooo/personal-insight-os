@@ -42,12 +42,14 @@ export default function Dashboard() {
     if (!data || copying) return;
     setCopying(true);
     try {
-      // Calculate last 7 days range
+      // Calculate last 7 days range based on KST
+      const kstDate = (date: Date) =>
+        date.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
       const end = new Date();
       const start = new Date();
       start.setDate(end.getDate() - 6);
-      const startStr = start.toISOString().slice(0, 10);
-      const endStr = end.toISOString().slice(0, 10);
+      const startStr = kstDate(start);
+      const endStr = kstDate(end);
 
       const [sleepRes, activitiesRes] = await Promise.all([
         api.health.sleep(startStr, endStr),
