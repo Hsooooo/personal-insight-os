@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X, ClipboardPaste, Copy, Footprints } from 'lucide-react';
+import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X, ClipboardPaste, Copy, Footprints, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { formatDateTime, formatDistance, formatDuration, formatPace, formatLapCopyText } from '@/lib/utils';
 import type { Activity as ActivityType, ActivityFilter, WeightTrainingRequest, GarminActivityLap } from '@/types';
 import {
@@ -20,6 +20,13 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import HevyImportDialog from '@/components/HevyImportDialog';
 
 const TAG_PRESETS = ['5K / 레이스', '10K / 레이스', '하프 / 레이스', '풀 / 레이스'];
@@ -209,6 +216,245 @@ function FilterSelect({
         <option key={o.value} value={o.value}>{o.label}</option>
       ))}
     </select>
+  );
+}
+
+function MobileActivityCard({
+  activity,
+  onClick,
+}: {
+  activity: ActivityType;
+  onClick: () => void;
+}) {
+  const running = isRunningType(activity.activityType);
+  return (
+    <div
+      onClick={onClick}
+      className="rounded-lg border bg-card p-4 active:bg-muted/60 cursor-pointer transition-colors"
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>{formatDateTime(activity.startTime)}</span>
+            {getTypeBadge(activity.activityType, activity.sourceType)}
+          </div>
+          <h3 className="mt-1 truncate text-sm font-semibold">{activity.activityName}</h3>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+        {activity.distanceMeters != null && (
+          <span className="text-muted-foreground">{formatDistance(activity.distanceMeters)}</span>
+        )}
+        {activity.durationSeconds > 0 && (
+          <span className="text-muted-foreground">{formatDuration(activity.durationSeconds)}</span>
+        )}
+        {running && activity.averagePaceSeconds != null && (
+          <span className="text-muted-foreground">{formatPace(activity.averagePaceSeconds)}</span>
+        )}
+      </div>
+      {activity.userTag && (
+        <div className="mt-2">
+          <Badge className={getTagColor(activity.userTag)}>{activity.userTag}</Badge>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MobileFilterBar({
+  draft,
+  setDraft,
+  applyFilter,
+  resetFilter,
+  hasActiveFilter,
+  currentSortValue,
+}: {
+  draft: ActivityFilter;
+  setDraft: (f: ActivityFilter) => void;
+  applyFilter: () => void;
+  resetFilter: () => void;
+  hasActiveFilter: boolean;
+  currentSortValue: string;
+}) {
+  const [showSearch, setShowSearch] = useState(false);
+
+  const handleSortChange = (sortValue: string) => {
+    const [sortBy, sortDir] = sortValue.split(',');
+    setDraft({ ...draft, sortBy, sortDir });
+  };
+
+  return (
+    <div className="space-y-2 md:hidden">
+      <div className="flex flex-wrap items-center gap-2">
+        <FilterSelect
+          value={draft.activityType || ''}
+          onChange={(v) => setDraft({ ...draft, activityType: v || undefined })}
+          options={ACTIVITY_TYPES}
+        />
+        <FilterSelect
+          value={draft.userTag === '' && draft.userTag !== undefined ? '__none__' : draft.userTag || ''}
+          onChange={(v) => setDraft({ ...draft, userTag: v === '__none__' ? '' : v || undefined })}
+          options={TAG_OPTIONS}
+        />
+        <FilterSelect
+          value={currentSortValue}
+          onChange={handleSortChange}
+          options={SORT_OPTIONS}
+        />
+        <Button
+          size="sm"
+          variant={showSearch ? 'default' : 'outline'}
+          className="h-8 px-2"
+          onClick={() => setShowSearch((s) => !s)}
+        >
+          <Search className="h-3.5 w-3.5" />
+        </Button>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button size="sm" variant="outline" className="h-8 gap-1 px-2">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              필터
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="bottom" className="h-auto max-h-[80vh]">
+            <SheetHeader>
+              <SheetTitle>고급 필터</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">기간</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    value={draft.startTimeFrom || ''}
+                    onChange={(e) => setDraft({ ...draft, startTimeFrom: e.target.value || undefined })}
+                    className="h-9 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">~</span>
+                  <Input
+                    type="date"
+                    value={draft.startTimeTo || ''}
+                    onChange={(e) => setDraft({ ...draft, startTimeTo: e.target.value || undefined })}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">거리 (m)</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="최소"
+                    value={draft.minDistance || ''}
+                    onChange={(e) => setDraft({ ...draft, minDistance: e.target.value || undefined })}
+                    className="h-9 text-xs"
+                  />
+                  <span className="text-xs text-muted-foreground">~</span>
+                  <Input
+                    type="number"
+                    placeholder="최대"
+                    value={draft.maxDistance || ''}
+                    onChange={(e) => setDraft({ ...draft, maxDistance: e.target.value || undefined })}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button className="flex-1" size="sm" onClick={applyFilter}>
+                  적용
+                </Button>
+                <Button variant="ghost" size="sm" onClick={resetFilter}>
+                  초기화
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+      {showSearch && (
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="이름 검색"
+              value={draft.activityName || ''}
+              onChange={(e) => setDraft({ ...draft, activityName: e.target.value || undefined })}
+              className="h-8 pl-7 text-xs"
+              onKeyDown={(e) => e.key === 'Enter' && applyFilter()}
+            />
+          </div>
+          <Button size="sm" variant="secondary" className="h-8 text-xs" onClick={applyFilter}>
+            검색
+          </Button>
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="secondary" className="h-8 text-xs" onClick={applyFilter}>
+          적용
+        </Button>
+        <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={resetFilter}>
+          초기화
+        </Button>
+        {hasActiveFilter && (
+          <Badge variant="outline" className="text-xs">
+            필터 적용중
+          </Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function MobileActionMenu({
+  onHevy,
+  onWeight,
+  showForm,
+}: {
+  onHevy: () => void;
+  onWeight: () => void;
+  showForm: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="md:hidden">
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>
+          <Button size="sm" className="h-9 gap-1">
+            <Plus className="h-4 w-4" />
+            기록
+          </Button>
+        </SheetTrigger>
+        <SheetContent side="bottom" className="h-auto">
+          <SheetHeader>
+            <SheetTitle>새 기록</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() => {
+                onHevy();
+                setOpen(false);
+              }}
+            >
+              <ClipboardPaste className="h-4 w-4" />
+              Hevy 불러오기
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() => {
+                onWeight();
+                setOpen(false);
+              }}
+            >
+              {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showForm ? '기록 닫기' : '수동 웨이트 기록'}
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }
 
@@ -677,26 +923,38 @@ export default function Activities() {
           <p className="text-muted-foreground">Your workout and activity history</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="h-9 gap-1"
-            onClick={() => setShowHevyDialog(true)}
-          >
-            <ClipboardPaste className="h-4 w-4" />
-            Hevy 불러오기
-          </Button>
-          <Button
-            size="sm"
-            className="h-9 gap-1"
-            onClick={() => {
+          {/* Desktop action buttons */}
+          <div className="hidden md:flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1"
+              onClick={() => setShowHevyDialog(true)}
+            >
+              <ClipboardPaste className="h-4 w-4" />
+              Hevy 불러오기
+            </Button>
+            <Button
+              size="sm"
+              className="h-9 gap-1"
+              onClick={() => {
+                setEditActivity(undefined);
+                setShowForm((s) => !s);
+              }}
+            >
+              {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showForm ? '닫기' : '웨이트 기록'}
+            </Button>
+          </div>
+          {/* Mobile action menu */}
+          <MobileActionMenu
+            onHevy={() => setShowHevyDialog(true)}
+            onWeight={() => {
               setEditActivity(undefined);
               setShowForm((s) => !s);
             }}
-          >
-            {showForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-            {showForm ? '닫기' : '웨이트 기록'}
-          </Button>
+            showForm={showForm}
+          />
         </div>
       </div>
 
@@ -720,8 +978,8 @@ export default function Activities() {
           )}
         </CardHeader>
 
-        {/* Filter Bar */}
-        <div className="border-b bg-muted/30 px-6 py-3">
+        {/* Filter Bar - Desktop */}
+        <div className="hidden md:block border-b bg-muted/30 px-6 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <FilterSelect
               value={draft.activityType || ''}
@@ -790,16 +1048,36 @@ export default function Activities() {
           </div>
         </div>
 
-        <CardContent className="pt-4">
+        {/* Filter Bar - Mobile */}
+        <div className="border-b bg-muted/30 px-4 py-3 md:hidden">
+          <MobileFilterBar
+            draft={draft}
+            setDraft={setDraft}
+            applyFilter={applyFilter}
+            resetFilter={resetFilter}
+            hasActiveFilter={hasActiveFilter}
+            currentSortValue={currentSortValue}
+          />
+        </div>
+
+        <CardContent className="pt-4 px-4 md:px-6">
           {isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-12" />
-              ))}
-            </div>
+            <>
+              <div className="hidden md:block space-y-2">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12" />
+                ))}
+              </div>
+              <div className="space-y-3 md:hidden">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-24" />
+                ))}
+              </div>
+            </>
           ) : (
             <>
-              <Table>
+              {/* Desktop Table */}
+              <Table className="hidden md:table">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
@@ -851,6 +1129,25 @@ export default function Activities() {
                   )}
                 </TableBody>
               </Table>
+
+              {/* Mobile Card List */}
+              <div className="space-y-3 md:hidden">
+                {data?.content?.length ? (
+                  data.content.map((activity) => (
+                    <MobileActivityCard
+                      key={activity.id}
+                      activity={activity}
+                      onClick={() => handleRowClick(activity)}
+                    />
+                  ))
+                ) : (
+                  <p className="text-center text-muted-foreground py-8">
+                    {hasActiveFilter
+                      ? '조건에 맞는 활동이 없습니다. 필터를 조정해 보세요.'
+                      : 'No activities found. Connect your Garmin to sync data or add a manual workout.'}
+                  </p>
+                )}
+              </div>
 
               {/* Pagination */}
               {data && data.totalPages > 1 && (
