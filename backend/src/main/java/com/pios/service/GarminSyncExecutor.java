@@ -37,6 +37,10 @@ public class GarminSyncExecutor {
     @Async("syncTaskExecutor")
     @Transactional
     public void runSyncAsync(Long userId, Long syncLogId, LocalDate fromDate, LocalDate toDate) {
+        if (syncLogId == null) {
+            log.error("syncLogId is null, cannot start sync for user {}", userId);
+            return;
+        }
         SyncLog syncLog = syncLogRepo.findById(syncLogId)
                 .orElseThrow(() -> new IllegalStateException("Sync log not found: " + syncLogId));
         ProviderConnection conn = providerRepo.findByUserIdAndProviderType(userId, "GARMIN")

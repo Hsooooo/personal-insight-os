@@ -67,7 +67,11 @@ public class GarminSyncService {
                 .dateTo(toDate)
                 .startedAt(Instant.now())
                 .build();
-        syncLog = syncLogRepo.save(syncLog);
+        syncLog = syncLogRepo.saveAndFlush(syncLog);
+
+        if (syncLog.getId() == null) {
+            throw new IllegalStateException("Failed to create sync log");
+        }
 
         executor.runSyncAsync(userId, syncLog.getId(), fromDate, toDate);
 

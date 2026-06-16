@@ -52,6 +52,9 @@ public class DataSourceController {
     public ApiResponse<SyncLogDto> getSyncLog(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long logId) {
+        if (logId == null) {
+            throw new IllegalArgumentException("logId is required");
+        }
         return ApiResponse.ok(dataSourceService.getSyncLog(userId, logId));
     }
 
