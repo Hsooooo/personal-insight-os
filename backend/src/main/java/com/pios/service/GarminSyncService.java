@@ -11,7 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -30,6 +31,7 @@ public class GarminSyncService {
     private final ProviderConnectionRepository providerRepo;
     private final SyncLogRepository syncLogRepo;
     private final GarminSyncExecutor executor;
+    private final PlatformTransactionManager transactionManager;
 
     @Value("${sync.rate-limit-seconds:30}")
     private int rateLimitSeconds;
@@ -39,7 +41,6 @@ public class GarminSyncService {
 
     private static final ZoneId KST = of("Asia/Seoul");
 
-    @Transactional
     public SyncLog sync(Long userId, SyncType syncType, LocalDate fromDate, LocalDate toDate) {
         ProviderConnection conn = providerRepo.findByUserIdAndProviderType(userId, "GARMIN")
                 .orElseThrow(() -> new IllegalArgumentException("Garmin not connected"));
@@ -58,23 +59,33 @@ public class GarminSyncService {
             }
         }
 
-        SyncLog syncLog = SyncLog.builder()
-                .user(User.builder().id(userId).build())
-                .providerType("GARMIN")
-                .syncType(syncType.name())
-                .status(SyncStatus.RUNNING.name())
-                .dateFrom(fromDate)
-                .dateTo(toDate)
-                .startedAt(Instant.now())
-                .build();
-        syncLog = syncLogRepo.saveAndFlush(syncLog);
-
-        if (syncLog.getId() == null) {
-            throw new IllegalStateException("Failed to create sync log");
-        }
+        SyncLog syncLog = createSyncLogInNewTransaction(userId, syncType, fromDate, toDate);
 
         executor.runSyncAsync(userId, syncLog.getId(), fromDate, toDate);
 
+        return syncLog;
+    }
+
+    private SyncLog createSyncLogInNewTransaction(Long userId, SyncType syncType,
+                                                  LocalDate fromDate, LocalDate toDate) {
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehaviorName("PROPAGATION_REQUIRES_NEW");
+        SyncLog syncLog = txTemplate.execute(status -> {
+            SyncLog log = SyncLog.builder()
+                    .user(User.builder().id(userId).build())
+                    .providerType("GARMIN")
+                    .syncType(syncType.name())
+                    .status(SyncStatus.RUNNING.name())
+                    .dateFrom(fromDate)
+                    .dateTo(toDate)
+                    .startedAt(Instant.now())
+                    .build();
+            return syncLogRepo.saveAndFlush(log);
+        });
+
+        if (syncLog == null || syncLog.getId() == null) {
+            throw new IllegalStateException("Failed to create sync log");
+        }
         return syncLog;
     }
 
