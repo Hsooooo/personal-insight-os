@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Lightbulb, Save, Bookmark, Trash2 } from 'lucide-react';
+import { Lightbulb, Save, Bookmark, Trash2, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const categories = ['', '운동', '수면', '회복', '스트레스', '목표', '패턴'];
 const feedbackStatuses = ['', 'CORRECT', 'UNCLEAR', 'WRONG', 'IMPORTANT'];
@@ -104,6 +105,57 @@ export default function Insights() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-sm leading-relaxed text-muted-foreground">{insight.summary}</p>
+
+                  {insight.evidences && insight.evidences.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">Evidences</p>
+                      {insight.evidences.map((evidence) => {
+                        const route = evidence.evidenceData?.route;
+                        return (
+                          <div
+                            key={evidence.id}
+                            className="rounded-md border p-2 text-xs hover:bg-muted/20"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <p className="font-medium">
+                                  {evidence.evidenceData?.metric || evidence.evidenceType}
+                                </p>
+                                <p className="text-muted-foreground">{evidence.evidenceSummary}</p>
+                              </div>
+                              {route && (
+                                <Link
+                                  to={route}
+                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </Link>
+                              )}
+                            </div>
+                            {evidence.evidenceData && (
+                              <div className="mt-1 grid grid-cols-2 gap-2">
+                                <div className="rounded bg-muted/40 px-2 py-1">
+                                  <span className="text-muted-foreground">Current</span>
+                                  <div className="font-medium">
+                                    {evidence.evidenceData.currentValue ?? '-'}
+                                    {evidence.evidenceData.unit}
+                                  </div>
+                                </div>
+                                <div className="rounded bg-muted/40 px-2 py-1">
+                                  <span className="text-muted-foreground">Baseline</span>
+                                  <div className="font-medium">
+                                    {evidence.evidenceData.baselineValue ?? '-'}
+                                    {evidence.evidenceData.unit}
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   <div className="mt-3 flex items-center gap-2">
                     {insight.category && <Badge variant="secondary">{insight.category}</Badge>}
                     {insight.confidence && (

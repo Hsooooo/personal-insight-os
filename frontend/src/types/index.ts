@@ -115,6 +115,16 @@ export interface Insight {
   evidences: Evidence[];
 }
 
+export interface EvidenceData {
+  metric: string;
+  currentValue: number | null;
+  baselineValue: number | null;
+  changeRate: number | null;
+  unit: string;
+  date: string | null;
+  route: string | null;
+}
+
 export interface Evidence {
   id: number;
   evidenceType: string;
@@ -122,6 +132,7 @@ export interface Evidence {
   sourceId: number;
   evidenceSummary: string;
   weight: number;
+  evidenceData?: EvidenceData;
 }
 
 export interface Goal {
@@ -182,6 +193,33 @@ export interface DashboardSummary {
   suggestedQuestions: string[];
 }
 
+export interface AskPeriod {
+  start: string;
+  end: string;
+  baselineStart: string;
+  baselineEnd: string;
+}
+
+export interface AskConfidence {
+  score: number;
+  level: 'LOW' | 'MEDIUM' | 'HIGH';
+  reasons: string[];
+}
+
+export interface AskEvidence {
+  type: 'HEALTH_METRIC' | 'SLEEP' | 'ACTIVITY';
+  label: string;
+  observation: string;
+  comparison: string;
+  currentValue: number | null;
+  baselineValue: number | null;
+  changeRate: number | null;
+  unit: string;
+  sourceId: number | null;
+  sourceDate: string | null;
+  route: string | null;
+}
+
 export interface AskRequest {
   question: string;
 }
@@ -189,11 +227,12 @@ export interface AskRequest {
 export interface AskResponse {
   questionId: number;
   insightId: number;
-  conclusion: string;
-  evidenceSummary: string[];
-  relatedData: string[];
-  confidence: string;
-  followUpQuestion: string;
+  answer: string;
+  intent: string;
+  period: AskPeriod;
+  confidence: AskConfidence;
+  evidences: AskEvidence[];
+  followUpQuestions: string[];
 }
 
 export interface GraphNode {
