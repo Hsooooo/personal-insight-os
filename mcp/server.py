@@ -462,20 +462,61 @@ def register_tools(mcp: FastMCP):
                 return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
 
             data = payload.get("data", {})
-            conclusion = data.get("conclusion", "")
-            evidence = data.get("evidenceSummary", [])
-            confidence = data.get("confidence", "")
-            follow_up = data.get("followUpQuestion", "")
+            answer = data.get("answer", "")
+            intent = data.get("intent", "")
+            period = data.get("period", {}) or {}
+            confidence = data.get("confidence", {}) or {}
+            evidences = data.get("evidences", []) or []
+            follow_ups = data.get("followUpQuestions", []) or []
 
-            lines = ["🧠 코치의 답변\n\n", conclusion, "\n"]
-            if evidence:
+            lines = ["🧠 코치의 답변\n\n", answer, "\n"]
+
+            if period.get("start") and period.get("end"):
+                lines.append(
+                    f"\n📅 분석 기간: {period.get('start')} ~ {period.get('end')}\n"
+                )
+                if period.get("baselineStart") and period.get("baselineEnd"):
+                    lines.append(
+                        f"📊 기준선 기간: {period.get('baselineStart')} ~ {period.get('baselineEnd')}\n"
+                    )
+
+            if evidences:
                 lines.append("\n📎 근거:\n")
-                for e in evidence:
-                    lines.append(f"- {e}\n")
+                for e in evidences:
+                    label = e.get("label", "")
+                    observation = e.get("observation", "")
+                    comparison = e.get("comparison", "")
+                    current = e.get("currentValue")
+                    baseline = e.get("baselineValue")
+                    change = e.get("changeRate")
+                    unit = e.get("unit", "")
+                    lines.append(f"- {label}: {observation} ({comparison})\n")
+                    if current is not None and baseline is not None:
+                        lines.append(f"    현재 {current}{unit} / 기준선 {baseline}{unit}")
+                        if change is not None:
+                            direction = "증가" if change > 0 else "감소"
+                            lines.append(f" / {abs(change):.1f}% {direction}")
+                        lines.append("\n")
+
             if confidence:
-                lines.append(f"\n📊 신뢰도: {confidence}\n")
-            if follow_up:
-                lines.append(f"\n💡 추가 질문: {follow_up}\n")
+                score = confidence.get("score")
+                level = confidence.get("level", "")
+                reasons = confidence.get("reasons", []) or []
+                score_str = f" ({score * 100:.0f}%)" if score is not None else ""
+                lines.append(f"\n🎯 신뢰도: {level}{score_str}\n")
+                if reasons:
+                    lines.append("  판정 이유:\n")
+                    for r in reasons:
+                        lines.append(f"  - {r}\n")
+
+            if follow_ups:
+                lines.append("\n💡 추가 질문:\n")
+                for q in follow_ups:
+                    lines.append(f"- {q}\n")
+
+            if intent:
+                lines.append(f"\n🏷️ 의도: {intent}\n")
+
             return "".join(lines)
 
     @mcp.tool()
