@@ -86,6 +86,34 @@ class EvidenceStatisticsCalculatorTest {
     }
 
     @Test
+    void nullSleepSecondsAreHandled() {
+        LocalDate today = LocalDate.of(2026, 6, 20);
+        AskPeriod period = AskPeriod.builder()
+                .start(today.minusDays(6))
+                .end(today)
+                .baselineStart(today.minusDays(13))
+                .baselineEnd(today.minusDays(7))
+                .build();
+
+        when(healthRepo.findByUserIdAndMetricDateBetweenOrderByMetricDateDesc(eq(1L), any(), any()))
+                .thenReturn(List.of());
+        when(sleepRepo.findByUserIdAndSleepDateBetweenOrderBySleepDateDesc(eq(1L), any(), any()))
+                .thenReturn(List.of(
+                        sleep(1L, today, 28800, 85, 7200, 5400),
+                        sleep(2L, today.minusDays(1), null, 80, 6000, 4800),
+                        sleep(3L, today.minusDays(2), 25200, 78, null, 4200)
+                ));
+        when(activityRepo.findRecentByUserId(eq(1L), any())).thenReturn(List.of());
+
+        EvidenceStatistics stats = calculator.calculate(1L, period);
+
+        MetricStatistic totalSleep = find(stats.getSleepMetrics(), "totalSleepSeconds");
+        assertThat(totalSleep.getCurrentValue()).isNotNull();
+        MetricStatistic deepSleep = find(stats.getSleepMetrics(), "deepSleepSeconds");
+        assertThat(deepSleep.getCurrentValue()).isNotNull();
+    }
+
+    @Test
     void nullValuesAreExcludedAndUnreliableBelowThreeDays() {
         LocalDate today = LocalDate.of(2026, 6, 20);
         AskPeriod period = AskPeriod.builder()
@@ -131,7 +159,7 @@ class EvidenceStatisticsCalculatorTest {
                 .build();
     }
 
-    private GarminSleepSession sleep(Long id, LocalDate date, int total, int score, int deep, int rem) {
+    private GarminSleepSession sleep(Long id, LocalDate date, Integer total, Integer score, Integer deep, Integer rem) {
         return GarminSleepSession.builder()
                 .id(id)
                 .user(User.builder().id(1L).build())
