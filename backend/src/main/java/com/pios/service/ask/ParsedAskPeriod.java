@@ -1,6 +1,6 @@
-package com.pios.dto;
+package com.pios.service.ask;
 
-import jakarta.validation.constraints.NotBlank;
+import com.pios.dto.AskPeriod;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class AskRequest {
-    @NotBlank
-    private String question;
+public class ParsedAskPeriod {
+    private AskPeriod period;
+    private boolean explicit;
 }

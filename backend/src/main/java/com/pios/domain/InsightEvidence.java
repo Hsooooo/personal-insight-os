@@ -1,8 +1,11 @@
 package com.pios.domain;
 
+import com.pios.dto.EvidenceData;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -32,6 +35,10 @@ public class InsightEvidence {
     private String evidenceSummary;
 
     private BigDecimal weight;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "evidence_data", columnDefinition = "jsonb")
+    private EvidenceData evidenceData;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

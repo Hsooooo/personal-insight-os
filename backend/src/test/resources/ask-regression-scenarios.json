@@ -1,0 +1,77 @@
+[
+  {
+    "question": "최근 컨디션이 왜 떨어졌어",
+    "intent": "CONDITION",
+    "explicitPeriod": false
+  },
+  {
+    "question": "이번 주 수면 어땠어",
+    "intent": "SLEEP",
+    "explicitPeriod": true
+  },
+  {
+    "question": "지난 주 훈련 강도",
+    "intent": "TRAINING",
+    "explicitPeriod": true
+  },
+  {
+    "question": "최근 한 달 러닝 기록",
+    "intent": "PERFORMANCE",
+    "explicitPeriod": true
+  },
+  {
+    "question": "이번주 운동 정리해줘",
+    "intent": "WORKOUT_SUMMARY",
+    "explicitPeriod": true
+  },
+  {
+    "question": "최근 14일 HRV 추이",
+    "intent": "CONDITION",
+    "explicitPeriod": true
+  },
+  {
+    "question": "최근 3주 러닝 거리",
+    "intent": "PERFORMANCE",
+    "explicitPeriod": true
+  },
+  {
+    "question": "스트레스 높은 날 패턴",
+    "intent": "CONDITION",
+    "explicitPeriod": false
+  },
+  {
+    "question": "딥슬립이 줄었어",
+    "intent": "SLEEP",
+    "explicitPeriod": false
+  },
+  {
+    "question": "마라톤 페이스 분석",
+    "intent": "PERFORMANCE",
+    "explicitPeriod": false
+  },
+  {
+    "question": "훈련 볼륨이 적절했어",
+    "intent": "TRAINING",
+    "explicitPeriod": false
+  },
+  {
+    "question": "weekly summary",
+    "intent": "WORKOUT_SUMMARY",
+    "explicitPeriod": false
+  },
+  {
+    "question": "최근 90일 컨디션",
+    "intent": "CONDITION",
+    "explicitPeriod": true
+  },
+  {
+    "question": "최근 120일 수면",
+    "intent": "SLEEP",
+    "explicitPeriod": true
+  },
+  {
+    "question": "오늘 날씨 어때",
+    "intent": "GENERAL",
+    "explicitPeriod": false
+  }
+]

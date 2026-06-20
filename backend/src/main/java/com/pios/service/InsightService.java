@@ -74,6 +74,7 @@ public class InsightService {
                         .sourceId(e.getSourceId())
                         .evidenceSummary(e.getEvidenceSummary())
                         .weight(e.getWeight())
+                        .evidenceData(e.getEvidenceData())
                         .build())
                 .toList();
         return InsightDto.builder()

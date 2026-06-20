@@ -5,16 +5,19 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.util.List;
 
-@Data @Builder @NoArgsConstructor @AllArgsConstructor
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AskResponse {
     private Long questionId;
     private Long insightId;
-    private String conclusion;
-    private List<String> evidenceSummary;
-    private List<String> relatedData;
-    private String confidence;
-    private String followUpQuestion;
+    private String answer;
+    private String intent;
+    private AskPeriod period;
+    private AskConfidence confidence;
+    private List<AskEvidence> evidences;
+    private List<String> followUpQuestions;
 }

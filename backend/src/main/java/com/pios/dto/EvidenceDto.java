@@ -15,4 +15,5 @@ public class EvidenceDto {
     private Long sourceId;
     private String evidenceSummary;
     private BigDecimal weight;
+    private EvidenceData evidenceData;
 }
