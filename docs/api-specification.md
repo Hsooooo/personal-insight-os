@@ -288,11 +288,11 @@ PATCH /api/activities/123/tag
 
 ---
 
-### 💬 Ask API (RAG)
+### 💬 Ask API (RAG v2)
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| POST | `/api/ask` | 자연어 질의 |
+| POST | `/api/ask` | 자연어 질의 (개인 기준선 비교 기반) |
 
 **요청**
 ```json
@@ -306,22 +306,50 @@ PATCH /api/activities/123/tag
 {
   "questionId": 1,
   "insightId": 5,
-  "conclusion": "최근 컨디션 저하는 수면 시간 자첳보다 운등 강도 누적과 회복 지표 저하와 더 관련 있어 보입니다.",
-  "evidenceSummary": [
-    "최근 7일 데이터 기준",
-    "건강 지표 7일",
-    "수면 기록 7일",
-    "활동 기록 3개",
-    "관련 태그 활동 2개 (5K / 레이스)"
+  "answer": "최근 HRV 저하와 수면 시간 감소가 함께 관찰됩니다.",
+  "intent": "CONDITION",
+  "period": {
+    "start": "2026-06-14",
+    "end": "2026-06-20",
+    "baselineStart": "2026-05-17",
+    "baselineEnd": "2026-06-13"
+  },
+  "confidence": {
+    "score": 0.82,
+    "level": "HIGH",
+    "reasons": ["분석 기간 데이터 7일 확보", "28일 기준선 비교 가능"]
+  },
+  "evidences": [
+    {
+      "type": "HEALTH_METRIC",
+      "label": "평균 HRV",
+      "observation": "최근 7일 평균 42ms",
+      "comparison": "기준선보다 12% 낮음",
+      "currentValue": 42,
+      "baselineValue": 48,
+      "changeRate": -12,
+      "unit": "ms",
+      "sourceId": 123,
+      "sourceDate": "2026-06-19",
+      "route": "/health?date=2026-06-19"
+    }
   ],
-  "confidence": "중간",
-  "followUpQuestion": "최근 업무 스트레스나 주관적 피로 기록이 있다면 함께 분석할 수 있습니다."
+  "followUpQuestions": [
+    "수면과 HRV 변화를 날짜별로 비교해줘"
+  ]
 }
 ```
 
-**특수 질문 — 운등 요약**
+**특성**
+- 질문의 기간("이번 주", "지난 주", "최근 N일/주", "최근 한 달")과 의도(CONDITION, SLEEP, TRAINING, PERFORMANCE, WORKOUT_SUMMARY, GENERAL)를 규칙 기반으로 판별
+- 분석 기간은 기본 7일, 기준선은 직전 28일(명시적 기간은 동일 길이 기준선)로 설정되며 최대 90일로 제한
+- 건강/수면/활동 지표의 평균·합계·변화율을 계산하여 신뢰도와 근거로 반환
+- 신뢰도(score/level/reasons)는 서버가 데이터 커버리지(40%), 기준선 비교 가능 여부(30%), 질문-지표 관련성(30%)으로 산정
+- OpenAI 키 미설정 또는 장애 시에도 동일한 구조의 규칙 기반 답변 반환
 
-키워드: "이번주 운등", "운등 정리", "훈련 일지", "weekly summary" 등
+**특수 질문 — 운동 요약**
+
+키워드: "이번주 운동", "운동 정리", "훈련 일지", "weekly summary" 등
 
 - Garmin 활동은 랩(lap) 단위로, 수동 웨이트 트레이닝은 종목/세트 단위로 표 형태로 정리
 - 마지막에 전체 주간 요약(총 활동 횟수, 총 거리, 총 볼륨 등) 추가
@@ -377,3 +405,27 @@ PATCH /api/activities/123/tag
 ```
 
 피드백 상태: `CORRECT`, `UNCLEAR`, `WRONG`, `IMPORTANT`
+
+**인사이트 응답의 근거(`evidences`)**
+
+각 근거는 `evidenceSummary`(텍스트)와 `evidenceData`(구조화된 JSON)를 포함할 수 있습니다.
+
+```json
+{
+  "id": 10,
+  "evidenceType": "HEALTH_METRIC",
+  "sourceTable": "garmin_daily_health_metrics",
+  "sourceId": 123,
+  "evidenceSummary": "평균 HRV: 최근 7일 평균 42ms — 기준선보다 12% 낮음",
+  "weight": 0.5,
+  "evidenceData": {
+    "metric": "평균 HRV",
+    "currentValue": 42,
+    "baselineValue": 48,
+    "changeRate": -12,
+    "unit": "ms",
+    "date": "2026-06-19",
+    "route": "/health?date=2026-06-19"
+  }
+}
+```

@@ -270,46 +270,59 @@ const { data } = useQuery({
 
 ---
 
-## ✅ 12. 근거 기반 RAG 응답
+## ✅ 12. 근거 기반 RAG v2 응답
 
 | 항목 | 내용 |
 |------|------|
-| **구현 위치** | `AskService.ask()` |
-| **파이프라인** | 질문 저장 → 데이터 수집(PostgreSQL) → **태그 키워드 retrieval** → 관계 조회(Neo4j) → LLM 호출 → 근거 수집 → 응답 생성 |
-| **활동 데이터** | 이름/날짜/타입/거리/시간/태그를 LLM 프롬프트에 상세 직렬화하여 주입 |
-| **태그 기반 retrieval** | "5K/10K/하프/풀" 키워드 감지 → `userTag` exact match 조회 → 결과를 프롬프트 상단에 주입 |
-| **환각 방지 원칙** | Evidence-first, 근거 없는 답변 금지, 인과관계 단정 금지, 신뢰도 표시 |
-| **Fallback** | OpenAI API Key 미설정 시에도 기본 응답 제공 |
+| **구현 위치** | `AskService.ask()`, `com.pios.service.ask.*` |
+| **파이프라인** | 기간/의도 판별 → 질문 저장 → 분석 기간+기준선 데이터 수집(PostgreSQL) → 통계 계산 → 신뢰도 산정 → 근거 생성 → LLM 호출 → 응답 생성 |
+| **의도 분류** | `CONDITION`, `SLEEP`, `TRAINING`, `PERFORMANCE`, `WORKOUT_SUMMARY`, `GENERAL` |
+| **기간 판별** | "이번 주", "지난 주", "최근 N일/주", "최근 한 달" 지원. 기본 분석 7일, 기준선 28일. 최대 90일 제한. |
+| **통계** | 건강(RHR/HRV/스트레스/바디배터리), 수면(시간/점수/딥/REM), 활동(횟수/시간/거리/심박/훈련일) 평균·합계·변화율 |
+| **신뢰도** | 서버 산정. 데이터 커버리지 40% + 기준선 비교 가능 30% + 질문-지표 관련성 30% |
+| **환각 방지 원칙** | Evidence-first, 근거 없는 답변 금지, 인과관계 단정 금지, LLM은 수치를 재계산하지 않음 |
+| **Fallback** | OpenAI API Key 미설정 또는 장애 시에도 동일한 구조의 규칙 기반 답변 반환 |
 
 ```java
 // AskService.java
-private String callLlm(String question, List<?> health, List<?> sleep, List<?> activities) {
-    // systemPrompt: 환각 방지 규칙 6가지
-    // userPrompt: 질문 + 데이터 요약
-    // OpenAI API 호출 또는 Fallback
+public AskResponse ask(Long userId, AskRequest request) {
+    // 1. 기간/의도 판별
+    // 2. 통계 계산 (EvidenceStatisticsCalculator)
+    // 3. 신뢰도 산정 (ConfidenceScorer)
+    // 4. 근거 생성 (AskEvidenceBuilder)
+    // 5. LLM 호출 또는 Fallback
+    // 6. Insight + InsightEvidence(evidence_data JSONB) 저장
 }
 ```
 
 **응답 구조**
 ```json
 {
-  "conclusion": "...",
-  "evidenceSummary": ["최근 7일 데이터 기준", "건강 지표 7일", ...],
-  "confidence": "중간",
-  "followUpQuestion": "..."
+  "questionId": 1,
+  "insightId": 5,
+  "answer": "...",
+  "intent": "CONDITION",
+  "period": { "start": "...", "end": "...", "baselineStart": "...", "baselineEnd": "..." },
+  "confidence": { "score": 0.82, "level": "HIGH", "reasons": ["..."] },
+  "evidences": [
+    { "type": "HEALTH_METRIC", "label": "평균 HRV", "observation": "...", "comparison": "...",
+      "currentValue": 42, "baselineValue": 48, "changeRate": -12, "unit": "ms",
+      "sourceId": 123, "sourceDate": "2026-06-19", "route": "/health?date=2026-06-19" }
+  ],
+  "followUpQuestions": ["..."]
 }
 ```
 
 ---
 
-## ✅ 13. AI 운등 요약 (Ask My Data 확장)
+## ✅ 13. AI 운동 요약 (Ask My Data 확장)
 
 | 항목 | 내용 |
 |------|------|
 | **구현 위치** | `AskService` |
-| **키워드** | "이번주 운등", "운등 정리", "훈련 일지", "weekly summary" |
-| **동작** | 최근 7일 활동 수집 → Garmin 랩 테이블 + 웨이트 세트 테이블 포맷팅 → LLM 프롬프트 주입 |
-| **출력** | 날짜별 활동 요약(랩/세트 표) + 주간 총평 |
+| **키워드** | "이번주 운동", "운동 정리", "훈련 일지", "weekly summary" |
+| **동작** | 분석 기간 활동 수집 → Garmin 랩 테이블 + 웨이트 세트 테이블 포맷팅 → LLM 프롬프트 주입 |
+| **출력** | 날짜별 활동 요약(랩/세트 표) + 주간 총평. 동일한 `AskResponse` 구조로 반환 |
 
 ---
 
@@ -339,7 +352,7 @@ private String callLlm(String question, List<?> health, List<?> sleep, List<?> a
 
 | 기준 | 달성 |
 |------|------|
-| Garmin 데이터를 수집해서 내 운등/수면/건강 지표를 조회할 수 있는가? | ✅ |
+| Garmin 데이터를 수집해서 내 운동/수면/건강 지표를 조회할 수 있는가? | ✅ |
 | 수집된 데이터를 Activity, Sleep, HealthMetric 등 도메인으로 변환할 수 있는가? | ✅ |
 | PostgreSQL에는 원천/정형 데이터를 저장하고, Neo4j에는 의미 있는 관계를 저장할 수 있는가? | ✅ |
 | 사용자가 자연어로 질문했을 때, 실제 데이터 근거를 기반으로 답변할 수 있는가? | ✅ |

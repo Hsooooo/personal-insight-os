@@ -143,7 +143,7 @@ sequenceDiagram
 
 ---
 
-## 데이터 흐름 (RAG 파이프라인)
+## 데이터 흐름 (RAG v2 파이프라인)
 
 ```mermaid
 sequenceDiagram
@@ -151,30 +151,36 @@ sequenceDiagram
     participant FE as React Frontend
     participant BE as Spring Boot
     participant PG as PostgreSQL
-    participant NEO as Neo4j
     participant OAI as OpenAI API
 
     U->>FE: "최근 컨디션이 떨어진 이유가 뭐야?"
     FE->>BE: POST /api/ask
 
-    BE->>PG: 질문 저장 (questions 테이블)
-    BE->>PG: 최근 7일 건강 지표 조회
-    BE->>PG: 최근 7일 수면 조회
-    BE->>PG: 최근 활동 조회
-    BE->>NEO: 관련 그래프 관계 조회
+    BE->>BE: 질문에서 기간/의도 판별 (Asia/Seoul 기준)
+    BE->>PG: 질문 저장 (questions 테이블, intent/time_range 기록)
+    BE->>PG: 분석 기간 + 기준선 기간 데이터 조회
+    BE->>BE: 건강/수면/활동 평균·합계·변화율 통계 계산
+    BE->>BE: 데이터 커버리지/기준선/관련성 기반 신뢰도 산정
+    BE->>BE: 의도별 핵심 근거 선별 및 라우트 생성
 
     alt OpenAI API Key 설정됨
-        BE->>OAI: GPT-4o-mini 호출<br/>(프롬프트 + 근거 데이터)
-        OAI-->>BE: 근거 기반 답변
-    else API Key 없음
-        BE-->>BE: Fallback 응답 생성
+        BE->>OAI: GPT-4o-mini 호출<br/>(통계 + 근거 요약만 전달)
+        OAI-->>BE: 근거 설명 답변
+    else API Key 없음/장애
+        BE-->>BE: 규칙 기반 Fallback 답변 생성
     end
 
     BE->>PG: 인사이트 저장 (insights 테이블)
-    BE->>PG: 근거 저장 (insight_evidences 테이블)
-    BE-->>FE: 결론 + 근거 + 신뢰도
-    FE-->>U: 답변 + 피드백 버튼
+    BE->>PG: 근거 저장 (insight_evidences 테이블, evidence_data JSONB 포함)
+    BE-->>FE: answer + intent + period + confidence + evidences + followUpQuestions
+    FE-->>U: 답변 + 분석 기간/신뢰도/근거 카드 + 피드백 버튼
 ```
+
+**RAG v2 특성**
+- LLM은 백엔드가 계산한 통계와 근거를 **설명만** 하고, 수치를 재계산하지 않습니다.
+- 개인 기준선 비교를 위해 분석 기간 직전 동일 길이(기본 28일)의 데이터를 활용합니다.
+- 모든 날짜 계산은 `Asia/Seoul` 기준이며, 분석 기간은 최대 90일로 제한됩니다.
+- Neo4j 그래프 데이터는 현재 retrieval에 사용하지 않습니다.
 
 ---
 

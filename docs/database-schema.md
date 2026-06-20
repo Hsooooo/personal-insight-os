@@ -142,6 +142,7 @@ erDiagram
         bigint source_id
         text evidence_summary
         numeric weight
+        jsonb evidence_data
     }
 
     GRAPH_NODE_MAPPINGS {
@@ -188,11 +189,37 @@ erDiagram
 | 8 | `llm_providers` | LLM Provider 설정 | 1~3 / 사용자 |
 | 9 | `questions` | 사용자 질문 이력 | 50~200 / 사용자 |
 | 10 | `insights` | 생성된 인사이트 | 100~500 / 사용자 |
-| 11 | `insight_evidences` | 인사이트 근거 데이터 | 3~10 / 인사이트 |
+| 11 | `insight_evidences` | 인사이트 근거 데이터 (텍스트 요약 + `evidence_data` JSONB) | 3~10 / 인사이트 |
 | 12 | `graph_node_mappings` | PostgreSQL-Neo4j 매핑 | 1000~5000 / 사용자 |
 | 13 | `sync_logs` | 동기화 이력 (상태, 기간, 레코드 수, 에러) | 100~500 / 사용자 |
 | 14 | `exercises` | 사용자 정의 웨이트 트레이닝 종목 | 20~100 / 사용자 |
 | 15 | `refresh_tokens` | Refresh Token 저장 (SHA-256 hash, rotation/ revoke 지원) | 1~3 / 사용자 |
+
+### `insight_evidences.evidence_data` JSONB
+
+RAG v2에서 생성된 근거는 텍스트 요약과 함께 구조화된 수치 데이터를 JSONB로 저장합니다.
+
+```json
+{
+  "metric": "평균 HRV",
+  "currentValue": 42,
+  "baselineValue": 48,
+  "changeRate": -12,
+  "unit": "ms",
+  "date": "2026-06-19",
+  "route": "/health?date=2026-06-19"
+}
+```
+
+| 필드 | 설명 |
+|------|------|
+| `metric` | 지표명 |
+| `currentValue` | 분석 기간 평균/합계 값 |
+| `baselineValue` | 기준선 기간 평균/합계 값 |
+| `changeRate` | 변화율(%) |
+| `unit` | 단위(ms, bpm, 시간, km, 회 등) |
+| `date` | 근거의 대표 날짜 |
+| `route` | 프론트엔드 라우트(활동 상세 또는 Health 화면) |
 
 ---
 
