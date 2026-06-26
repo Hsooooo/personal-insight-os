@@ -447,6 +447,8 @@ PATCH /api/activities/123/tag
 
 거래의 `asset`은 앱 export 원본값으로 보존하고, 사용자가 만든 계좌 마스터와 연결할 때만 `account_id`를 채운다. import confirm 시 `asset`이 기존 계좌 이름 또는 alias와 일치하면 자동 연결하고, 일치하지 않으면 Accounts 탭의 unmapped asset으로 노출한다. 계좌 생성/수정 시 alias가 추가되면 기존 거래도 같은 alias 기준으로 일괄 연결된다.
 
+`수입/지출` 값이 `이체지출`인 거래는 `asset`을 출금 자산, `분류`를 입금처 자산명으로 해석한다. 소비분석에서는 제외하지만 Accounts의 cycle 흐름에서는 출금 계좌의 `cashOut`과 입금처 계좌의 `income`에 각각 반영한다.
+
 계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`를 사용하고, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`를 사용한다.
 
 피드백 상태: `CORRECT`, `UNCLEAR`, `WRONG`, `IMPORTANT`

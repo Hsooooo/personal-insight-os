@@ -211,30 +211,35 @@ export default function Finance() {
   }, [transactions]);
 
   const accountTotals = useMemo(() => {
-    const map = new Map<string, { income: number; cashOut: number; net: number }>();
-    (transactions || []).forEach((tx) => {
-      const key = tx.accountName || tx.asset || 'Unmapped';
-      const current = map.get(key) || { income: 0, cashOut: 0, net: 0 };
-      if (tx.flowType === '수입') current.income += Number(tx.amount);
-      if (tx.flowType !== '수입' && tx.cashflowIncluded) current.cashOut += Number(tx.amount);
-      current.net = current.income - current.cashOut;
-      map.set(key, current);
-    });
-    return Array.from(map.entries()).sort((a, b) => Math.abs(b[1].net) - Math.abs(a[1].net)).slice(0, 8);
-  }, [transactions]);
+    return [...(accounts || [])]
+      .sort((a, b) => Math.abs(Number(b.cycleNetFlow)) - Math.abs(Number(a.cycleNetFlow)))
+      .slice(0, 8);
+  }, [accounts]);
 
   const unmappedAssets = useMemo(() => {
     const map = new Map<string, { count: number; cashOut: number; income: number }>();
+    const mappedAliases = new Set<string>();
+    (accounts || []).forEach((account) => {
+      mappedAliases.add(account.name);
+      (account.aliases || []).forEach((alias) => mappedAliases.add(alias));
+    });
     (transactions || []).forEach((tx) => {
-      if (tx.accountId || !tx.asset) return;
-      const current = map.get(tx.asset) || { count: 0, cashOut: 0, income: 0 };
-      current.count += 1;
-      if (tx.flowType === '수입') current.income += Number(tx.amount);
-      if (tx.flowType !== '수입' && tx.cashflowIncluded) current.cashOut += Number(tx.amount);
-      map.set(tx.asset, current);
+      if (!tx.accountId && tx.asset) {
+        const current = map.get(tx.asset) || { count: 0, cashOut: 0, income: 0 };
+        current.count += 1;
+        if (tx.flowType === '수입') current.income += Number(tx.amount);
+        if (tx.flowType !== '수입' && tx.cashflowIncluded) current.cashOut += Number(tx.amount);
+        map.set(tx.asset, current);
+      }
+      if (tx.flowType === '이체지출' && tx.category && !mappedAliases.has(tx.category)) {
+        const current = map.get(tx.category) || { count: 0, cashOut: 0, income: 0 };
+        current.count += 1;
+        current.income += Number(tx.amount);
+        map.set(tx.category, current);
+      }
     });
     return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
-  }, [transactions]);
+  }, [accounts, transactions]);
 
   const handlePreview = () => {
     if (!file) {
@@ -353,12 +358,12 @@ export default function Finance() {
             <CardContent>
               <div className="space-y-3">
                 {accountTotals.length === 0 && <p className="text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
-                {accountTotals.map(([account, flow]) => (
-                  <div key={account} className="grid gap-2 rounded-md border px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_120px]">
-                    <span className="font-medium">{account}</span>
-                    <span className="text-muted-foreground">In {money(flow.income)}</span>
-                    <span className="text-muted-foreground">Out {money(flow.cashOut)}</span>
-                    <span className="text-right font-medium tabular-nums">{money(flow.net)}</span>
+                {accountTotals.map((account) => (
+                  <div key={account.id} className="grid gap-2 rounded-md border px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_120px]">
+                    <span className="font-medium">{account.name}</span>
+                    <span className="text-muted-foreground">In {money(account.cycleIncome)}</span>
+                    <span className="text-muted-foreground">Out {money(account.cycleCashOut)}</span>
+                    <span className="text-right font-medium tabular-nums">{money(account.cycleNetFlow)}</span>
                   </div>
                 ))}
               </div>

@@ -129,11 +129,8 @@ public class FinanceService {
         List<FinanceTransaction> transactions = cycleId == null
                 ? transactionRepo.findByUserIdOrderByTransactionAtDesc(userId)
                 : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtDesc(userId, cycleId);
-        Map<Long, List<FinanceTransaction>> byAccount = transactions.stream()
-                .filter(t -> t.getAccount() != null)
-                .collect(Collectors.groupingBy(t -> t.getAccount().getId()));
         return accounts.stream()
-                .map(account -> toAccountDto(account, byAccount.getOrDefault(account.getId(), List.of())))
+                .map(account -> toAccountDto(account, transactions))
                 .toList();
     }
 
@@ -481,12 +478,13 @@ public class FinanceService {
     }
 
     private FinanceAccountDto toAccountDto(FinanceAccount account, List<FinanceTransaction> cycleTransactions) {
+        Set<String> aliases = new HashSet<>(aliasesFor(account));
         BigDecimal income = cycleTransactions.stream()
-                .filter(t -> "수입".equals(t.getFlowType()))
+                .filter(t -> isAccountIncome(account, aliases, t))
                 .map(FinanceTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal cashOut = cycleTransactions.stream()
-                .filter(t -> !"수입".equals(t.getFlowType()) && t.isCashflowIncluded())
+                .filter(t -> isAccountCashOut(account, t))
                 .map(FinanceTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         return FinanceAccountDto.builder()
@@ -504,6 +502,23 @@ public class FinanceService {
                 .cycleCashOut(cashOut)
                 .cycleNetFlow(income.subtract(cashOut))
                 .build();
+    }
+
+    private boolean isAccountIncome(FinanceAccount account, Set<String> aliases, FinanceTransaction transaction) {
+        if ("수입".equals(transaction.getFlowType()) && isTransactionAccount(account, transaction)) {
+            return true;
+        }
+        return "이체지출".equals(transaction.getFlowType()) && aliases.contains(safe(transaction.getCategory()));
+    }
+
+    private boolean isAccountCashOut(FinanceAccount account, FinanceTransaction transaction) {
+        return !"수입".equals(transaction.getFlowType())
+                && transaction.isCashflowIncluded()
+                && isTransactionAccount(account, transaction);
+    }
+
+    private boolean isTransactionAccount(FinanceAccount account, FinanceTransaction transaction) {
+        return transaction.getAccount() != null && transaction.getAccount().getId().equals(account.getId());
     }
 
     private RecurringBillDto toRecurringBillDto(RecurringBillTemplate template) {

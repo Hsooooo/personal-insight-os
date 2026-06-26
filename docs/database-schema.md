@@ -312,3 +312,5 @@ Finance 도메인은 PostgreSQL에 우선 저장하며, 이번 1차 구현에서
 `finance_transactions`는 현금흐름과 소비분석을 분리하기 위해 `cashflow_included`, `spending_included`를 별도로 가진다. 예를 들어 통신비 납부액은 현금흐름에는 포함하고, 소액결제 원거래는 소비분석에 포함한다.
 
 계좌 확장은 원본 보존과 분석용 매핑을 분리한다. `asset`은 export 원본 문자열로 유지하고, 사용자가 Accounts 탭에서 만든 `finance_accounts`와 일치하는 name/alias가 있을 때만 `account_id`를 채운다. 지원 계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`이며, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`이다.
+
+`이체지출` 거래는 단일 원본 row로 저장하되, 계좌 흐름 계산 시 `asset`을 출금 계좌, `category`(`분류`)를 입금처 계좌 alias로 해석한다. 따라서 소비분석에는 포함하지 않고 계좌별 현금흐름에는 양방향으로 반영한다.
