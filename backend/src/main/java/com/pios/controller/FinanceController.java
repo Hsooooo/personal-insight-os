@@ -28,6 +28,14 @@ public class FinanceController {
         return ApiResponse.ok(financeService.getTransactions(userId, cycleId));
     }
 
+    @PatchMapping("/transactions/{transactionId}/time")
+    public ApiResponse<FinanceTransactionDto> updateTransactionTime(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long transactionId,
+            @RequestBody FinanceTransactionTimeUpdateRequest request) {
+        return ApiResponse.ok(financeService.updateTransactionTime(userId, transactionId, request));
+    }
+
     @PostMapping("/import/preview")
     public ApiResponse<FinanceImportPreviewResponse> preview(
             @AuthenticationPrincipal Long userId,

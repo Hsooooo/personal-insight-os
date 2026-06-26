@@ -253,6 +253,8 @@ sequenceDiagram
 
 Finance는 월급 입금 직후부터 다음 월급 직전까지를 `finance_cycles`로 관리합니다. 통신비 납부액처럼 현금흐름과 소비분석이 다른 거래는 `cashflow_included`, `spending_included` 플래그로 분리합니다.
 
+Transactions 탭의 시간 보정은 원본 import 멱등성과 분리된다. 사용자는 날짜는 바꾸지 않고 시:분만 수정할 수 있으며, 백엔드는 `transaction_date + HH:mm:00`을 Asia/Seoul 기준 `transaction_at`에 저장한다. fingerprint와 source row는 원본 그대로 유지되어 같은 엑셀 파일을 다시 올려도 기존 거래로 판정된다.
+
 계좌 분석은 원본 거래의 `asset` 문자열을 감사용으로 보존한 채, 사용자가 정의한 `finance_accounts`와 `finance_account_aliases`를 통해 선택적으로 `account_id`를 연결한다. import 시 기존 계좌 name/alias가 있으면 자동 연결하고, 없으면 Accounts 탭의 unmapped asset으로 남겨 사용자가 계좌 타입과 역할을 확정한다.
 
 ---

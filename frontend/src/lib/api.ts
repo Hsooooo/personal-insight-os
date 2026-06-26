@@ -263,6 +263,8 @@ export const api = {
       const qs = params.toString();
       return fetchApi(`/api/finance/transactions${qs ? '?' + qs : ''}`);
     },
+    updateTransactionTime: (id: number, request: { time: string }): Promise<FinanceTransaction> =>
+      fetchApi(`/api/finance/transactions/${id}/time`, { method: 'PATCH', body: JSON.stringify(request) }),
     previewImport: (file: File): Promise<FinanceImportPreviewResponse> => {
       const body = new FormData();
       body.append('file', file);

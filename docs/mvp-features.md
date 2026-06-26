@@ -355,6 +355,7 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **구현 위치** | `FinanceController`, `FinanceService`, `Finance.tsx` |
 | **기능** | 엑셀 export를 preview 후 확정 저장하고, 월급일 기준 cycle에 거래 배정 |
 | **중복 처리** | 원본 행 fingerprint로 동일 import 재실행을 skip. 같은 날짜+금액+수입/지출은 사용자 확인 |
+| **시간 보정** | Transactions 탭에서 날짜는 고정하고 시:분만 수정. 정렬은 보정된 `transaction_at` 시간순으로 처리 |
 | **통신비 처리** | 납부 거래는 현금흐름, 소액결제는 실제 소비 카테고리로 분리 |
 | **계좌 매핑** | Finance > Accounts 탭에서 원본 `asset` 값을 계좌/지갑/부채/목적자금 alias로 연결 |
 | **잔액 보정** | 계좌별 opening balance를 저장해 기록 시작 전 잔액을 추정 잔액 계산에 반영 |

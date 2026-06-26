@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
@@ -27,6 +27,16 @@ function parseMoneyInput(value: string) {
 function shortDateTime(value: string | null | undefined) {
   if (!value) return '-';
   return value.slice(0, 16).replace('T', ' ');
+}
+
+function seoulTime(value: string | null | undefined) {
+  if (!value) return '';
+  return new Date(value).toLocaleTimeString('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
 }
 
 function statusBadge(status: FinanceImportRow['status']) {
@@ -206,6 +216,16 @@ export default function Finance() {
       queryClient.invalidateQueries({ queryKey: ['financeAccounts'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
     },
+  });
+
+  const updateTransactionTimeMutation = useMutation({
+    mutationFn: ({ id, time }: { id: number; time: string }) => api.finance.updateTransactionTime(id, { time }),
+    onSuccess: () => {
+      toast.success('거래 시간을 보정했습니다');
+      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Transaction time update failed'),
   });
 
   const totals = useMemo(() => {
@@ -402,7 +422,12 @@ export default function Finance() {
             </CardHeader>
             <CardContent>
               {transactionsLoading ? <Skeleton className="h-48" /> : (
-                <FinanceTransactionsTable transactions={transactions || []} />
+                <FinanceTransactionsTable
+                  transactions={transactions || []}
+                  updatingTransactionId={updateTransactionTimeMutation.variables?.id}
+                  isUpdatingTime={updateTransactionTimeMutation.isPending}
+                  onUpdateTime={(id, time) => updateTransactionTimeMutation.mutate({ id, time })}
+                />
               )}
             </CardContent>
           </Card>
@@ -766,7 +791,17 @@ function SelectField({ label, value, options, onChange }: { label: string; value
   );
 }
 
-function FinanceTransactionsTable({ transactions }: { transactions: FinanceTransaction[] }) {
+function FinanceTransactionsTable({
+  transactions,
+  updatingTransactionId,
+  isUpdatingTime,
+  onUpdateTime,
+}: {
+  transactions: FinanceTransaction[];
+  updatingTransactionId?: number;
+  isUpdatingTime: boolean;
+  onUpdateTime: (id: number, time: string) => void;
+}) {
   if (transactions.length === 0) {
     return <p className="text-sm text-muted-foreground">No finance transactions yet. Import an export file to begin.</p>;
   }
@@ -787,7 +822,13 @@ function FinanceTransactionsTable({ transactions }: { transactions: FinanceTrans
         <TableBody>
           {transactions.map((tx) => (
             <TableRow key={tx.id}>
-              <TableCell className="whitespace-nowrap text-xs">{shortDateTime(tx.transactionAt)}</TableCell>
+              <TableCell className="min-w-40 whitespace-nowrap text-xs">
+                <TransactionTimeEditor
+                  transaction={tx}
+                  isSaving={isUpdatingTime && updatingTransactionId === tx.id}
+                  onSave={onUpdateTime}
+                />
+              </TableCell>
               <TableCell className="min-w-36">
                 <p className="text-sm font-medium">{tx.accountName || tx.asset || '-'}</p>
                 <p className="text-xs text-muted-foreground">{tx.accountRole || (tx.accountName ? tx.accountType : 'Unmapped')}</p>
@@ -810,6 +851,49 @@ function FinanceTransactionsTable({ transactions }: { transactions: FinanceTrans
           ))}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+function TransactionTimeEditor({
+  transaction,
+  isSaving,
+  onSave,
+}: {
+  transaction: FinanceTransaction;
+  isSaving: boolean;
+  onSave: (id: number, time: string) => void;
+}) {
+  const [time, setTime] = useState(seoulTime(transaction.transactionAt));
+  const currentTime = seoulTime(transaction.transactionAt);
+  const changed = time !== currentTime;
+
+  useEffect(() => {
+    setTime(currentTime);
+  }, [currentTime]);
+
+  return (
+    <div className="space-y-1">
+      <p className="font-medium">{transaction.transactionDate}</p>
+      <div className="flex items-center gap-2">
+        <Input
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          className="h-8 w-24 text-xs"
+          step={60}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 text-xs"
+          onClick={() => onSave(transaction.id, time)}
+          disabled={!changed || !time || isSaving}
+        >
+          Save
+        </Button>
+      </div>
+      {transaction.timeAdjusted && <Badge variant="secondary">Adjusted</Badge>}
     </div>
   );
 }

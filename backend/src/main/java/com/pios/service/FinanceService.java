@@ -14,8 +14,10 @@ import org.springframework.web.multipart.MultipartFile;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -41,9 +43,28 @@ public class FinanceService {
 
     public List<FinanceTransactionDto> getTransactions(Long userId, Long cycleId) {
         List<FinanceTransaction> transactions = cycleId == null
-                ? transactionRepo.findByUserIdOrderByTransactionAtDesc(userId)
-                : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtDesc(userId, cycleId);
+                ? transactionRepo.findByUserIdOrderByTransactionAtAscIdAsc(userId)
+                : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(userId, cycleId);
         return transactions.stream().map(this::toTransactionDto).toList();
+    }
+
+    @Transactional
+    public FinanceTransactionDto updateTransactionTime(Long userId, Long transactionId, FinanceTransactionTimeUpdateRequest request) {
+        if (request == null || request.getTime() == null || request.getTime().isBlank()) {
+            throw new IllegalArgumentException("Time is required");
+        }
+        LocalTime time;
+        try {
+            time = LocalTime.parse(request.getTime(), DateTimeFormatter.ofPattern("HH:mm"));
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("Time must use HH:mm format");
+        }
+        FinanceTransaction transaction = transactionRepo.findByIdAndUserId(transactionId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Finance transaction not found"));
+        transaction.setTransactionAt(transaction.getTransactionDate().atTime(time).atZone(SEOUL).toInstant());
+        transaction.setTimeAdjusted(true);
+        transaction.setTimeAdjustedAt(Instant.now());
+        return toTransactionDto(transaction);
     }
 
     public FinanceImportPreviewResponse previewImport(Long userId, MultipartFile file) {
@@ -127,8 +148,8 @@ public class FinanceService {
     public List<FinanceAccountDto> getAccounts(Long userId, Long cycleId) {
         List<FinanceAccount> accounts = accountRepo.findByUserIdOrderByNameAsc(userId);
         List<FinanceTransaction> transactions = cycleId == null
-                ? transactionRepo.findByUserIdOrderByTransactionAtDesc(userId)
-                : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtDesc(userId, cycleId);
+                ? transactionRepo.findByUserIdOrderByTransactionAtAscIdAsc(userId)
+                : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(userId, cycleId);
         return accounts.stream()
                 .map(account -> toAccountDto(account, transactions))
                 .toList();
@@ -486,6 +507,8 @@ public class FinanceService {
                 .cashflowIncluded(t.isCashflowIncluded())
                 .spendingIncluded(t.isSpendingIncluded())
                 .paymentMethod(t.getPaymentMethod())
+                .timeAdjusted(t.isTimeAdjusted())
+                .timeAdjustedAt(t.getTimeAdjustedAt())
                 .build();
     }
 

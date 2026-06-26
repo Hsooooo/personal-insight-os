@@ -48,6 +48,8 @@ export interface FinanceTransaction {
   cashflowIncluded: boolean;
   spendingIncluded: boolean;
   paymentMethod: string;
+  timeAdjusted: boolean;
+  timeAdjustedAt: string | null;
 }
 
 export interface FinanceAccount {

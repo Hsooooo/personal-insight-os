@@ -12,12 +12,13 @@ import java.util.Optional;
 
 @Repository
 public interface FinanceTransactionRepository extends JpaRepository<FinanceTransaction, Long> {
-    List<FinanceTransaction> findByUserIdOrderByTransactionAtDesc(Long userId);
-    List<FinanceTransaction> findByUserIdAndCycleIdOrderByTransactionAtDesc(Long userId, Long cycleId);
+    List<FinanceTransaction> findByUserIdOrderByTransactionAtAscIdAsc(Long userId);
+    List<FinanceTransaction> findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(Long userId, Long cycleId);
+    Optional<FinanceTransaction> findByIdAndUserId(Long id, Long userId);
     Optional<FinanceTransaction> findByUserIdAndSourceFingerprint(Long userId, String sourceFingerprint);
     List<FinanceTransaction> findByUserIdAndSourceFingerprintIn(Long userId, Collection<String> fingerprints);
     List<FinanceTransaction> findByUserIdAndTransactionDateAndAmountAndFlowType(
             Long userId, LocalDate transactionDate, BigDecimal amount, String flowType);
     List<FinanceTransaction> findByUserIdAndAssetIn(Long userId, Collection<String> assets);
-    List<FinanceTransaction> findByUserIdAndAccountIdIsNullOrderByTransactionAtDesc(Long userId);
+    List<FinanceTransaction> findByUserIdAndAccountIdIsNullOrderByTransactionAtAscIdAsc(Long userId);
 }

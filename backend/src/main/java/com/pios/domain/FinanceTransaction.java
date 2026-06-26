@@ -75,6 +75,12 @@ public class FinanceTransaction {
     @Column(name = "payment_method")
     private String paymentMethod;
 
+    @Column(name = "time_adjusted", nullable = false)
+    private boolean timeAdjusted;
+
+    @Column(name = "time_adjusted_at")
+    private Instant timeAdjustedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

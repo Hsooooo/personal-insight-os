@@ -411,7 +411,8 @@ PATCH /api/activities/123/tag
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
 | GET | `/api/finance/cycles` | 월급일 기준 finance cycle 목록 |
-| GET | `/api/finance/transactions?cycleId=` | cycle별 지출/수입 거래 목록 |
+| GET | `/api/finance/transactions?cycleId=` | cycle별 지출/수입 거래 목록. `transaction_at ASC, id ASC` 시간순 정렬 |
+| PATCH | `/api/finance/transactions/{id}/time` | 거래 날짜는 유지하고 정렬/분석용 시각만 `HH:mm`으로 보정 |
 | POST | `/api/finance/import/preview` | 앱 export `.xlsx` 파일 preview. `multipart/form-data`의 `file` 사용 |
 | POST | `/api/finance/import/confirm` | preview 결과를 사용자 결정값과 함께 확정 저장 |
 | GET | `/api/finance/accounts?cycleId=` | 계좌/지갑/부채/목적자금 목록과 cycle 내 현금흐름 요약 |
@@ -442,6 +443,15 @@ PATCH /api/activities/123/tag
   ]
 }
 ```
+
+**거래 시간 보정 요청**
+```json
+{
+  "time": "14:35"
+}
+```
+
+시간 보정은 기존 `transaction_date`를 유지한 채 Asia/Seoul 기준 `transaction_at`의 시:분만 바꾼다. 초는 항상 `00`으로 저장하며, `timeAdjusted`, `timeAdjustedAt`으로 보정 여부를 표시한다. 원본 `sourceFingerprint`, `sourceRow`, `transactionDate`는 변경하지 않으므로 같은 엑셀 파일을 다시 import해도 기존 거래는 `DUPLICATE`로 분류된다.
 
 **Finance account 매핑**
 

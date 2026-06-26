@@ -31,4 +31,6 @@ public class FinanceTransactionDto {
     private boolean cashflowIncluded;
     private boolean spendingIncluded;
     private String paymentMethod;
+    private boolean timeAdjusted;
+    private Instant timeAdjustedAt;
 }
