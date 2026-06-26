@@ -144,6 +144,9 @@ public class FinanceService {
                 .role(defaultValue(dto.getRole(), "OTHER"))
                 .institution(dto.getInstitution())
                 .memo(dto.getMemo())
+                .openingBalance(defaultAmount(dto.getOpeningBalance()))
+                .openingBalanceDate(dto.getOpeningBalanceDate())
+                .openingBalanceMemo(dto.getOpeningBalanceMemo())
                 .active(true)
                 .build());
         replaceAliases(userId, account, dto.getAliases());
@@ -160,6 +163,15 @@ public class FinanceService {
         account.setRole(defaultValue(dto.getRole(), "OTHER"));
         account.setInstitution(dto.getInstitution());
         account.setMemo(dto.getMemo());
+        if (dto.getOpeningBalance() != null) {
+            account.setOpeningBalance(dto.getOpeningBalance());
+        }
+        if (dto.getOpeningBalanceDate() != null) {
+            account.setOpeningBalanceDate(dto.getOpeningBalanceDate());
+        }
+        if (dto.getOpeningBalanceMemo() != null) {
+            account.setOpeningBalanceMemo(dto.getOpeningBalanceMemo());
+        }
         if (dto.getActive() != null) {
             account.setActive(dto.getActive());
         }
@@ -487,6 +499,8 @@ public class FinanceService {
                 .filter(t -> isAccountCashOut(account, t))
                 .map(FinanceTransaction::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal opening = defaultAmount(account.getOpeningBalance());
+        BigDecimal netFlow = income.subtract(cashOut);
         return FinanceAccountDto.builder()
                 .id(account.getId())
                 .name(account.getName())
@@ -495,12 +509,16 @@ public class FinanceService {
                 .institution(account.getInstitution())
                 .memo(account.getMemo())
                 .active(account.isActive())
+                .openingBalance(opening)
+                .openingBalanceDate(account.getOpeningBalanceDate())
+                .openingBalanceMemo(account.getOpeningBalanceMemo())
                 .aliases(accountAliasRepo.findByAccountIdOrderByAliasNameAsc(account.getId()).stream()
                         .map(FinanceAccountAlias::getAliasName)
                         .toList())
                 .cycleIncome(income)
                 .cycleCashOut(cashOut)
-                .cycleNetFlow(income.subtract(cashOut))
+                .cycleNetFlow(netFlow)
+                .estimatedBalance(opening.add(netFlow))
                 .build();
     }
 
@@ -561,6 +579,10 @@ public class FinanceService {
 
     private String defaultValue(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private BigDecimal defaultAmount(BigDecimal value) {
+        return value == null ? BigDecimal.ZERO : value;
     }
 
     private record CycleAnchor(Long cycleId, String label, Instant startsAt, LocalDate salaryDate) {

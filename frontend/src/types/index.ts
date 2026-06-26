@@ -58,10 +58,14 @@ export interface FinanceAccount {
   institution: string | null;
   memo: string | null;
   active: boolean;
+  openingBalance: number;
+  openingBalanceDate: string | null;
+  openingBalanceMemo: string | null;
   aliases: string[];
   cycleIncome: number;
   cycleCashOut: number;
   cycleNetFlow: number;
+  estimatedBalance: number;
 }
 
 export interface FinanceAccountAutoMapResponse {

@@ -5,7 +5,9 @@ import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Entity
 @Table(name = "finance_accounts")
@@ -35,6 +37,16 @@ public class FinanceAccount {
 
     @Column(nullable = false)
     private boolean active;
+
+    @Builder.Default
+    @Column(name = "opening_balance", nullable = false)
+    private BigDecimal openingBalance = BigDecimal.ZERO;
+
+    @Column(name = "opening_balance_date")
+    private LocalDate openingBalanceDate;
+
+    @Column(name = "opening_balance_memo", columnDefinition = "text")
+    private String openingBalanceMemo;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

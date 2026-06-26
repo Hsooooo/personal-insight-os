@@ -449,6 +449,8 @@ PATCH /api/activities/123/tag
 
 `수입/지출` 값이 `이체지출`인 거래는 `asset`을 출금 자산, `분류`를 입금처 자산명으로 해석한다. 소비분석에서는 제외하지만 Accounts의 cycle 흐름에서는 출금 계좌의 `cashOut`과 입금처 계좌의 `income`에 각각 반영한다.
 
+계좌에는 기록 시작 전 잔액 보정을 위한 `openingBalance`, `openingBalanceDate`, `openingBalanceMemo`를 저장할 수 있다. 이 값은 거래/소비/수입으로 집계하지 않고, Accounts 응답의 `estimatedBalance = openingBalance + cycleNetFlow` 계산에만 사용한다.
+
 계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`를 사용하고, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`를 사용한다.
 
 피드백 상태: `CORRECT`, `UNCLEAR`, `WRONG`, `IMPORTANT`

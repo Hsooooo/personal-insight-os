@@ -357,6 +357,7 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **중복 처리** | 원본 행 fingerprint로 동일 import 재실행을 skip. 같은 날짜+금액+수입/지출은 사용자 확인 |
 | **통신비 처리** | 납부 거래는 현금흐름, 소액결제는 실제 소비 카테고리로 분리 |
 | **계좌 매핑** | Finance > Accounts 탭에서 원본 `asset` 값을 계좌/지갑/부채/목적자금 alias로 연결 |
+| **잔액 보정** | 계좌별 opening balance를 저장해 기록 시작 전 잔액을 추정 잔액 계산에 반영 |
 | **반복 청구** | Finance > Recurring 탭에서 통신비 고정 템플릿을 cycle별 버전으로 관리 |
 
 ---

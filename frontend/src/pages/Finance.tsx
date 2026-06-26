@@ -19,6 +19,11 @@ function money(value: number | null | undefined) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(value);
 }
 
+function parseMoneyInput(value: string) {
+  const parsed = Number(value.replace(/,/g, '').trim() || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function shortDateTime(value: string | null | undefined) {
   if (!value) return '-';
   return value.slice(0, 16).replace('T', ' ');
@@ -71,6 +76,9 @@ export default function Finance() {
     institution: '',
     aliases: '',
     memo: '',
+    openingBalance: '',
+    openingBalanceDate: '',
+    openingBalanceMemo: '',
   });
 
   const { data: cycles, isLoading: cyclesLoading } = useQuery({
@@ -156,7 +164,17 @@ export default function Finance() {
     mutationFn: api.finance.createAccount,
     onSuccess: () => {
       toast.success('계좌를 만들고 거래를 매핑했습니다');
-      setNewAccount({ name: '', accountType: 'BANK_ACCOUNT', role: 'OTHER', institution: '', aliases: '', memo: '' });
+      setNewAccount({
+        name: '',
+        accountType: 'BANK_ACCOUNT',
+        role: 'OTHER',
+        institution: '',
+        aliases: '',
+        memo: '',
+        openingBalance: '',
+        openingBalanceDate: '',
+        openingBalanceMemo: '',
+      });
       queryClient.invalidateQueries({ queryKey: ['financeAccounts'] });
       queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
     },
@@ -275,6 +293,9 @@ export default function Finance() {
       institution: asset.includes('은행') ? asset.replace(/\(.+\)/, '') : '',
       aliases: asset,
       memo: '',
+      openingBalance: '',
+      openingBalanceDate: '',
+      openingBalanceMemo: '',
     });
   };
 
@@ -282,6 +303,9 @@ export default function Finance() {
     createAccountMutation.mutate({
       ...newAccount,
       aliases: newAccount.aliases.split(',').map((v) => v.trim()).filter(Boolean),
+      openingBalance: parseMoneyInput(newAccount.openingBalance),
+      openingBalanceDate: newAccount.openingBalanceDate || null,
+      openingBalanceMemo: newAccount.openingBalanceMemo || null,
       active: true,
     });
   };
@@ -359,11 +383,11 @@ export default function Finance() {
               <div className="space-y-3">
                 {accountTotals.length === 0 && <p className="text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
                 {accountTotals.map((account) => (
-                  <div key={account.id} className="grid gap-2 rounded-md border px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_120px]">
+                  <div key={account.id} className="grid gap-2 rounded-md border px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_140px]">
                     <span className="font-medium">{account.name}</span>
                     <span className="text-muted-foreground">In {money(account.cycleIncome)}</span>
                     <span className="text-muted-foreground">Out {money(account.cycleCashOut)}</span>
-                    <span className="text-right font-medium tabular-nums">{money(account.cycleNetFlow)}</span>
+                    <span className="text-right font-medium tabular-nums">Est. {money(account.estimatedBalance)}</span>
                   </div>
                 ))}
               </div>
@@ -398,6 +422,11 @@ export default function Finance() {
                 </div>
                 <Field label="Institution" value={newAccount.institution} onChange={(v) => setNewAccount({ ...newAccount, institution: v })} />
                 <Field label="Aliases" value={newAccount.aliases} onChange={(v) => setNewAccount({ ...newAccount, aliases: v })} />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Field label="Opening Balance" value={newAccount.openingBalance} onChange={(v) => setNewAccount({ ...newAccount, openingBalance: v })} />
+                  <Field label="Opening Date" value={newAccount.openingBalanceDate} onChange={(v) => setNewAccount({ ...newAccount, openingBalanceDate: v })} />
+                </div>
+                <Field label="Opening Memo" value={newAccount.openingBalanceMemo} onChange={(v) => setNewAccount({ ...newAccount, openingBalanceMemo: v })} />
                 <Button className="w-full" onClick={handleCreateAccount} disabled={!newAccount.name || createAccountMutation.isPending}>
                   <Plus className="mr-2 h-4 w-4" />
                   Add Account
@@ -467,11 +496,17 @@ export default function Finance() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                  <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
+                    <span>Opening<br /><strong>{money(account.openingBalance)}</strong></span>
                     <span>In<br /><strong>{money(account.cycleIncome)}</strong></span>
                     <span>Out<br /><strong>{money(account.cycleCashOut)}</strong></span>
-                    <span>Net<br /><strong>{money(account.cycleNetFlow)}</strong></span>
+                    <span>Estimated<br /><strong>{money(account.estimatedBalance)}</strong></span>
                   </div>
+                  <AccountOpeningBalanceEditor
+                    account={account}
+                    isSaving={updateAccountMutation.isPending}
+                    onSave={(payload) => updateAccountMutation.mutate({ id: account.id, account: { ...account, ...payload } })}
+                  />
                   <div className="mt-3 flex flex-wrap gap-1">
                     {account.aliases.map((alias) => <Badge key={alias} variant="secondary">{alias}</Badge>)}
                   </div>
@@ -659,6 +694,55 @@ function MetricCard({ title, value, icon }: { title: string; value: string; icon
         <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
       </CardContent>
     </Card>
+  );
+}
+
+function AccountOpeningBalanceEditor({
+  account,
+  isSaving,
+  onSave,
+}: {
+  account: FinanceAccount;
+  isSaving: boolean;
+  onSave: (payload: Partial<FinanceAccount>) => void;
+}) {
+  const [openingBalance, setOpeningBalance] = useState(String(account.openingBalance ?? 0));
+  const [openingBalanceDate, setOpeningBalanceDate] = useState(account.openingBalanceDate || '');
+  const [openingBalanceMemo, setOpeningBalanceMemo] = useState(account.openingBalanceMemo || '');
+
+  return (
+    <div className="mt-3 grid gap-2 rounded-md bg-muted/30 p-3">
+      <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
+        <Input
+          value={openingBalance}
+          inputMode="numeric"
+          onChange={(e) => setOpeningBalance(e.target.value)}
+          placeholder="Opening balance"
+        />
+        <Input
+          value={openingBalanceDate}
+          type="date"
+          onChange={(e) => setOpeningBalanceDate(e.target.value)}
+        />
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onSave({
+            openingBalance: parseMoneyInput(openingBalance),
+            openingBalanceDate: openingBalanceDate || null,
+            openingBalanceMemo: openingBalanceMemo || null,
+          })}
+          disabled={isSaving}
+        >
+          Save
+        </Button>
+      </div>
+      <Input
+        value={openingBalanceMemo}
+        onChange={(e) => setOpeningBalanceMemo(e.target.value)}
+        placeholder="Opening balance memo"
+      />
+    </div>
   );
 }
 
