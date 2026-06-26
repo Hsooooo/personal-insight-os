@@ -404,6 +404,40 @@ PATCH /api/activities/123/tag
 }
 ```
 
+---
+
+### 💰 Finance API
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| GET | `/api/finance/cycles` | 월급일 기준 finance cycle 목록 |
+| GET | `/api/finance/transactions?cycleId=` | cycle별 지출/수입 거래 목록 |
+| POST | `/api/finance/import/preview` | 앱 export `.xlsx` 파일 preview. `multipart/form-data`의 `file` 사용 |
+| POST | `/api/finance/import/confirm` | preview 결과를 사용자 결정값과 함께 확정 저장 |
+| GET | `/api/finance/recurring-bills` | 통신비 등 반복 청구 템플릿 목록 |
+| POST | `/api/finance/recurring-bills` | 반복 청구 템플릿 생성 |
+| POST | `/api/finance/recurring-bills/{id}/versions` | 대상 cycle부터 적용할 템플릿 버전 생성 |
+| DELETE | `/api/finance/recurring-bills/{id}` | 반복 청구 템플릿 삭제 |
+
+**Import preview 상태**
+
+| 상태 | 의미 |
+|------|------|
+| `NEW` | 동일 fingerprint가 없고 중복 의심 조건도 없음 |
+| `DUPLICATE` | `user_id + source_fingerprint`가 이미 존재 |
+| `NEEDS_REVIEW` | 같은 날짜 + 같은 금액 + 같은 수입/지출이 있으나 fingerprint는 다름 |
+
+**Import confirm 요청**
+```json
+{
+  "importSessionId": "...",
+  "decisions": [
+    { "action": "create", "row": { "sourceFingerprint": "...", "status": "NEW" } },
+    { "action": "skip", "row": { "sourceFingerprint": "...", "status": "NEEDS_REVIEW" } }
+  ]
+}
+```
+
 피드백 상태: `CORRECT`, `UNCLEAR`, `WRONG`, `IMPORTANT`
 
 **인사이트 응답의 근거(`evidences`)**

@@ -348,6 +348,18 @@ public AskResponse ask(Long userId, AskRequest request) {
 
 ---
 
+## ✅ 15. Finance cycle import
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `FinanceController`, `FinanceService`, `Finance.tsx` |
+| **기능** | 엑셀 export를 preview 후 확정 저장하고, 월급일 기준 cycle에 거래 배정 |
+| **중복 처리** | 원본 행 fingerprint로 동일 import 재실행을 skip. 같은 날짜+금액+수입/지출은 사용자 확인 |
+| **통신비 처리** | 납부 거래는 현금흐름, 소액결제는 실제 소비 카테고리로 분리 |
+| **반복 청구** | Finance > Recurring 탭에서 통신비 고정 템플릿을 cycle별 버전으로 관리 |
+
+---
+
 ## MVP 판단 기준 달성 여부
 
 | 기준 | 달성 |

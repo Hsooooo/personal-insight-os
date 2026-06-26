@@ -229,6 +229,31 @@ sequenceDiagram
 
 ---
 
+## Finance import 흐름
+
+```mermaid
+sequenceDiagram
+    actor U as 사용자
+    participant FE as Frontend
+    participant BE as Backend
+    participant PG as PostgreSQL
+
+    U->>FE: Finance > Import에서 .xlsx 업로드
+    FE->>BE: POST /api/finance/import/preview
+    BE->>BE: 내역 시트 파싱 + source_fingerprint 생성
+    BE->>PG: 기존 fingerprint 및 같은 날짜/금액 후보 조회
+    BE-->>FE: NEW / DUPLICATE / NEEDS_REVIEW preview
+    U->>FE: 확인필요 행 create/skip 선택
+    FE->>BE: POST /api/finance/import/confirm
+    BE->>PG: finance_cycles 생성/갱신
+    BE->>PG: finance_transactions 저장<br/>(user_id + source_fingerprint unique)
+    BE-->>FE: 생성/skip 결과
+```
+
+Finance는 월급 입금 직후부터 다음 월급 직전까지를 `finance_cycles`로 관리합니다. 통신비 납부액처럼 현금흐름과 소비분석이 다른 거래는 `cashflow_included`, `spending_included` 플래그로 분리합니다.
+
+---
+
 ## 배포 아키텍처 (Docker Compose)
 
 ```mermaid

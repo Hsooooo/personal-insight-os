@@ -292,3 +292,19 @@ flowchart LR
 4. 일/활동/수면/인사이트 단위 중심으로 시작
 5. 강한 인과관계(CAUSES) 대신 신중한 표현(POSSIBLY_AFFECTS) 사용
 ```
+
+---
+
+## Finance 스키마
+
+Finance 도메인은 PostgreSQL에 우선 저장하며, 이번 1차 구현에서는 Neo4j 투영 대상에서 제외한다.
+
+| 테이블 | 설명 |
+|--------|------|
+| `finance_cycles` | 월급 입금 직후부터 다음 월급 직전까지의 분석 cycle |
+| `finance_transactions` | 앱 export에서 import된 수입/지출 거래. `user_id + source_fingerprint`로 멱등성 보장 |
+| `recurring_bill_templates` | KT 통신비 같은 반복 청구 프로필 |
+| `recurring_bill_template_versions` | 특정 `effective_cycle_id`부터 적용되는 고정비 구성 버전 |
+| `recurring_bill_template_items` | 월정액, 부가서비스, 할인, 부가세 등 버전별 상세 항목 |
+
+`finance_transactions`는 현금흐름과 소비분석을 분리하기 위해 `cashflow_included`, `spending_included`를 별도로 가진다. 예를 들어 통신비 납부액은 현금흐름에는 포함하고, 소액결제 원거래는 소비분석에 포함한다.

@@ -324,3 +324,17 @@ flowchart LR
 | **구성** | Provider 목록 + 등록 폼 + About 카드 |
 | **API 호출** | `GET/POST/PATCH/DELETE /api/settings/llm-providers` |
 | **지원 Provider** | OpenAI, Anthropic, Google Gemini |
+
+---
+
+### 11. Finance (`/finance`)
+
+| 항목 | 내용 |
+|------|------|
+| **목적** | 월급일 기준 지출 cycle, 현금흐름, 소비분석, 반복 청구 템플릿 관리 |
+| **구성** | Overview, Transactions, Import, Recurring 탭 |
+| **Overview** | 선택 cycle의 수입, 현금유출, 소비분석 합계와 카테고리별 지출 요약 |
+| **Transactions** | 거래 목록, Cash/Spend/소액결제 플래그 표시 |
+| **Import** | `.xlsx` 업로드 → preview → 신규/중복/확인필요 상태 확인 → 확정 저장 |
+| **Recurring** | KT 통신비 같은 고정비 템플릿과 cycle 적용 버전 관리 |
+| **API 호출** | `/api/finance/*` |

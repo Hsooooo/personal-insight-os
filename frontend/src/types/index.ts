@@ -16,6 +16,113 @@ export interface ApiResponse<T> {
   data: T;
 }
 
+export interface FinanceCycle {
+  id: number;
+  label: string;
+  salaryDate: string;
+  startsAt: string;
+  endsAt: string | null;
+  status: string;
+}
+
+export interface FinanceTransaction {
+  id: number;
+  cycleId: number | null;
+  linkedTemplateVersionId: number | null;
+  transactionAt: string;
+  transactionDate: string;
+  asset: string;
+  category: string;
+  subcategory: string;
+  description: string;
+  amount: number;
+  flowType: string;
+  memo: string;
+  currency: string;
+  sourceFingerprint: string;
+  sourceRow: Record<string, unknown>;
+  cashflowIncluded: boolean;
+  spendingIncluded: boolean;
+  paymentMethod: string;
+}
+
+export interface FinanceImportRow {
+  rowId: string;
+  rowNumber: number;
+  status: 'NEW' | 'DUPLICATE' | 'NEEDS_REVIEW';
+  matchedTransactionId: number | null;
+  cycleId: number | null;
+  cycleLabel: string;
+  cycleStartsAt: string;
+  cycleSalaryDate: string;
+  transactionAt: string;
+  transactionDate: string;
+  asset: string;
+  category: string;
+  subcategory: string;
+  description: string;
+  amount: number;
+  flowType: string;
+  memo: string;
+  currency: string;
+  sourceFingerprint: string;
+  cashflowIncluded: boolean;
+  spendingIncluded: boolean;
+  paymentMethod: string;
+  sourceRow: Record<string, unknown>;
+}
+
+export interface FinanceImportPreviewResponse {
+  importSessionId: string;
+  totalRows: number;
+  newRows: number;
+  duplicateRows: number;
+  reviewRows: number;
+  rows: FinanceImportRow[];
+}
+
+export interface FinanceImportConfirmRequest {
+  importSessionId: string;
+  decisions: {
+    action: 'create' | 'skip';
+    row: FinanceImportRow;
+  }[];
+}
+
+export interface FinanceImportConfirmResponse {
+  created: number;
+  skipped: number;
+  transactions: FinanceTransaction[];
+}
+
+export interface RecurringBill {
+  id: number;
+  name: string;
+  provider: string;
+  category: string;
+  memo: string;
+  active: boolean;
+  versions: RecurringBillVersion[];
+}
+
+export interface RecurringBillVersion {
+  id: number;
+  templateId: number;
+  effectiveCycleId: number | null;
+  version: number;
+  expectedAmount: number;
+  active: boolean;
+  items: RecurringBillItem[];
+}
+
+export interface RecurringBillItem {
+  id?: number;
+  itemName: string;
+  amount: number;
+  itemType: string;
+  sortOrder: number;
+}
+
 export interface Activity {
   id: number;
   externalActivityId: string | null;

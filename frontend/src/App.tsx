@@ -15,6 +15,7 @@ import Insights from '@/pages/Insights';
 import Goals from '@/pages/Goals';
 import Settings from '@/pages/Settings';
 import McpSettings from '@/pages/McpSettings';
+import Finance from '@/pages/Finance';
 
 function App() {
   const { isAuthenticated, logout } = useAuthStore();
@@ -68,6 +69,7 @@ function App() {
         <Route path="/data-sources" element={<DataSources />} />
         <Route path="/activities" element={<Activities />} />
         <Route path="/health" element={<Health />} />
+        <Route path="/finance" element={<Finance />} />
         <Route path="/graph" element={<Graph />} />
         <Route path="/ask" element={<Ask />} />
         <Route path="/insights" element={<Insights />} />

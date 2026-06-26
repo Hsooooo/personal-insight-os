@@ -20,6 +20,13 @@ import type {
   SyncLog,
   User,
   WeightTrainingRequest,
+  FinanceCycle,
+  FinanceImportConfirmRequest,
+  FinanceImportConfirmResponse,
+  FinanceImportPreviewResponse,
+  FinanceTransaction,
+  RecurringBill,
+  RecurringBillVersion,
 } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -60,8 +67,9 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
   const token = useAuthStore.getState().token;
   const url = `${API_BASE}${path}`;
 
+  const isFormData = options.body instanceof FormData;
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
     ...((options.headers as Record<string, string>) || {}),
   };
 
@@ -230,5 +238,28 @@ export const api = {
     create: (name: string): Promise<ApiKey> =>
       fetchApi('/api/auth/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
     delete: (id: number): Promise<void> => fetchApi(`/api/auth/api-keys/${id}`, { method: 'DELETE' }),
+  },
+  finance: {
+    cycles: (): Promise<FinanceCycle[]> => fetchApi('/api/finance/cycles'),
+    transactions: (cycleId?: number): Promise<FinanceTransaction[]> => {
+      const params = new URLSearchParams();
+      if (cycleId) params.append('cycleId', String(cycleId));
+      const qs = params.toString();
+      return fetchApi(`/api/finance/transactions${qs ? '?' + qs : ''}`);
+    },
+    previewImport: (file: File): Promise<FinanceImportPreviewResponse> => {
+      const body = new FormData();
+      body.append('file', file);
+      return fetchApi('/api/finance/import/preview', { method: 'POST', body });
+    },
+    confirmImport: (request: FinanceImportConfirmRequest): Promise<FinanceImportConfirmResponse> =>
+      fetchApi('/api/finance/import/confirm', { method: 'POST', body: JSON.stringify(request) }),
+    recurringBills: (): Promise<RecurringBill[]> => fetchApi('/api/finance/recurring-bills'),
+    createRecurringBill: (bill: Partial<RecurringBill>): Promise<RecurringBill> =>
+      fetchApi('/api/finance/recurring-bills', { method: 'POST', body: JSON.stringify(bill) }),
+    createRecurringBillVersion: (templateId: number, version: Partial<RecurringBillVersion>): Promise<RecurringBillVersion> =>
+      fetchApi(`/api/finance/recurring-bills/${templateId}/versions`, { method: 'POST', body: JSON.stringify(version) }),
+    deleteRecurringBill: (templateId: number): Promise<void> =>
+      fetchApi(`/api/finance/recurring-bills/${templateId}`, { method: 'DELETE' }),
   },
 };
