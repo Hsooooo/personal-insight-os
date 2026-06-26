@@ -29,6 +29,10 @@ export interface FinanceTransaction {
   id: number;
   cycleId: number | null;
   linkedTemplateVersionId: number | null;
+  accountId: number | null;
+  accountName: string | null;
+  accountType: string | null;
+  accountRole: string | null;
   transactionAt: string;
   transactionDate: string;
   asset: string;
@@ -44,6 +48,24 @@ export interface FinanceTransaction {
   cashflowIncluded: boolean;
   spendingIncluded: boolean;
   paymentMethod: string;
+}
+
+export interface FinanceAccount {
+  id: number;
+  name: string;
+  accountType: string;
+  role: string;
+  institution: string | null;
+  memo: string | null;
+  active: boolean;
+  aliases: string[];
+  cycleIncome: number;
+  cycleCashOut: number;
+  cycleNetFlow: number;
+}
+
+export interface FinanceAccountAutoMapResponse {
+  updatedTransactions: number;
 }
 
 export interface FinanceImportRow {

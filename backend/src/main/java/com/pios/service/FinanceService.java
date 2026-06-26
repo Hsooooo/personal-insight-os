@@ -32,6 +32,8 @@ public class FinanceService {
     private final RecurringBillTemplateRepository templateRepo;
     private final RecurringBillTemplateVersionRepository versionRepo;
     private final RecurringBillTemplateItemRepository itemRepo;
+    private final FinanceAccountRepository accountRepo;
+    private final FinanceAccountAliasRepository accountAliasRepo;
 
     public List<FinanceCycleDto> getCycles(Long userId) {
         return cycleRepo.findByUserIdOrderByStartsAtDesc(userId).stream().map(this::toCycleDto).toList();
@@ -88,9 +90,11 @@ public class FinanceService {
             }
             try {
                 FinanceCycle cycle = ensureCycle(userId, row);
+                FinanceAccount account = findAccountForAsset(userId, row.getAsset()).orElse(null);
                 FinanceTransaction transaction = transactionRepo.save(FinanceTransaction.builder()
                         .user(User.builder().id(userId).build())
                         .cycle(cycle)
+                        .account(account)
                         .transactionAt(row.getTransactionAt())
                         .transactionDate(row.getTransactionDate())
                         .asset(row.getAsset())
@@ -118,6 +122,74 @@ public class FinanceService {
                 .skipped(skipped)
                 .transactions(created)
                 .build();
+    }
+
+    public List<FinanceAccountDto> getAccounts(Long userId, Long cycleId) {
+        List<FinanceAccount> accounts = accountRepo.findByUserIdOrderByNameAsc(userId);
+        List<FinanceTransaction> transactions = cycleId == null
+                ? transactionRepo.findByUserIdOrderByTransactionAtDesc(userId)
+                : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtDesc(userId, cycleId);
+        Map<Long, List<FinanceTransaction>> byAccount = transactions.stream()
+                .filter(t -> t.getAccount() != null)
+                .collect(Collectors.groupingBy(t -> t.getAccount().getId()));
+        return accounts.stream()
+                .map(account -> toAccountDto(account, byAccount.getOrDefault(account.getId(), List.of())))
+                .toList();
+    }
+
+    @Transactional
+    public FinanceAccountDto createAccount(Long userId, FinanceAccountDto dto) {
+        validateAccountName(userId, null, dto.getName());
+        FinanceAccount account = accountRepo.save(FinanceAccount.builder()
+                .user(User.builder().id(userId).build())
+                .name(dto.getName())
+                .accountType(defaultValue(dto.getAccountType(), "OTHER"))
+                .role(defaultValue(dto.getRole(), "OTHER"))
+                .institution(dto.getInstitution())
+                .memo(dto.getMemo())
+                .active(true)
+                .build());
+        replaceAliases(userId, account, dto.getAliases());
+        mapTransactionsForAccount(userId, account);
+        return toAccountDto(account, List.of());
+    }
+
+    @Transactional
+    public FinanceAccountDto updateAccount(Long userId, Long accountId, FinanceAccountDto dto) {
+        FinanceAccount account = findAccount(userId, accountId);
+        validateAccountName(userId, accountId, dto.getName());
+        account.setName(dto.getName());
+        account.setAccountType(defaultValue(dto.getAccountType(), "OTHER"));
+        account.setRole(defaultValue(dto.getRole(), "OTHER"));
+        account.setInstitution(dto.getInstitution());
+        account.setMemo(dto.getMemo());
+        if (dto.getActive() != null) {
+            account.setActive(dto.getActive());
+        }
+        FinanceAccount saved = accountRepo.save(account);
+        replaceAliases(userId, saved, dto.getAliases());
+        mapTransactionsForAccount(userId, saved);
+        return toAccountDto(saved, List.of());
+    }
+
+    @Transactional
+    public void deleteAccount(Long userId, Long accountId) {
+        FinanceAccount account = findAccount(userId, accountId);
+        transactionRepo.findByUserIdAndAssetIn(userId, aliasesFor(account)).forEach(tx -> {
+            if (tx.getAccount() != null && tx.getAccount().getId().equals(accountId)) {
+                tx.setAccount(null);
+            }
+        });
+        accountRepo.delete(account);
+    }
+
+    @Transactional
+    public FinanceAccountAutoMapResponse autoMapAccounts(Long userId) {
+        int updated = 0;
+        for (FinanceAccount account : accountRepo.findByUserIdOrderByNameAsc(userId)) {
+            updated += mapTransactionsForAccount(userId, account);
+        }
+        return FinanceAccountAutoMapResponse.builder().updatedTransactions(updated).build();
     }
 
     public List<RecurringBillDto> getRecurringBills(Long userId) {
@@ -311,6 +383,65 @@ public class FinanceService {
                 .orElseThrow(() -> new IllegalArgumentException("Recurring bill not found"));
     }
 
+    private FinanceAccount findAccount(Long userId, Long accountId) {
+        return accountRepo.findById(accountId)
+                .filter(a -> a.getUser().getId().equals(userId))
+                .orElseThrow(() -> new IllegalArgumentException("Finance account not found"));
+    }
+
+    private Optional<FinanceAccount> findAccountForAsset(Long userId, String asset) {
+        if (asset == null || asset.isBlank()) return Optional.empty();
+        Optional<FinanceAccount> byAlias = accountAliasRepo.findByAccountUserIdAndAliasName(userId, asset.trim())
+                .map(FinanceAccountAlias::getAccount);
+        if (byAlias.isPresent()) return byAlias;
+        return accountRepo.findByUserIdAndName(userId, asset.trim());
+    }
+
+    private int mapTransactionsForAccount(Long userId, FinanceAccount account) {
+        List<String> aliases = aliasesFor(account);
+        int updated = 0;
+        for (FinanceTransaction tx : transactionRepo.findByUserIdAndAssetIn(userId, aliases)) {
+            if (tx.getAccount() == null || !tx.getAccount().getId().equals(account.getId())) {
+                tx.setAccount(account);
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    private List<String> aliasesFor(FinanceAccount account) {
+        LinkedHashSet<String> aliases = new LinkedHashSet<>();
+        aliases.add(account.getName());
+        accountAliasRepo.findByAccountIdOrderByAliasNameAsc(account.getId()).forEach(alias -> aliases.add(alias.getAliasName()));
+        return aliases.stream().filter(v -> v != null && !v.isBlank()).toList();
+    }
+
+    private void replaceAliases(Long userId, FinanceAccount account, List<String> aliases) {
+        accountAliasRepo.deleteByAccountId(account.getId());
+        LinkedHashSet<String> unique = new LinkedHashSet<>();
+        unique.add(account.getName());
+        if (aliases != null) unique.addAll(aliases);
+        for (String raw : unique) {
+            String alias = raw == null ? "" : raw.trim();
+            if (alias.isBlank()) continue;
+            if (accountAliasRepo.existsByAccountUserIdAndAliasNameAndAccountIdNot(userId, alias, account.getId())) {
+                throw new IllegalArgumentException("Account alias already exists: " + alias);
+            }
+            accountAliasRepo.save(FinanceAccountAlias.builder().account(account).aliasName(alias).build());
+        }
+    }
+
+    private void validateAccountName(Long userId, Long accountId, String name) {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Account name is required");
+        }
+        accountRepo.findByUserIdAndName(userId, name.trim()).ifPresent(existing -> {
+            if (accountId == null || !existing.getId().equals(accountId)) {
+                throw new IllegalArgumentException("Account name already exists: " + name);
+            }
+        });
+    }
+
     private FinanceCycleDto toCycleDto(FinanceCycle c) {
         return FinanceCycleDto.builder()
                 .id(c.getId())
@@ -327,6 +458,10 @@ public class FinanceService {
                 .id(t.getId())
                 .cycleId(t.getCycle() != null ? t.getCycle().getId() : null)
                 .linkedTemplateVersionId(t.getLinkedTemplateVersion() != null ? t.getLinkedTemplateVersion().getId() : null)
+                .accountId(t.getAccount() != null ? t.getAccount().getId() : null)
+                .accountName(t.getAccount() != null ? t.getAccount().getName() : null)
+                .accountType(t.getAccount() != null ? t.getAccount().getAccountType() : null)
+                .accountRole(t.getAccount() != null ? t.getAccount().getRole() : null)
                 .transactionAt(t.getTransactionAt())
                 .transactionDate(t.getTransactionDate())
                 .asset(t.getAsset())
@@ -342,6 +477,32 @@ public class FinanceService {
                 .cashflowIncluded(t.isCashflowIncluded())
                 .spendingIncluded(t.isSpendingIncluded())
                 .paymentMethod(t.getPaymentMethod())
+                .build();
+    }
+
+    private FinanceAccountDto toAccountDto(FinanceAccount account, List<FinanceTransaction> cycleTransactions) {
+        BigDecimal income = cycleTransactions.stream()
+                .filter(t -> "수입".equals(t.getFlowType()))
+                .map(FinanceTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal cashOut = cycleTransactions.stream()
+                .filter(t -> !"수입".equals(t.getFlowType()) && t.isCashflowIncluded())
+                .map(FinanceTransaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return FinanceAccountDto.builder()
+                .id(account.getId())
+                .name(account.getName())
+                .accountType(account.getAccountType())
+                .role(account.getRole())
+                .institution(account.getInstitution())
+                .memo(account.getMemo())
+                .active(account.isActive())
+                .aliases(accountAliasRepo.findByAccountIdOrderByAliasNameAsc(account.getId()).stream()
+                        .map(FinanceAccountAlias::getAliasName)
+                        .toList())
+                .cycleIncome(income)
+                .cycleCashOut(cashOut)
+                .cycleNetFlow(income.subtract(cashOut))
                 .build();
     }
 
@@ -381,6 +542,10 @@ public class FinanceService {
 
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private String defaultValue(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 
     private record CycleAnchor(Long cycleId, String label, Instant startsAt, LocalDate salaryDate) {

@@ -12,6 +12,10 @@ public class FinanceTransactionDto {
     private Long id;
     private Long cycleId;
     private Long linkedTemplateVersionId;
+    private Long accountId;
+    private String accountName;
+    private String accountType;
+    private String accountRole;
     private Instant transactionAt;
     private LocalDate transactionDate;
     private String asset;

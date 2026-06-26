@@ -32,6 +32,10 @@ public class FinanceTransaction {
     @JoinColumn(name = "linked_template_version_id")
     private RecurringBillTemplateVersion linkedTemplateVersion;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "account_id")
+    private FinanceAccount account;
+
     @Column(name = "transaction_at", nullable = false)
     private Instant transactionAt;
 

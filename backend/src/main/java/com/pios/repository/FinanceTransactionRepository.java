@@ -18,4 +18,6 @@ public interface FinanceTransactionRepository extends JpaRepository<FinanceTrans
     List<FinanceTransaction> findByUserIdAndSourceFingerprintIn(Long userId, Collection<String> fingerprints);
     List<FinanceTransaction> findByUserIdAndTransactionDateAndAmountAndFlowType(
             Long userId, LocalDate transactionDate, BigDecimal amount, String flowType);
+    List<FinanceTransaction> findByUserIdAndAssetIn(Long userId, Collection<String> assets);
+    List<FinanceTransaction> findByUserIdAndAccountIdIsNullOrderByTransactionAtDesc(Long userId);
 }

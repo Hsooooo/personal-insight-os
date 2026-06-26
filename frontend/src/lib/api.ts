@@ -21,6 +21,8 @@ import type {
   User,
   WeightTrainingRequest,
   FinanceCycle,
+  FinanceAccount,
+  FinanceAccountAutoMapResponse,
   FinanceImportConfirmRequest,
   FinanceImportConfirmResponse,
   FinanceImportPreviewResponse,
@@ -241,6 +243,20 @@ export const api = {
   },
   finance: {
     cycles: (): Promise<FinanceCycle[]> => fetchApi('/api/finance/cycles'),
+    accounts: (cycleId?: number): Promise<FinanceAccount[]> => {
+      const params = new URLSearchParams();
+      if (cycleId) params.append('cycleId', String(cycleId));
+      const qs = params.toString();
+      return fetchApi(`/api/finance/accounts${qs ? '?' + qs : ''}`);
+    },
+    createAccount: (account: Partial<FinanceAccount>): Promise<FinanceAccount> =>
+      fetchApi('/api/finance/accounts', { method: 'POST', body: JSON.stringify(account) }),
+    updateAccount: (id: number, account: Partial<FinanceAccount>): Promise<FinanceAccount> =>
+      fetchApi(`/api/finance/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(account) }),
+    deleteAccount: (id: number): Promise<void> =>
+      fetchApi(`/api/finance/accounts/${id}`, { method: 'DELETE' }),
+    autoMapAccounts: (): Promise<FinanceAccountAutoMapResponse> =>
+      fetchApi('/api/finance/accounts/auto-map', { method: 'POST' }),
     transactions: (cycleId?: number): Promise<FinanceTransaction[]> => {
       const params = new URLSearchParams();
       if (cycleId) params.append('cycleId', String(cycleId));

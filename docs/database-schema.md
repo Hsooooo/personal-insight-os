@@ -302,9 +302,13 @@ Finance 도메인은 PostgreSQL에 우선 저장하며, 이번 1차 구현에서
 | 테이블 | 설명 |
 |--------|------|
 | `finance_cycles` | 월급 입금 직후부터 다음 월급 직전까지의 분석 cycle |
-| `finance_transactions` | 앱 export에서 import된 수입/지출 거래. `user_id + source_fingerprint`로 멱등성 보장 |
+| `finance_transactions` | 앱 export에서 import된 수입/지출 거래. `user_id + source_fingerprint`로 멱등성 보장. 원본 `asset`과 선택적 `account_id`를 함께 저장 |
+| `finance_accounts` | 사용자가 정의한 계좌/지갑/목적자금/부채 마스터 |
+| `finance_account_aliases` | import 원본 `asset` 값을 계좌에 연결하는 alias |
 | `recurring_bill_templates` | KT 통신비 같은 반복 청구 프로필 |
 | `recurring_bill_template_versions` | 특정 `effective_cycle_id`부터 적용되는 고정비 구성 버전 |
 | `recurring_bill_template_items` | 월정액, 부가서비스, 할인, 부가세 등 버전별 상세 항목 |
 
 `finance_transactions`는 현금흐름과 소비분석을 분리하기 위해 `cashflow_included`, `spending_included`를 별도로 가진다. 예를 들어 통신비 납부액은 현금흐름에는 포함하고, 소액결제 원거래는 소비분석에 포함한다.
+
+계좌 확장은 원본 보존과 분석용 매핑을 분리한다. `asset`은 export 원본 문자열로 유지하고, 사용자가 Accounts 탭에서 만든 `finance_accounts`와 일치하는 name/alias가 있을 때만 `account_id`를 채운다. 지원 계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`이며, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`이다.

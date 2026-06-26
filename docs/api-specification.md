@@ -414,6 +414,11 @@ PATCH /api/activities/123/tag
 | GET | `/api/finance/transactions?cycleId=` | cycle별 지출/수입 거래 목록 |
 | POST | `/api/finance/import/preview` | 앱 export `.xlsx` 파일 preview. `multipart/form-data`의 `file` 사용 |
 | POST | `/api/finance/import/confirm` | preview 결과를 사용자 결정값과 함께 확정 저장 |
+| GET | `/api/finance/accounts?cycleId=` | 계좌/지갑/부채/목적자금 목록과 cycle 내 현금흐름 요약 |
+| POST | `/api/finance/accounts` | 계좌 생성. `aliases`로 import 원본 `asset` 값을 매핑 |
+| PATCH | `/api/finance/accounts/{id}` | 계좌 이름, 타입, 역할, alias 수정 및 기존 거래 재매핑 |
+| DELETE | `/api/finance/accounts/{id}` | 계좌 삭제. 연결 거래의 `account_id`는 해제 |
+| POST | `/api/finance/accounts/auto-map` | 기존 계좌 name/alias 기준으로 미연결 거래 일괄 매핑 |
 | GET | `/api/finance/recurring-bills` | 통신비 등 반복 청구 템플릿 목록 |
 | POST | `/api/finance/recurring-bills` | 반복 청구 템플릿 생성 |
 | POST | `/api/finance/recurring-bills/{id}/versions` | 대상 cycle부터 적용할 템플릿 버전 생성 |
@@ -437,6 +442,12 @@ PATCH /api/activities/123/tag
   ]
 }
 ```
+
+**Finance account 매핑**
+
+거래의 `asset`은 앱 export 원본값으로 보존하고, 사용자가 만든 계좌 마스터와 연결할 때만 `account_id`를 채운다. import confirm 시 `asset`이 기존 계좌 이름 또는 alias와 일치하면 자동 연결하고, 일치하지 않으면 Accounts 탭의 unmapped asset으로 노출한다. 계좌 생성/수정 시 alias가 추가되면 기존 거래도 같은 alias 기준으로 일괄 연결된다.
+
+계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`를 사용하고, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`를 사용한다.
 
 피드백 상태: `CORRECT`, `UNCLEAR`, `WRONG`, `IMPORTANT`
 

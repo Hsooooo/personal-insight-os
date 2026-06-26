@@ -42,6 +42,41 @@ public class FinanceController {
         return ApiResponse.ok(financeService.confirmImport(userId, request));
     }
 
+    @GetMapping("/accounts")
+    public ApiResponse<List<FinanceAccountDto>> accounts(
+            @AuthenticationPrincipal Long userId,
+            @RequestParam(required = false) Long cycleId) {
+        return ApiResponse.ok(financeService.getAccounts(userId, cycleId));
+    }
+
+    @PostMapping("/accounts")
+    public ApiResponse<FinanceAccountDto> createAccount(
+            @AuthenticationPrincipal Long userId,
+            @RequestBody FinanceAccountDto dto) {
+        return ApiResponse.ok(financeService.createAccount(userId, dto));
+    }
+
+    @PatchMapping("/accounts/{accountId}")
+    public ApiResponse<FinanceAccountDto> updateAccount(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long accountId,
+            @RequestBody FinanceAccountDto dto) {
+        return ApiResponse.ok(financeService.updateAccount(userId, accountId, dto));
+    }
+
+    @DeleteMapping("/accounts/{accountId}")
+    public ApiResponse<Void> deleteAccount(
+            @AuthenticationPrincipal Long userId,
+            @PathVariable Long accountId) {
+        financeService.deleteAccount(userId, accountId);
+        return ApiResponse.ok("Deleted", null);
+    }
+
+    @PostMapping("/accounts/auto-map")
+    public ApiResponse<FinanceAccountAutoMapResponse> autoMapAccounts(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.ok(financeService.autoMapAccounts(userId));
+    }
+
     @GetMapping("/recurring-bills")
     public ApiResponse<List<RecurringBillDto>> recurringBills(@AuthenticationPrincipal Long userId) {
         return ApiResponse.ok(financeService.getRecurringBills(userId));
