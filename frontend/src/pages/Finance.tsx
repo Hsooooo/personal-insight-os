@@ -12,11 +12,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { ArrowDownUp, CalendarDays, Check, Copy, FileSpreadsheet, FilterX, Link2, Plus, ReceiptText, RefreshCw, Search, Trash2, WalletCards } from 'lucide-react';
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import type { FinanceAccount, FinanceImportPreviewResponse, FinanceImportRow, FinanceTransaction, RecurringBillItem } from '@/types';
+
+const CATEGORY_COLORS = ['#10b981', '#0ea5e9', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b'];
 
 function money(value: number | null | undefined) {
   if (value == null) return '-';
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(value);
+}
+
+function percent(value: number, total: number) {
+  if (total <= 0) return '0%';
+  return `${Math.round((value / total) * 100)}%`;
 }
 
 function cashflowAmount(tx: FinanceTransaction) {
@@ -456,6 +464,16 @@ export default function Finance() {
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [transactions]);
 
+  const categoryChartData = useMemo(
+    () => categoryTotals.map(([name, value]) => ({ name, value })),
+    [categoryTotals]
+  );
+
+  const categoryChartTotal = useMemo(
+    () => categoryChartData.reduce((sum, item) => sum + item.value, 0),
+    [categoryChartData]
+  );
+
   const accountTotals = useMemo(() => {
     return [...(accounts || [])]
       .filter((account) => !isLiabilityAccount(account))
@@ -701,7 +719,7 @@ export default function Finance() {
             <MetricCard title="Net External" value={money(totals.netExternalCashflow)} icon={<WalletCards className="h-4 w-4" />} />
             <MetricCard title="Rows" value={String(totals.count)} icon={<FileSpreadsheet className="h-4 w-4" />} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Spending Categories</CardTitle>
@@ -733,41 +751,107 @@ export default function Finance() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Account Flow</CardTitle>
+                <CardTitle>Category Mix</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {accountTotals.length === 0 && <p className="text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
-                  {accountTotals.map((account) => (
-                    <div key={account.id} className="grid gap-2 rounded-md border bg-background px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_140px]">
-                      <span className="font-medium">{account.name}</span>
-                      <span className="text-muted-foreground">In {money(account.cycleIncome)}</span>
-                      <span className="text-muted-foreground">Out {money(account.cycleCashOut)}</span>
-                      <span className="text-right font-medium tabular-nums">Est. {money(account.estimatedBalance)}</span>
+                {transactionsLoading ? <Skeleton className="h-64" /> : categoryChartData.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No spending mix in this cycle yet.</p>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-[minmax(220px,0.9fr)_1fr] md:items-center">
+                    <div className="relative h-64 min-w-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={categoryChartData}
+                            dataKey="value"
+                            nameKey="name"
+                            innerRadius="58%"
+                            outerRadius="82%"
+                            paddingAngle={2}
+                            strokeWidth={2}
+                          >
+                            {categoryChartData.map((entry, index) => (
+                              <Cell key={entry.name} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: number) => money(value)} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+                        <span className="text-xs text-muted-foreground">Actual</span>
+                        <span className="text-lg font-semibold tabular-nums">{money(categoryChartTotal)}</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Liability Flow</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {liabilityTotals.length === 0 && <p className="text-sm text-muted-foreground">No liability flow in this cycle yet.</p>}
-                  {liabilityTotals.map((liability) => (
-                    <div key={liability.name} className="grid gap-2 rounded-md border bg-background px-3 py-2 text-sm sm:grid-cols-[1fr_110px_110px_130px]">
-                      <span className="font-medium">{liability.name}</span>
-                      <span className="text-muted-foreground">Used {money(liability.used)}</span>
-                      <span className="text-muted-foreground">Settled {money(liability.settled)}</span>
-                      <span className="text-right font-medium tabular-nums">{money(liability.net)}</span>
+                    <div className="space-y-2">
+                      {categoryChartData.map((item, index) => (
+                        <div key={item.name} className="grid grid-cols-[12px_1fr_auto] items-center gap-2 text-sm">
+                          <span className="h-3 w-3 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }} />
+                          <span className="min-w-0 truncate text-muted-foreground">{item.name}</span>
+                          <span className="whitespace-nowrap text-right tabular-nums">{percent(item.value, categoryChartTotal)}</span>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Account Flow</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <div className="min-w-[760px] space-y-2">
+                  <div className="grid grid-cols-[1.4fr_130px_130px_150px_150px] gap-3 px-3 text-xs font-medium text-muted-foreground">
+                    <span>Account</span>
+                    <span className="text-right">In</span>
+                    <span className="text-right">Out</span>
+                    <span className="text-right">Net</span>
+                    <span className="text-right">Estimated</span>
+                  </div>
+                  {accountTotals.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
+                  {accountTotals.map((account) => (
+                    <div key={account.id} className="grid grid-cols-[1.4fr_130px_130px_150px_150px] items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate font-medium">{account.name}</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(account.cycleIncome)}</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(account.cycleCashOut)}</span>
+                      <span className="whitespace-nowrap text-right font-medium tabular-nums">{money(account.cycleNetFlow)}</span>
+                      <span className="whitespace-nowrap text-right font-medium tabular-nums">{money(account.estimatedBalance)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Liability Flow</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <div className="min-w-[680px] space-y-2">
+                  <div className="grid grid-cols-[1.4fr_150px_150px_170px] gap-3 px-3 text-xs font-medium text-muted-foreground">
+                    <span>Account</span>
+                    <span className="text-right">Used</span>
+                    <span className="text-right">Settled</span>
+                    <span className="text-right">Net Liability</span>
+                  </div>
+                  {liabilityTotals.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No liability flow in this cycle yet.</p>}
+                  {liabilityTotals.map((liability) => (
+                    <div key={liability.name} className="grid grid-cols-[1.4fr_150px_150px_170px] items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate font-medium">{liability.name}</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(liability.used)}</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(liability.settled)}</span>
+                      <span className="whitespace-nowrap text-right font-medium tabular-nums">{money(liability.net)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="transactions" className="space-y-4">
