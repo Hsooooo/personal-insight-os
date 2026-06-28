@@ -359,6 +359,8 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **통신비 처리** | 납부 거래는 현금흐름, 소액결제는 실제 소비 카테고리로 분리 |
 | **계좌 매핑** | Finance > Accounts 탭에서 원본 `asset` 값을 계좌/지갑/부채/목적자금 alias로 연결 |
 | **잔액 보정** | 계좌별 opening balance를 저장해 기록 시작 전 잔액을 추정 잔액 계산에 반영 |
+| **거래 필터** | Transactions 탭에서 텍스트 검색, 흐름, 계좌, 카테고리, Cash/Spend/Adjusted/Unmapped 플래그, 날짜 범위로 거래를 필터링 |
+| **주간 재무 요약 복사** | Finance 상단의 "Copy Weekly Summary" 버튼으로 선택 cycle의 월요일~일요일 주간 요약을 마크다운 복사. cycle 시작 주는 cycle 시작일 이후부터 일요일까지로 잘라 7일 미만 기간을 허용 |
 | **반복 청구** | Finance > Recurring 탭에서 통신비 고정 템플릿을 cycle별 버전으로 관리 |
 
 ---

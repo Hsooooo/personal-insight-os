@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { ArrowDownUp, FileSpreadsheet, Link2, Plus, ReceiptText, RefreshCw, Trash2, WalletCards } from 'lucide-react';
+import { ArrowDownUp, CalendarDays, Check, Copy, FileSpreadsheet, FilterX, Link2, Plus, ReceiptText, RefreshCw, Search, Trash2, WalletCards } from 'lucide-react';
 import type { FinanceAccount, FinanceImportPreviewResponse, FinanceImportRow, FinanceTransaction, RecurringBillItem } from '@/types';
 
 function money(value: number | null | undefined) {
@@ -47,6 +47,128 @@ function seoulTime(value: string | null | undefined) {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+function seoulDate(value: string | null | undefined) {
+  if (!value) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Date(value).toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+}
+
+function parseDateOnly(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function formatDateOnly(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function maxDate(a: string, b: string) {
+  return a > b ? a : b;
+}
+
+function minDate(a: string, b: string) {
+  return a < b ? a : b;
+}
+
+function getFinanceWeekRange(cycle: { startsAt: string; endsAt: string | null } | undefined, transactions: FinanceTransaction[]) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+  const cycleStart = seoulDate(cycle?.startsAt) || transactions[0]?.transactionDate || today;
+  const cycleEnd = seoulDate(cycle?.endsAt) || transactions[transactions.length - 1]?.transactionDate || today;
+  const reference = today >= cycleStart && today <= cycleEnd
+    ? today
+    : today > cycleEnd ? cycleEnd : cycleStart;
+  const refDate = parseDateOnly(reference);
+  const daysSinceMonday = (refDate.getDay() + 6) % 7;
+  const weekStart = formatDateOnly(addDays(refDate, -daysSinceMonday));
+  const weekEnd = formatDateOnly(addDays(parseDateOnly(weekStart), 6));
+  return {
+    start: maxDate(cycleStart, weekStart),
+    end: minDate(cycleEnd, weekEnd),
+    weekEnd,
+  };
+}
+
+function formatFinanceWeeklySummary(
+  transactions: FinanceTransaction[],
+  range: { start: string; end: string },
+  cycleLabel: string | undefined
+) {
+  const rows = transactions.filter((tx) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
+  const income = rows.filter((tx) => tx.flowType === '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const cashOut = rows.filter((tx) => tx.cashflowIncluded && tx.flowType !== '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const spending = rows.filter((tx) => tx.spendingIncluded && tx.flowType !== '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const net = income - cashOut;
+
+  const byCategory = new Map<string, number>();
+  const byAccount = new Map<string, { income: number; out: number }>();
+  rows.forEach((tx) => {
+    if (tx.spendingIncluded && tx.flowType !== '수입') {
+      byCategory.set(tx.category || 'Uncategorized', (byCategory.get(tx.category || 'Uncategorized') || 0) + Number(tx.amount));
+    }
+    const account = tx.accountName || tx.asset || 'Unmapped';
+    const current = byAccount.get(account) || { income: 0, out: 0 };
+    if (tx.flowType === '수입') current.income += Number(tx.amount);
+    if (tx.cashflowIncluded && tx.flowType !== '수입') current.out += Number(tx.amount);
+    byAccount.set(account, current);
+  });
+
+  const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const accountRows = Array.from(byAccount.entries())
+    .sort((a, b) => Math.abs(b[1].income - b[1].out) - Math.abs(a[1].income - a[1].out))
+    .slice(0, 8);
+
+  let md = `# Finance Weekly Summary: ${range.start} ~ ${range.end}\n\n`;
+  if (cycleLabel) md += `Cycle: ${cycleLabel}\n\n`;
+  md += `## Totals\n`;
+  md += `| Income | Cash Out | Spending | Net Cashflow | Transactions |\n`;
+  md += `|--------|----------|----------|--------------|--------------|\n`;
+  md += `| ${money(income)} | ${money(cashOut)} | ${money(spending)} | ${money(net)} | ${rows.length} |\n\n`;
+
+  md += `## Spending Categories\n`;
+  if (topCategories.length === 0) {
+    md += `_No spending rows in this period._\n\n`;
+  } else {
+    md += `| Category | Amount |\n|----------|--------|\n`;
+    topCategories.forEach(([category, amount]) => {
+      md += `| ${category} | ${money(amount)} |\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `## Account Flow\n`;
+  if (accountRows.length === 0) {
+    md += `_No account flow in this period._\n\n`;
+  } else {
+    md += `| Account | In | Out | Net |\n|---------|----|-----|-----|\n`;
+    accountRows.forEach(([account, summary]) => {
+      md += `| ${account} | ${money(summary.income)} | ${money(summary.out)} | ${money(summary.income - summary.out)} |\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `## Transactions\n`;
+  if (rows.length === 0) {
+    md += `_No transactions in this period._\n`;
+  } else {
+    md += `| Date | Account | Category | Description | Flow | Amount |\n`;
+    md += `|------|---------|----------|-------------|------|--------|\n`;
+    rows.forEach((tx) => {
+      md += `| ${tx.transactionDate} | ${tx.accountName || tx.asset || '-'} | ${tx.category || '-'} | ${tx.description || '-'} | ${tx.flowType} | ${money(tx.amount)} |\n`;
+    });
+  }
+
+  return md;
 }
 
 function statusBadge(status: FinanceImportRow['status']) {
@@ -85,6 +207,16 @@ export default function Finance() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<FinanceImportPreviewResponse | null>(null);
   const [reviewActions, setReviewActions] = useState<Record<string, 'create' | 'skip'>>({});
+  const [copiedWeeklyFinance, setCopiedWeeklyFinance] = useState(false);
+  const [transactionFilters, setTransactionFilters] = useState({
+    search: '',
+    flowType: 'ALL',
+    account: 'ALL',
+    category: 'ALL',
+    inclusion: 'ALL',
+    from: '',
+    to: '',
+  });
   const [newBill, setNewBill] = useState({ name: 'KT 통신비', provider: 'KT', category: '주거/통신', memo: '' });
   const [versionTemplateId, setVersionTemplateId] = useState<number | ''>('');
   const [versionCycleId, setVersionCycleId] = useState<number | ''>('');
@@ -107,6 +239,7 @@ export default function Finance() {
   });
 
   const activeCycleId = selectedCycleId || cycles?.[0]?.id;
+  const activeCycle = cycles?.find((cycle) => cycle.id === activeCycleId);
 
   const { data: transactions, isLoading: transactionsLoading } = useQuery({
     queryKey: ['financeTransactions', activeCycleId],
@@ -264,6 +397,57 @@ export default function Finance() {
       .slice(0, 8);
   }, [accounts]);
 
+  const financeWeekRange = useMemo(
+    () => getFinanceWeekRange(activeCycle, transactions || []),
+    [activeCycle, transactions]
+  );
+
+  const transactionFilterOptions = useMemo(() => {
+    const list = transactions || [];
+    return {
+      accounts: Array.from(new Set(list.map((tx) => tx.accountName || tx.asset || 'Unmapped'))).sort(),
+      categories: Array.from(new Set(list.map((tx) => tx.category || 'Uncategorized'))).sort(),
+      flowTypes: Array.from(new Set(list.map((tx) => tx.flowType).filter(Boolean))).sort(),
+    };
+  }, [transactions]);
+
+  const filteredTransactions = useMemo(() => {
+    const search = transactionFilters.search.trim().toLowerCase();
+    return (transactions || []).filter((tx) => {
+      const account = tx.accountName || tx.asset || 'Unmapped';
+      const category = tx.category || 'Uncategorized';
+      const searchable = [
+        tx.transactionDate,
+        account,
+        category,
+        tx.subcategory,
+        tx.description,
+        tx.asset,
+        tx.memo,
+        tx.flowType,
+        tx.paymentMethod,
+      ].filter(Boolean).join(' ').toLowerCase();
+
+      if (search && !searchable.includes(search)) return false;
+      if (transactionFilters.flowType !== 'ALL' && tx.flowType !== transactionFilters.flowType) return false;
+      if (transactionFilters.account !== 'ALL' && account !== transactionFilters.account) return false;
+      if (transactionFilters.category !== 'ALL' && category !== transactionFilters.category) return false;
+      if (transactionFilters.inclusion === 'CASH' && !tx.cashflowIncluded) return false;
+      if (transactionFilters.inclusion === 'SPEND' && !tx.spendingIncluded) return false;
+      if (transactionFilters.inclusion === 'ADJUSTED' && !tx.timeAdjusted) return false;
+      if (transactionFilters.inclusion === 'UNMAPPED' && tx.accountId) return false;
+      if (transactionFilters.from && tx.transactionDate < transactionFilters.from) return false;
+      if (transactionFilters.to && tx.transactionDate > transactionFilters.to) return false;
+      return true;
+    });
+  }, [transactionFilters, transactions]);
+
+  const filteredTransactionTotals = useMemo(() => ({
+    cashflowOut: filteredTransactions.filter((t) => t.cashflowIncluded && t.flowType !== '수입').reduce((sum, t) => sum + Number(t.amount), 0),
+    spending: filteredTransactions.filter((t) => t.spendingIncluded && t.flowType !== '수입').reduce((sum, t) => sum + Number(t.amount), 0),
+    income: filteredTransactions.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
+  }), [filteredTransactions]);
+
   const unmappedAssets = useMemo(() => {
     const map = new Map<string, { count: number; cashOut: number; income: number }>();
     const mappedAliases = new Set<string>();
@@ -352,23 +536,68 @@ export default function Finance() {
     });
   };
 
+  const handleCopyFinanceWeeklySummary = async () => {
+    const report = formatFinanceWeeklySummary(transactions || [], financeWeekRange, activeCycle?.label);
+    await navigator.clipboard.writeText(report);
+    setCopiedWeeklyFinance(true);
+    toast.success('Finance weekly summary copied');
+    setTimeout(() => setCopiedWeeklyFinance(false), 2000);
+  };
+
+  const resetTransactionFilters = () => setTransactionFilters({
+    search: '',
+    flowType: 'ALL',
+    account: 'ALL',
+    category: 'ALL',
+    inclusion: 'ALL',
+    from: '',
+    to: '',
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Finance</h2>
-          <p className="text-muted-foreground">Salary-cycle spending, cashflow, and recurring bill profiles</p>
+      <div className="rounded-md border bg-muted/20 p-4">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-3xl font-bold tracking-tight">Finance</h2>
+              {activeCycle && <Badge variant="outline">{activeCycle.status}</Badge>}
+            </div>
+            <p className="text-muted-foreground">Salary-cycle spending, cashflow, and recurring bill profiles</p>
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1">
+                <CalendarDays className="h-3.5 w-3.5" />
+                Cycle {activeCycle ? `${seoulDate(activeCycle.startsAt)} ~ ${seoulDate(activeCycle.endsAt) || 'open'}` : '-'}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1">
+                <ReceiptText className="h-3.5 w-3.5" />
+                Weekly copy {financeWeekRange.start} ~ {financeWeekRange.end}
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={handleCopyFinanceWeeklySummary}
+              disabled={transactionsLoading || !activeCycleId}
+            >
+              {copiedWeeklyFinance ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copiedWeeklyFinance ? 'Copied!' : 'Copy Weekly Summary'}
+            </Button>
+            <select
+              value={activeCycleId || ''}
+              onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : undefined)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            >
+              {cyclesLoading && <option>Loading cycles...</option>}
+              {cycles?.map((cycle) => (
+                <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <select
-          value={activeCycleId || ''}
-          onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : undefined)}
-          className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-        >
-          {cyclesLoading && <option>Loading cycles...</option>}
-          {cycles?.map((cycle) => (
-            <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
-          ))}
-        </select>
       </div>
 
       <Tabs defaultValue="overview" className="space-y-4">
@@ -387,53 +616,109 @@ export default function Finance() {
             <MetricCard title="Spending" value={money(totals.spending)} icon={<ReceiptText className="h-4 w-4" />} />
             <MetricCard title="Rows" value={String(totals.count)} icon={<FileSpreadsheet className="h-4 w-4" />} />
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Spending Categories</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {transactionsLoading ? <Skeleton className="h-32" /> : (
-                <div className="space-y-3">
-                  {categoryTotals.length === 0 && <p className="text-sm text-muted-foreground">No spending rows in this cycle yet.</p>}
-                  {categoryTotals.map(([category, amount]) => (
-                    <div key={category} className="flex items-center justify-between rounded-md border px-3 py-2">
-                      <span className="text-sm font-medium">{category}</span>
-                      <span className="text-sm tabular-nums">{money(amount)}</span>
+          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <Card>
+              <CardHeader>
+                <CardTitle>Spending Categories</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {transactionsLoading ? <Skeleton className="h-32" /> : (
+                  <div className="space-y-2">
+                    {categoryTotals.length === 0 && <p className="text-sm text-muted-foreground">No spending rows in this cycle yet.</p>}
+                    {categoryTotals.map(([category, amount], index) => {
+                      const max = categoryTotals[0]?.[1] || 1;
+                      return (
+                        <div key={category} className="rounded-md border bg-background px-3 py-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium">{category}</span>
+                            <span className="text-sm tabular-nums">{money(amount)}</span>
+                          </div>
+                          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                            <div
+                              className={index % 2 === 0 ? 'h-full rounded-full bg-emerald-500' : 'h-full rounded-full bg-sky-500'}
+                              style={{ width: `${Math.max(6, Math.round((amount / max) * 100))}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Account Flow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {accountTotals.length === 0 && <p className="text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
+                  {accountTotals.map((account) => (
+                    <div key={account.id} className="grid gap-2 rounded-md border bg-background px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_140px]">
+                      <span className="font-medium">{account.name}</span>
+                      <span className="text-muted-foreground">In {money(account.cycleIncome)}</span>
+                      <span className="text-muted-foreground">Out {money(account.cycleCashOut)}</span>
+                      <span className="text-right font-medium tabular-nums">Est. {money(account.estimatedBalance)}</span>
                     </div>
                   ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Account Flow</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {accountTotals.length === 0 && <p className="text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
-                {accountTotals.map((account) => (
-                  <div key={account.id} className="grid gap-2 rounded-md border px-3 py-2 text-sm sm:grid-cols-[1fr_120px_120px_140px]">
-                    <span className="font-medium">{account.name}</span>
-                    <span className="text-muted-foreground">In {money(account.cycleIncome)}</span>
-                    <span className="text-muted-foreground">Out {money(account.cycleCashOut)}</span>
-                    <span className="text-right font-medium tabular-nums">Est. {money(account.estimatedBalance)}</span>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
-        <TabsContent value="transactions">
+        <TabsContent value="transactions" className="space-y-4">
           <Card>
-            <CardHeader>
-              <CardTitle>Transactions</CardTitle>
+            <CardHeader className="space-y-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <CardTitle>Transactions</CardTitle>
+                  <p className="text-sm text-muted-foreground">
+                    {filteredTransactions.length} of {(transactions || []).length} rows · income {money(filteredTransactionTotals.income)} · cash out {money(filteredTransactionTotals.cashflowOut)} · spend {money(filteredTransactionTotals.spending)}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" className="gap-2" onClick={resetTransactionFilters}>
+                  <FilterX className="h-4 w-4" />
+                  Reset Filters
+                </Button>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1.4fr_0.8fr_0.9fr_0.9fr_0.9fr_0.8fr_0.8fr]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={transactionFilters.search}
+                    onChange={(e) => setTransactionFilters({ ...transactionFilters, search: e.target.value })}
+                    className="pl-9"
+                    placeholder="Search account, memo, category"
+                  />
+                </div>
+                <select value={transactionFilters.flowType} onChange={(e) => setTransactionFilters({ ...transactionFilters, flowType: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="ALL">All flows</option>
+                  {transactionFilterOptions.flowTypes.map((flow) => <option key={flow} value={flow}>{flow}</option>)}
+                </select>
+                <select value={transactionFilters.account} onChange={(e) => setTransactionFilters({ ...transactionFilters, account: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="ALL">All accounts</option>
+                  {transactionFilterOptions.accounts.map((account) => <option key={account} value={account}>{account}</option>)}
+                </select>
+                <select value={transactionFilters.category} onChange={(e) => setTransactionFilters({ ...transactionFilters, category: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="ALL">All categories</option>
+                  {transactionFilterOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}
+                </select>
+                <select value={transactionFilters.inclusion} onChange={(e) => setTransactionFilters({ ...transactionFilters, inclusion: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+                  <option value="ALL">All flags</option>
+                  <option value="CASH">Cashflow</option>
+                  <option value="SPEND">Spending</option>
+                  <option value="ADJUSTED">Adjusted</option>
+                  <option value="UNMAPPED">Unmapped</option>
+                </select>
+                <Input type="date" value={transactionFilters.from} onChange={(e) => setTransactionFilters({ ...transactionFilters, from: e.target.value })} />
+                <Input type="date" value={transactionFilters.to} onChange={(e) => setTransactionFilters({ ...transactionFilters, to: e.target.value })} />
+              </div>
             </CardHeader>
             <CardContent>
               {transactionsLoading ? <Skeleton className="h-48" /> : (
                 <FinanceTransactionsTable
-                  transactions={transactions || []}
+                  transactions={filteredTransactions}
                   updatingTransactionId={updateTransactionTimeMutation.variables?.id}
                   isUpdatingTime={updateTransactionTimeMutation.isPending}
                   onUpdateTime={(id, time) => updateTransactionTimeMutation.mutate({ id, time })}
