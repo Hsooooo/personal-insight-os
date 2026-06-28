@@ -358,7 +358,7 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **시간 보정** | Transactions 탭에서 날짜는 고정하고 시:분만 수정. 정렬은 보정된 `transaction_at` 시간순으로 처리 |
 | **통신비/소액결제 처리** | 통신비 납부와 단말기할부금은 원금 그대로 Actual Spending에 포함. 소액결제 원거래는 `cashflowAmount=0`인 Deferred Spending으로 별도 표시하고 실제 소비 카테고리에도 포함 |
 | **계좌 매핑** | Finance > Accounts 탭에서 원본 `asset` 값을 계좌/지갑/부채/목적자금 alias로 연결 |
-| **계좌 흐름** | Account Flow는 이체 입출금을 포함한 실제 계좌별 흐름, External Out은 이체 제외 외부 현금유출로 구분 |
+| **계좌/부채성 흐름** | Account Flow는 이체 입출금을 포함한 은행/현금/목적자금 흐름, Liability Flow는 소액결제/후불 미정산 흐름, External Cash Out은 이체 제외 외부 현금유출로 구분 |
 | **잔액 보정** | 계좌별 opening balance를 저장해 기록 시작 전 잔액을 추정 잔액 계산에 반영 |
 | **거래 필터** | Transactions 탭에서 텍스트 검색, 흐름, 계좌, 카테고리, Cash/Spend/Adjusted/Unmapped 플래그, 날짜 범위로 거래를 필터링 |
 | **주간 재무 요약 복사** | Finance 상단의 "Copy Weekly Summary" 버튼으로 선택 cycle의 월요일~일요일 주간 요약을 마크다운 복사. cycle 시작 주는 cycle 시작일 이후부터 일요일까지로 잘라 7일 미만 기간을 허용 |

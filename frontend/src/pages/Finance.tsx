@@ -32,6 +32,17 @@ function deferredSpendingAmount(tx: FinanceTransaction) {
   return spendingAmount(tx);
 }
 
+function isLiabilityTransaction(tx: FinanceTransaction) {
+  return tx.accountType === 'MOBILE_PAYMENT'
+    || tx.accountRole === 'PAYMENT_METHOD'
+    || tx.asset === '소액결제'
+    || tx.paymentMethod === '소액결제';
+}
+
+function isLiabilityAccount(account: FinanceAccount) {
+  return account.accountType === 'MOBILE_PAYMENT' || account.role === 'PAYMENT_METHOD';
+}
+
 function externalCashOutAmount(tx: FinanceTransaction) {
   if (tx.flowType === '수입' || tx.flowType === '이체지출') return 0;
   return cashflowAmount(tx);
@@ -131,10 +142,19 @@ function formatFinanceWeeklySummary(
 
   const byCategory = new Map<string, number>();
   const byAccount = new Map<string, { income: number; out: number }>();
+  const byLiability = new Map<string, { used: number; settled: number }>();
   rows.forEach((tx) => {
     const spend = spendingAmount(tx);
     if (tx.spendingIncluded && tx.flowType !== '수입' && spend > 0) {
       byCategory.set(tx.category || 'Uncategorized', (byCategory.get(tx.category || 'Uncategorized') || 0) + spend);
+    }
+    if (isLiabilityTransaction(tx)) {
+      const liability = tx.accountName || tx.asset || tx.paymentMethod || 'Liability';
+      const current = byLiability.get(liability) || { used: 0, settled: 0 };
+      current.used += spend;
+      current.settled += cashflowAmount(tx);
+      byLiability.set(liability, current);
+      return;
     }
     const account = tx.accountName || tx.asset || 'Unmapped';
     const current = byAccount.get(account) || { income: 0, out: 0 };
@@ -151,6 +171,9 @@ function formatFinanceWeeklySummary(
   const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const accountRows = Array.from(byAccount.entries())
     .sort((a, b) => Math.abs(b[1].income - b[1].out) - Math.abs(a[1].income - a[1].out))
+    .slice(0, 8);
+  const liabilityRows = Array.from(byLiability.entries())
+    .sort((a, b) => Math.abs(b[1].settled - b[1].used) - Math.abs(a[1].settled - a[1].used))
     .slice(0, 8);
 
   let md = `# Finance Weekly Summary: ${range.start} ~ ${range.end}\n\n`;
@@ -178,6 +201,17 @@ function formatFinanceWeeklySummary(
     md += `| Account | In | Out | Net |\n|---------|----|-----|-----|\n`;
     accountRows.forEach(([account, summary]) => {
       md += `| ${account} | ${money(summary.income)} | ${money(summary.out)} | ${money(summary.income - summary.out)} |\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `## Liability Flow\n`;
+  if (liabilityRows.length === 0) {
+    md += `_No liability flow in this period._\n\n`;
+  } else {
+    md += `| Account | Used | Settled | Net Liability |\n|---------|------|---------|---------------|\n`;
+    liabilityRows.forEach(([account, summary]) => {
+      md += `| ${account} | ${money(summary.used)} | ${money(summary.settled)} | ${money(summary.settled - summary.used)} |\n`;
     });
     md += `\n`;
   }
@@ -424,9 +458,26 @@ export default function Finance() {
 
   const accountTotals = useMemo(() => {
     return [...(accounts || [])]
+      .filter((account) => !isLiabilityAccount(account))
       .sort((a, b) => Math.abs(Number(b.cycleNetFlow)) - Math.abs(Number(a.cycleNetFlow)))
       .slice(0, 8);
   }, [accounts]);
+
+  const liabilityTotals = useMemo(() => {
+    const map = new Map<string, { used: number; settled: number }>();
+    (transactions || []).forEach((tx) => {
+      if (!isLiabilityTransaction(tx)) return;
+      const key = tx.accountName || tx.asset || tx.paymentMethod || 'Liability';
+      const current = map.get(key) || { used: 0, settled: 0 };
+      current.used += spendingAmount(tx);
+      current.settled += cashflowAmount(tx);
+      map.set(key, current);
+    });
+    return Array.from(map.entries())
+      .map(([name, summary]) => ({ name, ...summary, net: summary.settled - summary.used }))
+      .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
+      .slice(0, 8);
+  }, [transactions]);
 
   const financeWeekRange = useMemo(
     () => getFinanceWeekRange(activeCycle, transactions || []),
@@ -650,7 +701,7 @@ export default function Finance() {
             <MetricCard title="Net External" value={money(totals.netExternalCashflow)} icon={<WalletCards className="h-4 w-4" />} />
             <MetricCard title="Rows" value={String(totals.count)} icon={<FileSpreadsheet className="h-4 w-4" />} />
           </div>
-          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="grid gap-4 xl:grid-cols-3">
             <Card>
               <CardHeader>
                 <CardTitle>Spending Categories</CardTitle>
@@ -693,6 +744,24 @@ export default function Finance() {
                       <span className="text-muted-foreground">In {money(account.cycleIncome)}</span>
                       <span className="text-muted-foreground">Out {money(account.cycleCashOut)}</span>
                       <span className="text-right font-medium tabular-nums">Est. {money(account.estimatedBalance)}</span>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Liability Flow</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {liabilityTotals.length === 0 && <p className="text-sm text-muted-foreground">No liability flow in this cycle yet.</p>}
+                  {liabilityTotals.map((liability) => (
+                    <div key={liability.name} className="grid gap-2 rounded-md border bg-background px-3 py-2 text-sm sm:grid-cols-[1fr_110px_110px_130px]">
+                      <span className="font-medium">{liability.name}</span>
+                      <span className="text-muted-foreground">Used {money(liability.used)}</span>
+                      <span className="text-muted-foreground">Settled {money(liability.settled)}</span>
+                      <span className="text-right font-medium tabular-nums">{money(liability.net)}</span>
                     </div>
                   ))}
                 </div>

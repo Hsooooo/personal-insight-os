@@ -459,7 +459,7 @@ PATCH /api/activities/123/tag
 
 `수입/지출` 값이 `이체지출`인 거래는 `asset`을 출금 자산, `분류`를 입금처 자산명으로 해석한다. 소비분석에서는 제외하지만 Accounts의 cycle 흐름에서는 출금 계좌의 `cashOut`과 입금처 계좌의 `income`에 각각 반영한다.
 
-거래 응답은 원본 금액 `amount`와 분석용 금액 `cashflowAmount`, `spendingAmount`를 함께 내려준다. Actual Spending 합계와 카테고리 합계는 `spendingAmount`를 사용한다. 통신비 청구 row와 단말기할부금은 실제 청구/납부 소비로 포함하고, 휴대폰 `소액결제` 원거래는 아직 통장에서 빠지지 않은 `Deferred Spending`이면서 실제 사용 카테고리의 소비로 포함한다. External Cash Out은 `이체지출`과 deferred 소비를 제외한 외부 현금유출만 의미하고, Account Flow는 계좌 간 이체 입출금을 포함한 실제 계좌별 흐름을 의미한다.
+거래 응답은 원본 금액 `amount`와 분석용 금액 `cashflowAmount`, `spendingAmount`를 함께 내려준다. Actual Spending 합계와 카테고리 합계는 `spendingAmount`를 사용한다. 통신비 청구 row와 단말기할부금은 실제 청구/납부 소비로 포함하고, 휴대폰 `소액결제` 원거래는 아직 통장에서 빠지지 않은 `Deferred Spending`이면서 실제 사용 카테고리의 소비로 포함한다. External Cash Out은 `이체지출`과 deferred 소비를 제외한 외부 현금유출만 의미한다. Account Flow는 은행/현금/목적자금 계좌의 실제 입출금 흐름이고, Liability Flow는 소액결제/후불 같은 미정산 부채성 사용액과 정산액을 의미한다.
 
 계좌에는 기록 시작 전 잔액 보정을 위한 `openingBalance`, `openingBalanceDate`, `openingBalanceMemo`를 저장할 수 있다. 이 값은 거래/소비/수입으로 집계하지 않고, Accounts 응답의 `estimatedBalance = openingBalance + cycleNetFlow` 계산에만 사용한다.
 
