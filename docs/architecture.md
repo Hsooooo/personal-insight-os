@@ -251,7 +251,7 @@ sequenceDiagram
     BE-->>FE: 생성/skip 결과
 ```
 
-Finance는 월급 입금 직후부터 다음 월급 직전까지를 `finance_cycles`로 관리합니다. 통신비 납부액처럼 현금흐름과 소비분석이 다른 거래는 `cashflow_included`, `spending_included` 플래그와 `cashflow_amount`, `spending_amount` 분석금액으로 분리합니다. 통신비 청구 row는 같은 cycle의 소액결제 원거래 합계를 제외한 금액만 Spending에 반영하고, 계좌 간 `이체지출`은 Spending에서 제외합니다.
+Finance는 월급 입금 직후부터 다음 월급 직전까지를 `finance_cycles`로 관리합니다. 현금흐름과 소비분석이 다른 거래는 `cashflow_included`, `spending_included` 플래그와 `cashflow_amount`, `spending_amount` 분석금액으로 분리합니다. Actual Spending은 사용일 기준 소비이므로 통신비 청구액과 단말기할부금은 원금으로 포함하고, 휴대폰 소액결제 원거래는 통장에서 아직 빠지지 않은 Deferred Spending으로 별도 표시하면서 실제 소비 카테고리에 포함합니다. 계좌 간 `이체지출`은 Spending에서 제외합니다.
 
 Transactions 탭의 시간 보정은 원본 import 멱등성과 분리된다. 사용자는 날짜는 바꾸지 않고 시:분만 수정할 수 있으며, 백엔드는 `transaction_date + HH:mm:00`을 Asia/Seoul 기준 `transaction_at`에 저장한다. fingerprint와 source row는 원본 그대로 유지되어 같은 엑셀 파일을 다시 올려도 기존 거래로 판정된다.
 

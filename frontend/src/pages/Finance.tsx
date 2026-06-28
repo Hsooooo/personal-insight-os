@@ -27,6 +27,11 @@ function spendingAmount(tx: FinanceTransaction) {
   return Number(tx.spendingAmount ?? (tx.spendingIncluded ? tx.amount : 0));
 }
 
+function deferredSpendingAmount(tx: FinanceTransaction) {
+  if (tx.flowType === '수입' || tx.cashflowIncluded) return 0;
+  return spendingAmount(tx);
+}
+
 function externalCashOutAmount(tx: FinanceTransaction) {
   if (tx.flowType === '수입' || tx.flowType === '이체지출') return 0;
   return cashflowAmount(tx);
@@ -120,14 +125,16 @@ function formatFinanceWeeklySummary(
   const rows = transactions.filter((tx) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
   const income = rows.filter((tx) => tx.flowType === '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
   const cashOut = rows.reduce((sum, tx) => sum + externalCashOutAmount(tx), 0);
+  const deferredSpending = rows.reduce((sum, tx) => sum + deferredSpendingAmount(tx), 0);
   const spending = rows.reduce((sum, tx) => sum + spendingAmount(tx), 0);
   const net = income - cashOut;
 
   const byCategory = new Map<string, number>();
   const byAccount = new Map<string, { income: number; out: number }>();
   rows.forEach((tx) => {
-    if (tx.spendingIncluded && tx.flowType !== '수입') {
-      byCategory.set(tx.category || 'Uncategorized', (byCategory.get(tx.category || 'Uncategorized') || 0) + spendingAmount(tx));
+    const spend = spendingAmount(tx);
+    if (tx.spendingIncluded && tx.flowType !== '수입' && spend > 0) {
+      byCategory.set(tx.category || 'Uncategorized', (byCategory.get(tx.category || 'Uncategorized') || 0) + spend);
     }
     const account = tx.accountName || tx.asset || 'Unmapped';
     const current = byAccount.get(account) || { income: 0, out: 0 };
@@ -149,9 +156,9 @@ function formatFinanceWeeklySummary(
   let md = `# Finance Weekly Summary: ${range.start} ~ ${range.end}\n\n`;
   if (cycleLabel) md += `Cycle: ${cycleLabel}\n\n`;
   md += `## Totals\n`;
-  md += `| Income | External Out | Spending | Net External Cashflow | Transactions |\n`;
-  md += `|--------|----------|----------|--------------|--------------|\n`;
-  md += `| ${money(income)} | ${money(cashOut)} | ${money(spending)} | ${money(net)} | ${rows.length} |\n\n`;
+  md += `| Income | External Cash Out | Deferred Spending | Actual Spending | Net External Cashflow | Transactions |\n`;
+  md += `|--------|-------------------|-------------------|-----------------|-----------------------|--------------|\n`;
+  md += `| ${money(income)} | ${money(cashOut)} | ${money(deferredSpending)} | ${money(spending)} | ${money(net)} | ${rows.length} |\n\n`;
 
   md += `## Spending Categories\n`;
   if (topCategories.length === 0) {
@@ -391,10 +398,14 @@ export default function Finance() {
 
   const totals = useMemo(() => {
     const list = transactions || [];
+    const cashflowOut = list.reduce((sum, t) => sum + externalCashOutAmount(t), 0);
+    const income = list.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0);
     return {
-      cashflowOut: list.reduce((sum, t) => sum + externalCashOutAmount(t), 0),
+      cashflowOut,
+      deferredSpending: list.reduce((sum, t) => sum + deferredSpendingAmount(t), 0),
       spending: list.reduce((sum, t) => sum + spendingAmount(t), 0),
-      income: list.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
+      income,
+      netExternalCashflow: income - cashflowOut,
       count: list.length,
     };
   }, [transactions]);
@@ -464,6 +475,7 @@ export default function Finance() {
 
   const filteredTransactionTotals = useMemo(() => ({
     cashflowOut: filteredTransactions.reduce((sum, t) => sum + externalCashOutAmount(t), 0),
+    deferredSpending: filteredTransactions.reduce((sum, t) => sum + deferredSpendingAmount(t), 0),
     spending: filteredTransactions.reduce((sum, t) => sum + spendingAmount(t), 0),
     income: filteredTransactions.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
   }), [filteredTransactions]);
@@ -630,10 +642,12 @@ export default function Finance() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <MetricCard title="Income" value={money(totals.income)} icon={<WalletCards className="h-4 w-4" />} />
-            <MetricCard title="External Out" value={money(totals.cashflowOut)} icon={<ArrowDownUp className="h-4 w-4" />} />
-            <MetricCard title="Spending" value={money(totals.spending)} icon={<ReceiptText className="h-4 w-4" />} />
+            <MetricCard title="External Cash Out" value={money(totals.cashflowOut)} icon={<ArrowDownUp className="h-4 w-4" />} />
+            <MetricCard title="Deferred Spending" value={money(totals.deferredSpending)} icon={<ReceiptText className="h-4 w-4" />} />
+            <MetricCard title="Actual Spending" value={money(totals.spending)} icon={<ReceiptText className="h-4 w-4" />} />
+            <MetricCard title="Net External" value={money(totals.netExternalCashflow)} icon={<WalletCards className="h-4 w-4" />} />
             <MetricCard title="Rows" value={String(totals.count)} icon={<FileSpreadsheet className="h-4 w-4" />} />
           </div>
           <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
@@ -694,7 +708,7 @@ export default function Finance() {
                 <div>
                   <CardTitle>Transactions</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {filteredTransactions.length} of {(transactions || []).length} rows · income {money(filteredTransactionTotals.income)} · external out {money(filteredTransactionTotals.cashflowOut)} · spend {money(filteredTransactionTotals.spending)}
+                    {filteredTransactions.length} of {(transactions || []).length} rows · income {money(filteredTransactionTotals.income)} · external out {money(filteredTransactionTotals.cashflowOut)} · deferred {money(filteredTransactionTotals.deferredSpending)} · actual spend {money(filteredTransactionTotals.spending)}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" className="gap-2" onClick={resetTransactionFilters}>

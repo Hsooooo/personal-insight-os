@@ -70,7 +70,6 @@ public class FinanceService {
     public FinanceImportPreviewResponse previewImport(Long userId, MultipartFile file) {
         List<ParsedFinanceRow> parsedRows = excelParser.parse(file);
         Map<Instant, CycleAnchor> anchors = detectAnchors(userId, parsedRows);
-        Map<Integer, BigDecimal> spendingAmounts = adjustedSpendingAmounts(userId, parsedRows, anchors);
         Set<String> existingFingerprints = transactionRepo.findByUserIdAndSourceFingerprintIn(
                         userId,
                         parsedRows.stream().map(ParsedFinanceRow::sourceFingerprint).toList()
@@ -79,7 +78,7 @@ public class FinanceService {
                 .collect(Collectors.toSet());
 
         List<FinanceImportRowDto> rows = parsedRows.stream()
-                .map(row -> toPreviewRow(userId, row, anchors, existingFingerprints, spendingAmounts.get(row.rowNumber())))
+                .map(row -> toPreviewRow(userId, row, anchors, existingFingerprints, null))
                 .toList();
 
         return FinanceImportPreviewResponse.builder()
@@ -335,49 +334,6 @@ public class FinanceService {
                 .paymentMethod(row.paymentMethod())
                 .sourceRow(row.sourceRow())
                 .build();
-    }
-
-    private Map<Integer, BigDecimal> adjustedSpendingAmounts(Long userId, List<ParsedFinanceRow> rows, Map<Instant, CycleAnchor> anchors) {
-        Map<Integer, BigDecimal> amounts = rows.stream()
-                .collect(Collectors.toMap(ParsedFinanceRow::rowNumber, ParsedFinanceRow::spendingAmount));
-        if (rows.stream().noneMatch(this::isTelecomBill)) {
-            return amounts;
-        }
-
-        Map<String, BigDecimal> mobilePaymentsByCycle = new HashMap<>();
-        for (FinanceTransaction tx : transactionRepo.findByUserIdOrderByTransactionAtAscIdAsc(userId)) {
-            if (isMobilePayment(tx)) {
-                String key = tx.getCycle() != null ? "id:" + tx.getCycle().getId() : "date:" + tx.getTransactionDate();
-                mobilePaymentsByCycle.merge(key, transactionSpendingAmount(tx), BigDecimal::add);
-            }
-        }
-
-        Map<String, List<ParsedFinanceRow>> telecomRowsByCycle = new HashMap<>();
-        for (ParsedFinanceRow row : rows) {
-            CycleAnchor anchor = resolveAnchor(userId, row, anchors);
-            String key = cycleKey(anchor);
-            if (isMobilePayment(row)) {
-                mobilePaymentsByCycle.merge(key, row.spendingAmount(), BigDecimal::add);
-            }
-            if (isTelecomBill(row)) {
-                telecomRowsByCycle.computeIfAbsent(key, ignored -> new ArrayList<>()).add(row);
-            }
-        }
-
-        for (Map.Entry<String, List<ParsedFinanceRow>> entry : telecomRowsByCycle.entrySet()) {
-            BigDecimal mobilePaymentAmount = mobilePaymentsByCycle.getOrDefault(entry.getKey(), BigDecimal.ZERO);
-            if (mobilePaymentAmount.signum() <= 0) continue;
-            ParsedFinanceRow target = entry.getValue().stream()
-                    .max(Comparator.comparing(ParsedFinanceRow::amount))
-                    .orElse(null);
-            if (target == null) continue;
-            amounts.put(target.rowNumber(), target.amount().subtract(mobilePaymentAmount).max(BigDecimal.ZERO));
-        }
-        return amounts;
-    }
-
-    private String cycleKey(CycleAnchor anchor) {
-        return anchor.cycleId() != null ? "id:" + anchor.cycleId() : "start:" + anchor.startsAt();
     }
 
     private Map<Instant, CycleAnchor> detectAnchors(Long userId, List<ParsedFinanceRow> rows) {
@@ -676,18 +632,6 @@ public class FinanceService {
     private BigDecimal transactionSpendingAmount(FinanceTransaction transaction) {
         if (transaction.getSpendingAmount() != null) return transaction.getSpendingAmount();
         return transaction.isSpendingIncluded() ? transaction.getAmount() : BigDecimal.ZERO;
-    }
-
-    private boolean isMobilePayment(ParsedFinanceRow row) {
-        return "소액결제".equals(row.asset()) && !"수입".equals(row.flowType());
-    }
-
-    private boolean isMobilePayment(FinanceTransaction transaction) {
-        return "소액결제".equals(transaction.getAsset()) && !"수입".equals(transaction.getFlowType());
-    }
-
-    private boolean isTelecomBill(ParsedFinanceRow row) {
-        return "통신비".equals(row.subcategory()) && !"수입".equals(row.flowType());
     }
 
     private record CycleAnchor(Long cycleId, String label, Instant startsAt, LocalDate salaryDate) {
