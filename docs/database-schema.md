@@ -309,12 +309,12 @@ Finance 도메인은 PostgreSQL에 우선 저장하며, 이번 1차 구현에서
 | `recurring_bill_template_versions` | 특정 `effective_cycle_id`부터 적용되는 고정비 구성 버전 |
 | `recurring_bill_template_items` | 월정액, 부가서비스, 할인, 부가세 등 버전별 상세 항목 |
 
-`finance_transactions`는 현금흐름과 소비분석을 분리하기 위해 `cashflow_included`, `spending_included`를 별도로 가진다. 예를 들어 통신비 납부액은 현금흐름에는 포함하고, 소액결제 원거래는 소비분석에 포함한다.
+`finance_transactions`는 현금흐름과 소비분석을 분리하기 위해 `cashflow_included`, `spending_included`, `cashflow_amount`, `spending_amount`를 별도로 가진다. 원본 `amount`는 청구/결제 row의 실제 금액으로 보존하고, 화면 합계는 분석용 금액을 사용한다. 예를 들어 통신비 납부액은 현금흐름에는 원 청구액으로 포함하고, 소비분석에는 같은 cycle의 `소액결제` 합계를 제외한 금액만 반영한다. 소액결제 원거래는 실제 소비 카테고리의 `spending_amount`로 포함한다.
 
 엑셀 export의 년월일은 원본 날짜로 신뢰하고 `transaction_date`에 보존한다. 사용자가 Transactions 탭에서 시:분을 후보정하면 `transaction_at`만 변경하고 `time_adjusted`, `time_adjusted_at`을 기록한다. `source_fingerprint`와 `source_row`는 변경하지 않으므로 시간 보정 후에도 같은 원본 파일 재import는 멱등하게 `DUPLICATE`로 처리된다.
 
 계좌 확장은 원본 보존과 분석용 매핑을 분리한다. `asset`은 export 원본 문자열로 유지하고, 사용자가 Accounts 탭에서 만든 `finance_accounts`와 일치하는 name/alias가 있을 때만 `account_id`를 채운다. 지원 계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`이며, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`이다.
 
-`이체지출` 거래는 단일 원본 row로 저장하되, 계좌 흐름 계산 시 `asset`을 출금 계좌, `category`(`분류`)를 입금처 계좌 alias로 해석한다. 따라서 소비분석에는 포함하지 않고 계좌별 현금흐름에는 양방향으로 반영한다.
+`이체지출` 거래는 단일 원본 row로 저장하되, 계좌 흐름 계산 시 `asset`을 출금 계좌, `category`(`분류`)를 입금처 계좌 alias로 해석한다. 따라서 소비분석에는 포함하지 않고 계좌별 현금흐름에는 양방향으로 반영한다. Overview의 External Out은 이체를 제외한 외부 현금유출이고, Account Flow는 이체 입출금까지 포함한 실제 계좌별 흐름이다.
 
 `finance_accounts.opening_balance`는 기록 시작 전부터 존재하던 계좌 잔액 보정값이다. 거래 row로 만들지 않고 `opening_balance_date`, `opening_balance_memo`와 함께 계좌 상태값으로 보존하며, 추정 잔액은 `opening_balance + cycleNetFlow`로 계산한다.

@@ -72,6 +72,12 @@ public class FinanceTransaction {
     @Column(name = "spending_included", nullable = false)
     private boolean spendingIncluded;
 
+    @Column(name = "cashflow_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal cashflowAmount;
+
+    @Column(name = "spending_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal spendingAmount;
+
     @Column(name = "payment_method")
     private String paymentMethod;
 

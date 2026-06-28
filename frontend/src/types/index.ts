@@ -47,6 +47,8 @@ export interface FinanceTransaction {
   sourceRow: Record<string, unknown>;
   cashflowIncluded: boolean;
   spendingIncluded: boolean;
+  cashflowAmount: number;
+  spendingAmount: number;
   paymentMethod: string;
   timeAdjusted: boolean;
   timeAdjustedAt: string | null;
@@ -96,6 +98,8 @@ export interface FinanceImportRow {
   sourceFingerprint: string;
   cashflowIncluded: boolean;
   spendingIncluded: boolean;
+  cashflowAmount: number;
+  spendingAmount: number;
   paymentMethod: string;
   sourceRow: Record<string, unknown>;
 }

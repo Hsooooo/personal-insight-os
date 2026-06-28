@@ -19,6 +19,19 @@ function money(value: number | null | undefined) {
   return new Intl.NumberFormat('ko-KR', { style: 'currency', currency: 'KRW', maximumFractionDigits: 0 }).format(value);
 }
 
+function cashflowAmount(tx: FinanceTransaction) {
+  return Number(tx.cashflowAmount ?? (tx.cashflowIncluded ? tx.amount : 0));
+}
+
+function spendingAmount(tx: FinanceTransaction) {
+  return Number(tx.spendingAmount ?? (tx.spendingIncluded ? tx.amount : 0));
+}
+
+function externalCashOutAmount(tx: FinanceTransaction) {
+  if (tx.flowType === '수입' || tx.flowType === '이체지출') return 0;
+  return cashflowAmount(tx);
+}
+
 function parseMoneyInput(value: string) {
   const parsed = Number(value.replace(/,/g, '').trim() || 0);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -106,21 +119,26 @@ function formatFinanceWeeklySummary(
 ) {
   const rows = transactions.filter((tx) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
   const income = rows.filter((tx) => tx.flowType === '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
-  const cashOut = rows.filter((tx) => tx.cashflowIncluded && tx.flowType !== '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
-  const spending = rows.filter((tx) => tx.spendingIncluded && tx.flowType !== '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
+  const cashOut = rows.reduce((sum, tx) => sum + externalCashOutAmount(tx), 0);
+  const spending = rows.reduce((sum, tx) => sum + spendingAmount(tx), 0);
   const net = income - cashOut;
 
   const byCategory = new Map<string, number>();
   const byAccount = new Map<string, { income: number; out: number }>();
   rows.forEach((tx) => {
     if (tx.spendingIncluded && tx.flowType !== '수입') {
-      byCategory.set(tx.category || 'Uncategorized', (byCategory.get(tx.category || 'Uncategorized') || 0) + Number(tx.amount));
+      byCategory.set(tx.category || 'Uncategorized', (byCategory.get(tx.category || 'Uncategorized') || 0) + spendingAmount(tx));
     }
     const account = tx.accountName || tx.asset || 'Unmapped';
     const current = byAccount.get(account) || { income: 0, out: 0 };
     if (tx.flowType === '수입') current.income += Number(tx.amount);
-    if (tx.cashflowIncluded && tx.flowType !== '수입') current.out += Number(tx.amount);
+    if (tx.cashflowIncluded && tx.flowType !== '수입') current.out += cashflowAmount(tx);
     byAccount.set(account, current);
+    if (tx.flowType === '이체지출' && tx.category) {
+      const destination = byAccount.get(tx.category) || { income: 0, out: 0 };
+      destination.income += Number(tx.amount);
+      byAccount.set(tx.category, destination);
+    }
   });
 
   const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
@@ -131,7 +149,7 @@ function formatFinanceWeeklySummary(
   let md = `# Finance Weekly Summary: ${range.start} ~ ${range.end}\n\n`;
   if (cycleLabel) md += `Cycle: ${cycleLabel}\n\n`;
   md += `## Totals\n`;
-  md += `| Income | Cash Out | Spending | Net Cashflow | Transactions |\n`;
+  md += `| Income | External Out | Spending | Net External Cashflow | Transactions |\n`;
   md += `|--------|----------|----------|--------------|--------------|\n`;
   md += `| ${money(income)} | ${money(cashOut)} | ${money(spending)} | ${money(net)} | ${rows.length} |\n\n`;
 
@@ -374,8 +392,8 @@ export default function Finance() {
   const totals = useMemo(() => {
     const list = transactions || [];
     return {
-      cashflowOut: list.filter((t) => t.cashflowIncluded && t.flowType !== '수입').reduce((sum, t) => sum + Number(t.amount), 0),
-      spending: list.filter((t) => t.spendingIncluded && t.flowType !== '수입').reduce((sum, t) => sum + Number(t.amount), 0),
+      cashflowOut: list.reduce((sum, t) => sum + externalCashOutAmount(t), 0),
+      spending: list.reduce((sum, t) => sum + spendingAmount(t), 0),
       income: list.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
       count: list.length,
     };
@@ -385,8 +403,10 @@ export default function Finance() {
     const map = new Map<string, number>();
     (transactions || []).forEach((t) => {
       if (!t.spendingIncluded || t.flowType === '수입') return;
+      const amount = spendingAmount(t);
+      if (amount <= 0) return;
       const key = t.category || 'Uncategorized';
-      map.set(key, (map.get(key) || 0) + Number(t.amount));
+      map.set(key, (map.get(key) || 0) + amount);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
   }, [transactions]);
@@ -433,7 +453,7 @@ export default function Finance() {
       if (transactionFilters.account !== 'ALL' && account !== transactionFilters.account) return false;
       if (transactionFilters.category !== 'ALL' && category !== transactionFilters.category) return false;
       if (transactionFilters.inclusion === 'CASH' && !tx.cashflowIncluded) return false;
-      if (transactionFilters.inclusion === 'SPEND' && !tx.spendingIncluded) return false;
+      if (transactionFilters.inclusion === 'SPEND' && (!tx.spendingIncluded || spendingAmount(tx) <= 0)) return false;
       if (transactionFilters.inclusion === 'ADJUSTED' && !tx.timeAdjusted) return false;
       if (transactionFilters.inclusion === 'UNMAPPED' && tx.accountId) return false;
       if (transactionFilters.from && tx.transactionDate < transactionFilters.from) return false;
@@ -443,8 +463,8 @@ export default function Finance() {
   }, [transactionFilters, transactions]);
 
   const filteredTransactionTotals = useMemo(() => ({
-    cashflowOut: filteredTransactions.filter((t) => t.cashflowIncluded && t.flowType !== '수입').reduce((sum, t) => sum + Number(t.amount), 0),
-    spending: filteredTransactions.filter((t) => t.spendingIncluded && t.flowType !== '수입').reduce((sum, t) => sum + Number(t.amount), 0),
+    cashflowOut: filteredTransactions.reduce((sum, t) => sum + externalCashOutAmount(t), 0),
+    spending: filteredTransactions.reduce((sum, t) => sum + spendingAmount(t), 0),
     income: filteredTransactions.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
   }), [filteredTransactions]);
 
@@ -612,7 +632,7 @@ export default function Finance() {
         <TabsContent value="overview" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-4">
             <MetricCard title="Income" value={money(totals.income)} icon={<WalletCards className="h-4 w-4" />} />
-            <MetricCard title="Cash Out" value={money(totals.cashflowOut)} icon={<ArrowDownUp className="h-4 w-4" />} />
+            <MetricCard title="External Out" value={money(totals.cashflowOut)} icon={<ArrowDownUp className="h-4 w-4" />} />
             <MetricCard title="Spending" value={money(totals.spending)} icon={<ReceiptText className="h-4 w-4" />} />
             <MetricCard title="Rows" value={String(totals.count)} icon={<FileSpreadsheet className="h-4 w-4" />} />
           </div>
@@ -674,7 +694,7 @@ export default function Finance() {
                 <div>
                   <CardTitle>Transactions</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {filteredTransactions.length} of {(transactions || []).length} rows · income {money(filteredTransactionTotals.income)} · cash out {money(filteredTransactionTotals.cashflowOut)} · spend {money(filteredTransactionTotals.spending)}
+                    {filteredTransactions.length} of {(transactions || []).length} rows · income {money(filteredTransactionTotals.income)} · external out {money(filteredTransactionTotals.cashflowOut)} · spend {money(filteredTransactionTotals.spending)}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" className="gap-2" onClick={resetTransactionFilters}>
@@ -1134,11 +1154,16 @@ function FinanceTransactionsTable({
                 <p className="text-xs text-muted-foreground">{tx.asset}{tx.memo ? ` · ${tx.memo}` : ''}</p>
               </TableCell>
               <TableCell><Badge variant={tx.flowType === '수입' ? 'default' : 'secondary'}>{tx.flowType}</Badge></TableCell>
-              <TableCell className="whitespace-nowrap text-right tabular-nums">{money(tx.amount)}</TableCell>
+              <TableCell className="whitespace-nowrap text-right tabular-nums">
+                <p>{money(tx.amount)}</p>
+                {tx.spendingIncluded && spendingAmount(tx) !== Number(tx.amount) && (
+                  <p className="text-xs text-muted-foreground">Spend {money(spendingAmount(tx))}</p>
+                )}
+              </TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {tx.cashflowIncluded && <Badge variant="outline">Cash</Badge>}
-                  {tx.spendingIncluded && <Badge variant="outline">Spend</Badge>}
+                  {tx.spendingIncluded && spendingAmount(tx) > 0 && <Badge variant="outline">Spend</Badge>}
                   {tx.paymentMethod === '소액결제' && <Badge className="bg-sky-100 text-sky-700 hover:bg-sky-100">소액</Badge>}
                 </div>
               </TableCell>

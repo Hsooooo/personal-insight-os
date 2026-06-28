@@ -64,10 +64,12 @@ public class FinanceExcelParser {
                 String fingerprint = fingerprint(transactionAt, asset, category, subcategory, description, amount, flowType, memo, currency);
                 String paymentMethod = "소액결제".equals(asset) ? "소액결제" : asset;
                 boolean cashflowIncluded = !"소액결제".equals(asset);
-                boolean spendingIncluded = !"통신비".equals(subcategory) || "소액결제".equals(asset);
+                boolean spendingIncluded = !"수입".equals(flowType);
                 if ("이체지출".equals(flowType)) {
                     spendingIncluded = false;
                 }
+                BigDecimal cashflowAmount = cashflowIncluded ? amount : BigDecimal.ZERO;
+                BigDecimal spendingAmount = spendingIncluded ? amount : BigDecimal.ZERO;
 
                 rows.add(new ParsedFinanceRow(
                         i + 1,
@@ -84,6 +86,8 @@ public class FinanceExcelParser {
                         fingerprint,
                         cashflowIncluded,
                         spendingIncluded,
+                        cashflowAmount,
+                        spendingAmount,
                         paymentMethod,
                         sourceRow
                 ));

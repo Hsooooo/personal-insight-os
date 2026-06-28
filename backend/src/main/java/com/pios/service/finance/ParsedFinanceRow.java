@@ -20,6 +20,8 @@ public record ParsedFinanceRow(
         String sourceFingerprint,
         boolean cashflowIncluded,
         boolean spendingIncluded,
+        BigDecimal cashflowAmount,
+        BigDecimal spendingAmount,
         String paymentMethod,
         Map<String, Object> sourceRow
 ) {

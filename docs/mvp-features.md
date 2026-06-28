@@ -356,8 +356,9 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **기능** | 엑셀 export를 preview 후 확정 저장하고, 월급일 기준 cycle에 거래 배정 |
 | **중복 처리** | 원본 행 fingerprint로 동일 import 재실행을 skip. 같은 날짜+금액+수입/지출은 사용자 확인 |
 | **시간 보정** | Transactions 탭에서 날짜는 고정하고 시:분만 수정. 정렬은 보정된 `transaction_at` 시간순으로 처리 |
-| **통신비 처리** | 납부 거래는 현금흐름, 소액결제는 실제 소비 카테고리로 분리 |
+| **통신비 처리** | 납부 거래는 현금흐름 원금으로 보존하고, Spending에는 같은 cycle의 소액결제 정산분을 제외한 금액만 반영. 소액결제 원거래는 실제 소비 카테고리로 분리 |
 | **계좌 매핑** | Finance > Accounts 탭에서 원본 `asset` 값을 계좌/지갑/부채/목적자금 alias로 연결 |
+| **계좌 흐름** | Account Flow는 이체 입출금을 포함한 실제 계좌별 흐름, External Out은 이체 제외 외부 현금유출로 구분 |
 | **잔액 보정** | 계좌별 opening balance를 저장해 기록 시작 전 잔액을 추정 잔액 계산에 반영 |
 | **거래 필터** | Transactions 탭에서 텍스트 검색, 흐름, 계좌, 카테고리, Cash/Spend/Adjusted/Unmapped 플래그, 날짜 범위로 거래를 필터링 |
 | **주간 재무 요약 복사** | Finance 상단의 "Copy Weekly Summary" 버튼으로 선택 cycle의 월요일~일요일 주간 요약을 마크다운 복사. cycle 시작 주는 cycle 시작일 이후부터 일요일까지로 잘라 7일 미만 기간을 허용 |

@@ -30,6 +30,8 @@ public class FinanceImportRowDto {
     private String sourceFingerprint;
     private boolean cashflowIncluded;
     private boolean spendingIncluded;
+    private BigDecimal cashflowAmount;
+    private BigDecimal spendingAmount;
     private String paymentMethod;
     private Map<String, Object> sourceRow;
 }
