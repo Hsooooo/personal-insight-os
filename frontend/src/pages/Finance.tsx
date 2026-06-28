@@ -26,7 +26,17 @@ function parseMoneyInput(value: string) {
 
 function shortDateTime(value: string | null | undefined) {
   if (!value) return '-';
-  return value.slice(0, 16).replace('T', ' ');
+  const parts = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: 'Asia/Seoul',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date(value));
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}`;
 }
 
 function seoulTime(value: string | null | undefined) {
