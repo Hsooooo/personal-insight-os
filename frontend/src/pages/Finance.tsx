@@ -176,7 +176,7 @@ function formatFinanceWeeklySummary(
     }
   });
 
-  const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
   const accountRows = Array.from(byAccount.entries())
     .sort((a, b) => Math.abs(b[1].income - b[1].out) - Math.abs(a[1].income - a[1].out))
     .slice(0, 8);
@@ -461,7 +461,7 @@ export default function Finance() {
       const key = t.category || 'Uncategorized';
       map.set(key, (map.get(key) || 0) + amount);
     });
-    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
   }, [transactions]);
 
   const categoryChartData = useMemo(
