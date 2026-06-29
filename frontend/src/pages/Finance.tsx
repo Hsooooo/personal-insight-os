@@ -118,28 +118,134 @@ function minDate(a: string, b: string) {
   return a < b ? a : b;
 }
 
-function getFinanceWeekRange(cycle: { startsAt: string; endsAt: string | null } | undefined, transactions: FinanceTransaction[]) {
+function cyclePeriod(cycle: { startsAt: string; endsAt: string | null } | undefined, transactions: FinanceTransaction[]) {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
   const cycleStart = seoulDate(cycle?.startsAt) || transactions[0]?.transactionDate || today;
-  const cycleEnd = seoulDate(cycle?.endsAt) || transactions[transactions.length - 1]?.transactionDate || today;
-  const reference = today >= cycleStart && today <= cycleEnd
-    ? today
-    : today > cycleEnd ? cycleEnd : cycleStart;
-  const refDate = parseDateOnly(reference);
-  const daysSinceMonday = (refDate.getDay() + 6) % 7;
-  const weekStart = formatDateOnly(addDays(refDate, -daysSinceMonday));
-  const weekEnd = formatDateOnly(addDays(parseDateOnly(weekStart), 6));
-  return {
-    start: maxDate(cycleStart, weekStart),
-    end: minDate(cycleEnd, weekEnd),
-    weekEnd,
-  };
+  const lastTransactionDate = transactions[transactions.length - 1]?.transactionDate;
+  const cycleEnd = seoulDate(cycle?.endsAt) || lastTransactionDate || today;
+  return { start: cycleStart, end: cycleEnd };
+}
+
+function buildFinanceWeekOptions(cycle: { startsAt: string; endsAt: string | null } | undefined, transactions: FinanceTransaction[]) {
+  const period = cyclePeriod(cycle, transactions);
+  const options = [{ key: 'ALL', label: 'All cycle', start: period.start, end: period.end }];
+  if (!period.start || !period.end || period.start > period.end) return options;
+
+  let cursor = parseDateOnly(period.start);
+  let weekNumber = 1;
+  while (formatDateOnly(cursor) <= period.end) {
+    const daysSinceMonday = (cursor.getDay() + 6) % 7;
+    const calendarWeekStart = formatDateOnly(addDays(cursor, -daysSinceMonday));
+    const calendarWeekEnd = formatDateOnly(addDays(parseDateOnly(calendarWeekStart), 6));
+    const start = maxDate(period.start, calendarWeekStart);
+    const end = minDate(period.end, calendarWeekEnd);
+    options.push({
+      key: `${start}_${end}`,
+      label: `Week ${weekNumber} · ${start} ~ ${end}`,
+      start,
+      end,
+    });
+    cursor = addDays(parseDateOnly(end), 1);
+    weekNumber += 1;
+  }
+  return options;
+}
+
+function filterTransactionsByPeriod(transactions: FinanceTransaction[], period: { start: string; end: string }) {
+  return transactions.filter((tx) => tx.transactionDate >= period.start && tx.transactionDate <= period.end);
+}
+
+function accountAliases(account: FinanceAccount) {
+  return new Set([account.name, ...(account.aliases || [])].filter(Boolean));
+}
+
+function resolveAccount(accounts: FinanceAccount[], tx: FinanceTransaction) {
+  if (tx.accountId) {
+    const byId = accounts.find((account) => account.id === tx.accountId);
+    if (byId) return byId;
+  }
+  const candidates = [tx.accountName, tx.asset].filter(Boolean);
+  return accounts.find((account) => {
+    const aliases = accountAliases(account);
+    return candidates.some((candidate) => aliases.has(candidate || ''));
+  });
+}
+
+function resolveAccountByName(accounts: FinanceAccount[], name: string | null | undefined) {
+  if (!name) return undefined;
+  return accounts.find((account) => accountAliases(account).has(name));
+}
+
+function flowForAccount(transactions: FinanceTransaction[], accounts: FinanceAccount[]) {
+  const map = new Map<number, { income: number; out: number }>();
+  accounts.forEach((account) => {
+    if (!isLiabilityAccount(account)) map.set(account.id, { income: 0, out: 0 });
+  });
+
+  transactions.forEach((tx) => {
+    if (isLiabilityTransaction(tx)) return;
+    const source = resolveAccount(accounts, tx);
+    if (source && !isLiabilityAccount(source)) {
+      const current = map.get(source.id) || { income: 0, out: 0 };
+      if (tx.flowType === '수입') current.income += Number(tx.amount);
+      if (tx.flowType !== '수입' && tx.cashflowIncluded) current.out += cashflowAmount(tx);
+      map.set(source.id, current);
+    }
+    if (tx.flowType === '이체지출') {
+      const destination = resolveAccountByName(accounts, tx.category);
+      if (destination && !isLiabilityAccount(destination)) {
+        const current = map.get(destination.id) || { income: 0, out: 0 };
+        current.income += Number(tx.amount);
+        map.set(destination.id, current);
+      }
+    }
+  });
+
+  return map;
+}
+
+function accountFlowSummaries(accounts: FinanceAccount[], periodTransactions: FinanceTransaction[], cumulativeTransactions: FinanceTransaction[]) {
+  const periodFlow = flowForAccount(periodTransactions, accounts);
+  const cumulativeFlow = flowForAccount(cumulativeTransactions, accounts);
+  return accounts
+    .map((account) => {
+      if (isLiabilityAccount(account)) {
+        return {
+          ...account,
+          cycleIncome: 0,
+          cycleCashOut: 0,
+          cycleNetFlow: 0,
+          estimatedBalance: Number(account.openingBalance || 0),
+        };
+      }
+      const period = periodFlow.get(account.id) || { income: 0, out: 0 };
+      const cumulative = cumulativeFlow.get(account.id) || { income: 0, out: 0 };
+      const cycleNetFlow = period.income - period.out;
+      const cumulativeNetFlow = cumulative.income - cumulative.out;
+      return {
+        ...account,
+        cycleIncome: period.income,
+        cycleCashOut: period.out,
+        cycleNetFlow,
+        estimatedBalance: Number(account.openingBalance || 0) + cumulativeNetFlow,
+      };
+    });
+}
+
+function summaryTitle(periodKind: 'cycle' | 'week') {
+  return periodKind === 'week' ? 'Finance Weekly Summary' : 'Finance Cycle Summary';
+}
+
+function formatSummaryRange(range: { start: string; end: string }, kind: 'cycle' | 'week') {
+  if (kind === 'cycle') return `All cycle · ${range.start} ~ ${range.end}`;
+  return `${range.start} ~ ${range.end}`;
 }
 
 function formatFinanceWeeklySummary(
   transactions: FinanceTransaction[],
   range: { start: string; end: string },
-  cycleLabel: string | undefined
+  cycleLabel: string | undefined,
+  periodKind: 'cycle' | 'week' = 'week'
 ) {
   const rows = transactions.filter((tx) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
   const income = rows.filter((tx) => tx.flowType === '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
@@ -184,7 +290,7 @@ function formatFinanceWeeklySummary(
     .sort((a, b) => Math.abs(b[1].settled - b[1].used) - Math.abs(a[1].settled - a[1].used))
     .slice(0, 8);
 
-  let md = `# Finance Weekly Summary: ${range.start} ~ ${range.end}\n\n`;
+  let md = `# ${summaryTitle(periodKind)}: ${range.start} ~ ${range.end}\n\n`;
   if (cycleLabel) md += `Cycle: ${cycleLabel}\n\n`;
   md += `## Totals\n`;
   md += `| Income | External Cash Out | Deferred Spending | Actual Spending | Net External Cashflow | Transactions |\n`;
@@ -271,6 +377,7 @@ function suggestAccount(asset: string) {
 export default function Finance() {
   const queryClient = useQueryClient();
   const [selectedCycleId, setSelectedCycleId] = useState<number | undefined>();
+  const [selectedWeekKey, setSelectedWeekKey] = useState('ALL');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<FinanceImportPreviewResponse | null>(null);
   const [reviewActions, setReviewActions] = useState<Record<string, 'create' | 'skip'>>({});
@@ -323,6 +430,10 @@ export default function Finance() {
     queryKey: ['financeAccounts', activeCycleId],
     queryFn: () => api.finance.accounts(activeCycleId),
   });
+
+  useEffect(() => {
+    setSelectedWeekKey('ALL');
+  }, [activeCycleId]);
 
   const previewMutation = useMutation({
     mutationFn: api.finance.previewImport,
@@ -438,8 +549,27 @@ export default function Finance() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Transaction time update failed'),
   });
 
+  const weekOptions = useMemo(
+    () => buildFinanceWeekOptions(activeCycle, transactions || []),
+    [activeCycle, transactions]
+  );
+
+  const selectedWeek = weekOptions.find((option) => option.key === selectedWeekKey) || weekOptions[0];
+  const selectedPeriod = selectedWeek || cyclePeriod(activeCycle, transactions || []);
+  const selectedPeriodKind = selectedWeekKey === 'ALL' ? 'cycle' : 'week';
+
+  const selectedPeriodTransactions = useMemo(
+    () => filterTransactionsByPeriod(transactions || [], selectedPeriod),
+    [selectedPeriod, transactions]
+  );
+
+  const cumulativePeriodTransactions = useMemo(() => {
+    const cycleStart = cyclePeriod(activeCycle, transactions || []).start;
+    return (transactions || []).filter((tx) => tx.transactionDate >= cycleStart && tx.transactionDate <= selectedPeriod.end);
+  }, [activeCycle, selectedPeriod.end, transactions]);
+
   const totals = useMemo(() => {
-    const list = transactions || [];
+    const list = selectedPeriodTransactions;
     const cashflowOut = list.reduce((sum, t) => sum + externalCashOutAmount(t), 0);
     const income = list.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0);
     return {
@@ -450,11 +580,11 @@ export default function Finance() {
       netExternalCashflow: income - cashflowOut,
       count: list.length,
     };
-  }, [transactions]);
+  }, [selectedPeriodTransactions]);
 
   const categoryTotals = useMemo(() => {
     const map = new Map<string, number>();
-    (transactions || []).forEach((t) => {
+    selectedPeriodTransactions.forEach((t) => {
       if (!t.spendingIncluded || t.flowType === '수입') return;
       const amount = spendingAmount(t);
       if (amount <= 0) return;
@@ -462,7 +592,7 @@ export default function Finance() {
       map.set(key, (map.get(key) || 0) + amount);
     });
     return Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
-  }, [transactions]);
+  }, [selectedPeriodTransactions]);
 
   const categoryChartData = useMemo(
     () => categoryTotals.map(([name, value]) => ({ name, value })),
@@ -475,15 +605,15 @@ export default function Finance() {
   );
 
   const accountTotals = useMemo(() => {
-    return [...(accounts || [])]
+    return accountFlowSummaries(accounts || [], selectedPeriodTransactions, cumulativePeriodTransactions)
       .filter((account) => !isLiabilityAccount(account))
       .sort((a, b) => Math.abs(Number(b.cycleNetFlow)) - Math.abs(Number(a.cycleNetFlow)))
       .slice(0, 8);
-  }, [accounts]);
+  }, [accounts, cumulativePeriodTransactions, selectedPeriodTransactions]);
 
   const liabilityTotals = useMemo(() => {
     const map = new Map<string, { used: number; settled: number }>();
-    (transactions || []).forEach((tx) => {
+    selectedPeriodTransactions.forEach((tx) => {
       if (!isLiabilityTransaction(tx)) return;
       const key = tx.accountName || tx.asset || tx.paymentMethod || 'Liability';
       const current = map.get(key) || { used: 0, settled: 0 };
@@ -495,25 +625,25 @@ export default function Finance() {
       .map(([name, summary]) => ({ name, ...summary, net: summary.settled - summary.used }))
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
       .slice(0, 8);
-  }, [transactions]);
+  }, [selectedPeriodTransactions]);
 
-  const financeWeekRange = useMemo(
-    () => getFinanceWeekRange(activeCycle, transactions || []),
-    [activeCycle, transactions]
+  const accountCardSummaries = useMemo(
+    () => accountFlowSummaries(accounts || [], selectedPeriodTransactions, cumulativePeriodTransactions),
+    [accounts, cumulativePeriodTransactions, selectedPeriodTransactions]
   );
 
   const transactionFilterOptions = useMemo(() => {
-    const list = transactions || [];
+    const list = selectedPeriodTransactions;
     return {
       accounts: Array.from(new Set(list.map((tx) => tx.accountName || tx.asset || 'Unmapped'))).sort(),
       categories: Array.from(new Set(list.map((tx) => tx.category || 'Uncategorized'))).sort(),
       flowTypes: Array.from(new Set(list.map((tx) => tx.flowType).filter(Boolean))).sort(),
     };
-  }, [transactions]);
+  }, [selectedPeriodTransactions]);
 
   const filteredTransactions = useMemo(() => {
     const search = transactionFilters.search.trim().toLowerCase();
-    return (transactions || []).filter((tx) => {
+    return selectedPeriodTransactions.filter((tx) => {
       const account = tx.accountName || tx.asset || 'Unmapped';
       const category = tx.category || 'Uncategorized';
       const searchable = [
@@ -540,7 +670,7 @@ export default function Finance() {
       if (transactionFilters.to && tx.transactionDate > transactionFilters.to) return false;
       return true;
     });
-  }, [transactionFilters, transactions]);
+  }, [selectedPeriodTransactions, transactionFilters]);
 
   const filteredTransactionTotals = useMemo(() => ({
     cashflowOut: filteredTransactions.reduce((sum, t) => sum + externalCashOutAmount(t), 0),
@@ -556,7 +686,7 @@ export default function Finance() {
       mappedAliases.add(account.name);
       (account.aliases || []).forEach((alias) => mappedAliases.add(alias));
     });
-    (transactions || []).forEach((tx) => {
+    selectedPeriodTransactions.forEach((tx) => {
       if (!tx.accountId && tx.asset) {
         const current = map.get(tx.asset) || { count: 0, cashOut: 0, income: 0 };
         current.count += 1;
@@ -572,7 +702,7 @@ export default function Finance() {
       }
     });
     return Array.from(map.entries()).sort((a, b) => b[1].count - a[1].count);
-  }, [accounts, transactions]);
+  }, [accounts, selectedPeriodTransactions]);
 
   const handlePreview = () => {
     if (!file) {
@@ -638,10 +768,10 @@ export default function Finance() {
   };
 
   const handleCopyFinanceWeeklySummary = async () => {
-    const report = formatFinanceWeeklySummary(transactions || [], financeWeekRange, activeCycle?.label);
+    const report = formatFinanceWeeklySummary(transactions || [], selectedPeriod, activeCycle?.label, selectedPeriodKind);
     await navigator.clipboard.writeText(report);
     setCopiedWeeklyFinance(true);
-    toast.success('Finance weekly summary copied');
+    toast.success(selectedPeriodKind === 'week' ? 'Finance weekly summary copied' : 'Finance cycle summary copied');
     setTimeout(() => setCopiedWeeklyFinance(false), 2000);
   };
 
@@ -672,7 +802,7 @@ export default function Finance() {
               </span>
               <span className="inline-flex items-center gap-1 rounded-md border bg-background px-2 py-1">
                 <ReceiptText className="h-3.5 w-3.5" />
-                Weekly copy {financeWeekRange.start} ~ {financeWeekRange.end}
+                Summary range {formatSummaryRange(selectedPeriod, selectedPeriodKind)}
               </span>
             </div>
           </div>
@@ -685,16 +815,29 @@ export default function Finance() {
               disabled={transactionsLoading || !activeCycleId}
             >
               {copiedWeeklyFinance ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copiedWeeklyFinance ? 'Copied!' : 'Copy Weekly Summary'}
+              {copiedWeeklyFinance ? 'Copied!' : selectedPeriodKind === 'week' ? 'Copy Weekly Summary' : 'Copy Cycle Summary'}
             </Button>
             <select
               value={activeCycleId || ''}
-              onChange={(e) => setSelectedCycleId(e.target.value ? Number(e.target.value) : undefined)}
+              onChange={(e) => {
+                setSelectedCycleId(e.target.value ? Number(e.target.value) : undefined);
+                setSelectedWeekKey('ALL');
+              }}
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
             >
               {cyclesLoading && <option>Loading cycles...</option>}
               {cycles?.map((cycle) => (
                 <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
+              ))}
+            </select>
+            <select
+              value={selectedWeekKey}
+              onChange={(e) => setSelectedWeekKey(e.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              disabled={!activeCycleId || transactionsLoading}
+            >
+              {weekOptions.map((option) => (
+                <option key={option.key} value={option.key}>{option.label}</option>
               ))}
             </select>
           </div>
@@ -861,7 +1004,7 @@ export default function Finance() {
                 <div>
                   <CardTitle>Transactions</CardTitle>
                   <p className="text-sm text-muted-foreground">
-                    {filteredTransactions.length} of {(transactions || []).length} rows · income {money(filteredTransactionTotals.income)} · external out {money(filteredTransactionTotals.cashflowOut)} · deferred {money(filteredTransactionTotals.deferredSpending)} · actual spend {money(filteredTransactionTotals.spending)}
+                    {filteredTransactions.length} of {selectedPeriodTransactions.length} rows · income {money(filteredTransactionTotals.income)} · external out {money(filteredTransactionTotals.cashflowOut)} · deferred {money(filteredTransactionTotals.deferredSpending)} · actual spend {money(filteredTransactionTotals.spending)}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" className="gap-2" onClick={resetTransactionFilters}>
@@ -992,7 +1135,7 @@ export default function Finance() {
               <CardTitle>Accounts</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-3 md:grid-cols-2">
-              {accounts?.length ? accounts.map((account) => (
+              {accountCardSummaries.length ? accountCardSummaries.map((account) => (
                 <div key={account.id} className="rounded-md border p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
@@ -1003,10 +1146,11 @@ export default function Finance() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="mt-3 grid grid-cols-4 gap-2 text-xs">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
                     <span>Opening<br /><strong>{money(account.openingBalance)}</strong></span>
                     <span>In<br /><strong>{money(account.cycleIncome)}</strong></span>
                     <span>Out<br /><strong>{money(account.cycleCashOut)}</strong></span>
+                    <span>Net<br /><strong>{money(account.cycleNetFlow)}</strong></span>
                     <span>Estimated<br /><strong>{money(account.estimatedBalance)}</strong></span>
                   </div>
                   <AccountOpeningBalanceEditor

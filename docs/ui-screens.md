@@ -333,10 +333,10 @@ flowchart LR
 |------|------|
 | **목적** | 월급일 기준 지출 cycle, 현금흐름, 소비분석, 반복 청구 템플릿 관리 |
 | **구성** | Overview, Transactions, Accounts, Import, Recurring 탭 |
-| **Overview** | 선택 cycle의 수입, 이체 제외 External Cash Out, Deferred Spending, Actual Spending, Net External Cashflow, 전체 카테고리별 지출과 원형 Category Mix, 은행/현금/목적자금 Account Flow, 소액결제/후불 Liability Flow 요약. Flow 영역은 긴 금액/계좌명을 위해 별도 row와 고정 컬럼으로 표시 |
-| **Transactions** | 거래 목록, 검색/흐름/계좌/카테고리/플래그/기간 필터, 날짜 고정 + 시:분 후보정, Account 컬럼, Cash/Spend/소액결제/Adjusted 플래그 표시. 원본 금액과 소비분석 금액이 다르면 Spend 금액을 별도 표시 |
-| **주간 재무 요약 복사** | "Copy Weekly Summary" 버튼 → 선택 cycle의 현재 주간 재무 요약을 마크다운으로 클립보드 복사. Totals, 전체 Spending Categories, Account Flow, Liability Flow를 포함하며, 주는 월요일~일요일로 계산하되 cycle 시작 주는 월급 cycle 시작일~일요일처럼 7일 미만일 수 있음 |
-| **Accounts** | 계좌/지갑/부채/목적자금 카드, alias 관리, opening balance 보정, unmapped asset 생성/기존 계좌 매핑 |
+| **Overview** | 선택 cycle과 optional week 기준의 수입, 이체 제외 External Cash Out, Deferred Spending, Actual Spending, Net External Cashflow, 전체 카테고리별 지출과 원형 Category Mix, 은행/현금/목적자금 Account Flow, 소액결제/후불 Liability Flow 요약. Flow 영역은 긴 금액/계좌명을 위해 별도 row와 고정 컬럼으로 표시 |
+| **Transactions** | 선택 cycle/week 범위 안의 거래 목록, 검색/흐름/계좌/카테고리/플래그/기간 필터, 날짜 고정 + 시:분 후보정, Account 컬럼, Cash/Spend/소액결제/Adjusted 플래그 표시. 원본 금액과 소비분석 금액이 다르면 Spend 금액을 별도 표시 |
+| **재무 요약 복사** | "Copy Cycle Summary" 또는 "Copy Weekly Summary" 버튼 → 선택 cycle 또는 선택 week의 재무 요약을 마크다운으로 클립보드 복사. Totals, 전체 Spending Categories, Account Flow, Liability Flow를 포함하며, week는 월요일~일요일 기준이되 cycle 시작/끝 주는 cycle 범위로 잘라 표시 |
+| **Accounts** | 선택 cycle/week 기준 계좌 흐름, 계좌/지갑/부채/목적자금 카드, alias 관리, opening balance 보정, unmapped asset 생성/기존 계좌 매핑 |
 | **Import** | `.xlsx` 업로드 → preview → 신규/중복/확인필요 상태 확인 → 확정 저장 |
 | **Recurring** | KT 통신비 같은 고정비 템플릿과 cycle 적용 버전 관리 |
 | **API 호출** | `/api/finance/*` |
