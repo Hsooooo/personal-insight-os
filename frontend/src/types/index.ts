@@ -76,6 +76,11 @@ export interface FinanceAccountAutoMapResponse {
   updatedTransactions: number;
 }
 
+export interface FinanceTransactionDeleteResponse {
+  requested: number;
+  deleted: number;
+}
+
 export interface FinanceImportRow {
   rowId: string;
   rowNumber: number;

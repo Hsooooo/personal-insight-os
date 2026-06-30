@@ -36,6 +36,13 @@ public class FinanceController {
         return ApiResponse.ok(financeService.updateTransactionTime(userId, transactionId, request));
     }
 
+    @PostMapping("/transactions/delete")
+    public ApiResponse<FinanceTransactionDeleteResponse> deleteTransactions(
+            @AuthenticationPrincipal Long userId,
+            @RequestBody FinanceTransactionDeleteRequest request) {
+        return ApiResponse.ok(financeService.deleteTransactions(userId, request));
+    }
+
     @PostMapping("/import/preview")
     public ApiResponse<FinanceImportPreviewResponse> preview(
             @AuthenticationPrincipal Long userId,

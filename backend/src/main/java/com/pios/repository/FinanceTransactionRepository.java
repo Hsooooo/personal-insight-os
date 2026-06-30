@@ -21,4 +21,5 @@ public interface FinanceTransactionRepository extends JpaRepository<FinanceTrans
             Long userId, LocalDate transactionDate, BigDecimal amount, String flowType);
     List<FinanceTransaction> findByUserIdAndAssetIn(Long userId, Collection<String> assets);
     List<FinanceTransaction> findByUserIdAndAccountIdIsNullOrderByTransactionAtAscIdAsc(Long userId);
+    List<FinanceTransaction> findByUserIdAndIdIn(Long userId, Collection<Long> ids);
 }

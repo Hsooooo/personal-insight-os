@@ -391,6 +391,7 @@ export default function Finance() {
     from: '',
     to: '',
   });
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<number[]>([]);
   const [newBill, setNewBill] = useState({ name: 'KT 통신비', provider: 'KT', category: '주거/통신', memo: '' });
   const [versionTemplateId, setVersionTemplateId] = useState<number | ''>('');
   const [versionCycleId, setVersionCycleId] = useState<number | ''>('');
@@ -549,6 +550,17 @@ export default function Finance() {
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Transaction time update failed'),
   });
 
+  const deleteTransactionsMutation = useMutation({
+    mutationFn: api.finance.deleteTransactions,
+    onSuccess: (data) => {
+      toast.success(`${data.deleted}개 거래를 삭제했습니다`);
+      setSelectedTransactionIds([]);
+      queryClient.invalidateQueries({ queryKey: ['financeTransactions'] });
+      queryClient.invalidateQueries({ queryKey: ['financeAccounts'] });
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Transaction delete failed'),
+  });
+
   const weekOptions = useMemo(
     () => buildFinanceWeekOptions(activeCycle, transactions || []),
     [activeCycle, transactions]
@@ -679,6 +691,11 @@ export default function Finance() {
     income: filteredTransactions.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
   }), [filteredTransactions]);
 
+  useEffect(() => {
+    const visibleIds = new Set(filteredTransactions.map((tx) => tx.id));
+    setSelectedTransactionIds((ids) => ids.filter((id) => visibleIds.has(id)));
+  }, [filteredTransactions]);
+
   const unmappedAssets = useMemo(() => {
     const map = new Map<string, { count: number; cashOut: number; income: number }>();
     const mappedAliases = new Set<string>();
@@ -784,6 +801,22 @@ export default function Finance() {
     from: '',
     to: '',
   });
+
+  const handleToggleTransactionSelection = (id: number, checked: boolean) => {
+    setSelectedTransactionIds((ids) => {
+      if (checked) return ids.includes(id) ? ids : [...ids, id];
+      return ids.filter((selectedId) => selectedId !== id);
+    });
+  };
+
+  const handleToggleAllVisibleTransactions = (checked: boolean) => {
+    setSelectedTransactionIds(checked ? filteredTransactions.map((tx) => tx.id) : []);
+  };
+
+  const handleDeleteSelectedTransactions = () => {
+    if (selectedTransactionIds.length === 0 || deleteTransactionsMutation.isPending) return;
+    deleteTransactionsMutation.mutate(selectedTransactionIds);
+  };
 
   return (
     <div className="space-y-6">
@@ -1047,12 +1080,34 @@ export default function Finance() {
             </CardHeader>
             <CardContent>
               {transactionsLoading ? <Skeleton className="h-48" /> : (
-                <FinanceTransactionsTable
-                  transactions={filteredTransactions}
-                  updatingTransactionId={updateTransactionTimeMutation.variables?.id}
-                  isUpdatingTime={updateTransactionTimeMutation.isPending}
-                  onUpdateTime={(id, time) => updateTransactionTimeMutation.mutate({ id, time })}
-                />
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <span className="text-muted-foreground">
+                      {selectedTransactionIds.length > 0
+                        ? `${selectedTransactionIds.length} selected`
+                        : 'Select rows to delete transactions'}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="gap-2"
+                      disabled={selectedTransactionIds.length === 0 || deleteTransactionsMutation.isPending}
+                      onClick={handleDeleteSelectedTransactions}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      {deleteTransactionsMutation.isPending ? 'Deleting...' : 'Delete Selected'}
+                    </Button>
+                  </div>
+                  <FinanceTransactionsTable
+                    transactions={filteredTransactions}
+                    selectedIds={selectedTransactionIds}
+                    updatingTransactionId={updateTransactionTimeMutation.variables?.id}
+                    isUpdatingTime={updateTransactionTimeMutation.isPending}
+                    onToggleTransaction={handleToggleTransactionSelection}
+                    onToggleAll={handleToggleAllVisibleTransactions}
+                    onUpdateTime={(id, time) => updateTransactionTimeMutation.mutate({ id, time })}
+                  />
+                </div>
               )}
             </CardContent>
           </Card>
@@ -1419,26 +1474,43 @@ function SelectField({ label, value, options, onChange }: { label: string; value
 
 function FinanceTransactionsTable({
   transactions,
+  selectedIds,
   updatingTransactionId,
   isUpdatingTime,
+  onToggleTransaction,
+  onToggleAll,
   onUpdateTime,
 }: {
   transactions: FinanceTransaction[];
+  selectedIds: number[];
   updatingTransactionId?: number;
   isUpdatingTime: boolean;
+  onToggleTransaction: (id: number, checked: boolean) => void;
+  onToggleAll: (checked: boolean) => void;
   onUpdateTime: (id: number, time: string) => void;
 }) {
   if (transactions.length === 0) {
     return <p className="text-sm text-muted-foreground">No finance transactions yet. Import an export file to begin.</p>;
   }
+  const selectedSet = new Set(selectedIds);
+  const allVisibleSelected = transactions.length > 0 && transactions.every((tx) => selectedSet.has(tx.id));
   return (
     <div className="overflow-x-auto rounded-md border">
       <Table>
         <TableHeader>
-            <TableRow>
-              <TableHead>Date</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Category</TableHead>
+          <TableRow>
+            <TableHead className="w-10">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={(event) => onToggleAll(event.target.checked)}
+                aria-label="Select all visible transactions"
+                className="h-4 w-4 rounded border-input"
+              />
+            </TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>Account</TableHead>
+            <TableHead>Category</TableHead>
             <TableHead>Description</TableHead>
             <TableHead>Flow</TableHead>
             <TableHead>Amount</TableHead>
@@ -1448,6 +1520,15 @@ function FinanceTransactionsTable({
         <TableBody>
           {transactions.map((tx) => (
             <TableRow key={tx.id}>
+              <TableCell>
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(tx.id)}
+                  onChange={(event) => onToggleTransaction(tx.id, event.target.checked)}
+                  aria-label={`Select transaction ${tx.id}`}
+                  className="h-4 w-4 rounded border-input"
+                />
+              </TableCell>
               <TableCell className="min-w-40 whitespace-nowrap text-xs">
                 <TransactionTimeEditor
                   transaction={tx}

@@ -413,6 +413,7 @@ PATCH /api/activities/123/tag
 | GET | `/api/finance/cycles` | 월급일 기준 finance cycle 목록 |
 | GET | `/api/finance/transactions?cycleId=` | cycle별 지출/수입 거래 목록. `transaction_at ASC, id ASC` 시간순 정렬 |
 | PATCH | `/api/finance/transactions/{id}/time` | 거래 날짜는 유지하고 정렬/분석용 시각만 `HH:mm`으로 보정 |
+| POST | `/api/finance/transactions/delete` | 선택 거래 일괄 삭제. body: `{ "transactionIds": [1, 2] }`, 현재 사용자 소유 거래만 삭제 |
 | POST | `/api/finance/import/preview` | 앱 export `.xlsx` 파일 preview. `multipart/form-data`의 `file` 사용 |
 | POST | `/api/finance/import/confirm` | preview 결과를 사용자 결정값과 함께 확정 저장 |
 | GET | `/api/finance/accounts?cycleId=` | 계좌/지갑/부채/목적자금 목록과 cycle 내 현금흐름 요약 |

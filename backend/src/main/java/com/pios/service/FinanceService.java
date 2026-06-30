@@ -67,6 +67,22 @@ public class FinanceService {
         return toTransactionDto(transaction);
     }
 
+    @Transactional
+    public FinanceTransactionDeleteResponse deleteTransactions(Long userId, FinanceTransactionDeleteRequest request) {
+        List<Long> ids = request == null || request.getTransactionIds() == null
+                ? List.of()
+                : request.getTransactionIds().stream().filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) {
+            return FinanceTransactionDeleteResponse.builder().requested(0).deleted(0).build();
+        }
+        List<FinanceTransaction> transactions = transactionRepo.findByUserIdAndIdIn(userId, ids);
+        transactionRepo.deleteAll(transactions);
+        return FinanceTransactionDeleteResponse.builder()
+                .requested(ids.size())
+                .deleted(transactions.size())
+                .build();
+    }
+
     public FinanceImportPreviewResponse previewImport(Long userId, MultipartFile file) {
         List<ParsedFinanceRow> parsedRows = excelParser.parse(file);
         Map<Instant, CycleAnchor> anchors = detectAnchors(userId, parsedRows);

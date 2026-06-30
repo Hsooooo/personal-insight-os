@@ -26,6 +26,7 @@ import type {
   FinanceImportConfirmRequest,
   FinanceImportConfirmResponse,
   FinanceImportPreviewResponse,
+  FinanceTransactionDeleteResponse,
   FinanceTransaction,
   RecurringBill,
   RecurringBillVersion,
@@ -265,6 +266,8 @@ export const api = {
     },
     updateTransactionTime: (id: number, request: { time: string }): Promise<FinanceTransaction> =>
       fetchApi(`/api/finance/transactions/${id}/time`, { method: 'PATCH', body: JSON.stringify(request) }),
+    deleteTransactions: (transactionIds: number[]): Promise<FinanceTransactionDeleteResponse> =>
+      fetchApi('/api/finance/transactions/delete', { method: 'POST', body: JSON.stringify({ transactionIds }) }),
     previewImport: (file: File): Promise<FinanceImportPreviewResponse> => {
       const body = new FormData();
       body.append('file', file);
