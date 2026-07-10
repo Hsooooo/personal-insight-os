@@ -1,5 +1,6 @@
 package com.pios.service;
 
+import com.pios.common.AppTimeZones;
 import com.pios.domain.*;
 import com.pios.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +27,7 @@ public class MockDataService {
     @Transactional
     public void generateMockData(Long userId) {
         User user = User.builder().id(userId).build();
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppTimeZones.todayKst();
 
         // Generate 30 days of health metrics, sleep, and some activities
         for (int i = 0; i < 30; i++) {
@@ -65,8 +66,8 @@ public class MockDataService {
         GarminSleepSession sleep = GarminSleepSession.builder()
                 .user(user)
                 .sleepDate(date)
-                .startTime(date.atTime(23, 0).atZone(java.time.ZoneId.systemDefault()).toInstant())
-                .endTime(date.plusDays(1).atTime(6 + random.nextInt(3), 0).atZone(java.time.ZoneId.systemDefault()).toInstant())
+                .startTime(date.atTime(23, 0).atZone(AppTimeZones.KST).toInstant())
+                .endTime(date.plusDays(1).atTime(6 + random.nextInt(3), 0).atZone(AppTimeZones.KST).toInstant())
                 .totalSleepSeconds(totalSleep)
                 .deepSleepSeconds(totalSleep / 5 + random.nextInt(3600))
                 .lightSleepSeconds(totalSleep / 2 + random.nextInt(1800))

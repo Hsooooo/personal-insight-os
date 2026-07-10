@@ -8,7 +8,7 @@
 - JWT를 이용한 사용자 인증
 - Garmin Connect 실제 데이터 동기화 (Python `garminconnect` 라이브러리 via ProcessBuilder)
 - 동기화 이력 관리 (`sync_logs` 테이블)
-- 자동 동기화 (Spring Scheduler, 매일 새벽 3시)
+- 자동 동기화 (Spring Scheduler, 매일 정오 12:00 KST)
 - Rate limit (30초) 및 청크 단위 처리 (30일)
 - 건강 지표, 수면, 활동 추적
 - 목표 관리
@@ -186,7 +186,7 @@ Dockerfile은 멀티스테이지 빌드를 사용합니다:
 | `sync.rate-limit-seconds` | — | `30` |
 | `sync.chunk-days` | — | `30` |
 | `sync.default-full-sync-months` | — | `12` |
-| `sync.schedule.cron` | — | `0 0 3 * * *` (매일 03:00) |
+| `sync.schedule.cron` | — | `0 0 12 * * *` (매일 12:00 KST) |
 
 **중요**: 기본 JWT secret 및 데이터베이스 자격 증명은 로컬 개발용입니다. 프로덕션에서는 반드시 환경 변수를 통해 변경하세요.
 
@@ -209,7 +209,7 @@ Dockerfile은 멀티스테이지 빌드를 사용합니다:
 ### 주요 구현 상세
 - **Authentication**: JWT 필터는 principal을 `Long userId`로 설정 (NOT `UserDetails`). 컨트롤러는 `@AuthenticationPrincipal Long userId`로 수신.
 - **OpenAI integration**: `AskService`는 한국어 시스템 프롬프트와 함께 OpenAI Chat Completions REST API를 직접 호출. API 키가 없거나 호출이 실패하면 일반 템플릿 응답으로 fallback.
-- **실제 Garmin 동기화**: `GarminSyncService.sync()`가 `GarminPythonClient`를 통해 Python `garminconnect` 라이브러리를 실행. 30일 청크 단위로 데이터를 수신하여 PostgreSQL에 UPSERT 저장 후 Neo4j에 투영. Rate limit(30초), sync_logs 이력 관리, Spring Scheduler(매일 03:00) 지원.
+- **실제 Garmin 동기화**: `GarminSyncService.sync()`가 `GarminPythonClient`를 통해 Python `garminconnect` 라이브러리를 실행. 30일 청크 단위로 데이터를 수신하여 PostgreSQL에 UPSERT 저장 후 Neo4j에 투영. Rate limit(30초), sync_logs 이력 관리, Spring Scheduler(매일 12:00 KST) 지원.
 - **Mock data**: `DataSourceService.generateMockData()`는 개발/테스트용으로 `MockDataService.generateMockData()`를 트리거하여 30일치 건강/수면 데이터와 10개의 무작위 활동을 생성. 실제 동기화와 별도로 유지.
 - **Graph projection**: `GraphProjectorService`는 관계형 데이터를 읽고 Neo4j에서 관계(`PERFORMED`, `HAS_METRIC`, `HAS_SLEEP`)와 함께 노드를 생성/머지. 중복 방지를 위해 매핑 테이블을 유지.
 

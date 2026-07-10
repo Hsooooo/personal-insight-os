@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +13,11 @@ import {
   Scale,
   Lightbulb,
   MessageSquare,
-  Copy,
   Check,
   FileText,
+  Newspaper,
+  Target,
+  RefreshCw,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -26,10 +28,26 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { formatDate, formatDistance, formatDuration, formatWeeklyReport, isRunningType } from '@/lib/utils';
+import { formatDate, formatDistance, formatWeeklyReport, isRunningType } from '@/lib/utils';
+
+function paceLabel(pace?: string | null): string {
+  switch (pace) {
+    case 'AHEAD':
+      return '앞서감';
+    case 'ON_TRACK':
+      return '순항';
+    case 'BEHIND':
+      return '뒤처짐';
+    case 'INSUFFICIENT_DATA':
+      return '데이터 부족';
+    default:
+      return pace || '-';
+  }
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [copying, setCopying] = useState(false);
 
@@ -38,11 +56,15 @@ export default function Dashboard() {
     queryFn: api.dashboard.summary,
   });
 
+  const generateBriefing = useMutation({
+    mutationFn: () => api.briefings.generate(true),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+  });
+
   const handleCopyWeeklyReport = async () => {
     if (!data || copying) return;
     setCopying(true);
     try {
-      // Calculate last 7 days range based on KST
       const kstDate = (date: Date) =>
         date.toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
       const end = new Date();
@@ -61,7 +83,6 @@ export default function Dashboard() {
         }),
       ]);
 
-      // Fetch laps for running activities
       const activities = activitiesRes.content || [];
       const runningActivities = activities.filter((a) => isRunningType(a.activityType));
       const lapsResults = await Promise.all(
@@ -104,6 +125,10 @@ export default function Dashboard() {
     weight: h.weightKg,
   })) || [];
 
+  const briefingPreview = data?.latestBriefing?.summary
+    ? data.latestBriefing.summary.split('\n').filter(Boolean).slice(0, 4).join('\n')
+    : null;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -118,16 +143,63 @@ export default function Dashboard() {
           onClick={handleCopyWeeklyReport}
           disabled={copying || isLoading}
         >
-          {copied ? (
-            <Check className="h-4 w-4" />
-          ) : (
-            <FileText className="h-4 w-4" />
-          )}
+          {copied ? <Check className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
           {copied ? 'Copied!' : 'Copy Weekly Report'}
         </Button>
       </div>
 
-      {/* Summary Cards */}
+      <Card className="border-indigo-200/60 bg-gradient-to-br from-indigo-50/80 to-background">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Newspaper className="h-4 w-4 text-indigo-600" />
+              {data?.latestBriefing?.title || 'Weekly Briefing'}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              지난주 데이터 기반 자동 브리핑 · 목표·패턴 포함
+            </CardDescription>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1 shrink-0"
+            disabled={generateBriefing.isPending}
+            onClick={() => generateBriefing.mutate()}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${generateBriefing.isPending ? 'animate-spin' : ''}`} />
+            {data?.latestBriefing ? 'Regenerate' : 'Generate'}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {briefingPreview ? (
+            <div className="space-y-3">
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-foreground/90">
+                {briefingPreview}
+              </pre>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">WEEKLY_BRIEFING</Badge>
+                {data?.latestBriefing?.confidence != null && (
+                  <span className="text-xs text-muted-foreground">
+                    Confidence: {(Number(data.latestBriefing.confidence) * 100).toFixed(0)}%
+                  </span>
+                )}
+                <Button
+                  variant="link"
+                  className="h-auto p-0 text-xs"
+                  onClick={() => navigate('/insights')}
+                >
+                  View full briefing
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              아직 주간 브리핑이 없습니다. Generate를 눌러 지난주 요약을 만들어 보세요.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -136,7 +208,8 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {data?.latestHealth?.restingHeartRate || '-'} <span className="text-sm font-normal text-muted-foreground">bpm</span>
+              {data?.latestHealth?.restingHeartRate || '-'}{' '}
+              <span className="text-sm font-normal text-muted-foreground">bpm</span>
             </div>
             <p className="text-xs text-muted-foreground">Latest reading</p>
           </CardContent>
@@ -148,9 +221,7 @@ export default function Dashboard() {
             <Moon className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {data?.latestSleep?.sleepScore || '-'}
-            </div>
+            <div className="text-2xl font-bold">{data?.latestSleep?.sleepScore || '-'}</div>
             <p className="text-xs text-muted-foreground">Last night</p>
           </CardContent>
         </Card>
@@ -177,7 +248,8 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {data?.latestHealth?.weightKg ?? '-'} <span className="text-sm font-normal text-muted-foreground">kg</span>
+              {data?.latestHealth?.weightKg ?? '-'}{' '}
+              <span className="text-sm font-normal text-muted-foreground">kg</span>
             </div>
             <p className="text-xs text-muted-foreground">Latest reading</p>
           </CardContent>
@@ -185,7 +257,6 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-7">
-        {/* Health Chart */}
         <Card className="lg:col-span-4">
           <CardHeader>
             <CardTitle>7-Day Trends</CardTitle>
@@ -232,8 +303,62 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Recent Insights & Quick Questions */}
         <div className="space-y-4 lg:col-span-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-indigo-500" />
+                Goal Progress
+              </CardTitle>
+              <Button variant="link" className="h-auto p-0 text-xs" onClick={() => navigate('/goals')}>
+                Manage
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {data?.activeGoals?.length ? (
+                data.activeGoals.slice(0, 3).map((goal) => {
+                  const percent = Math.min(Math.max(Number(goal.progressPercent ?? 0), 0), 100);
+                  return (
+                    <div key={goal.id} className="space-y-1.5">
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="truncate font-medium">{goal.title}</span>
+                        <Badge variant="outline" className="shrink-0 text-[10px]">
+                          {paceLabel(goal.paceStatus)}
+                        </Badge>
+                      </div>
+                      {goal.progressSupported ? (
+                        <>
+                          <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                              className="h-full rounded-full bg-indigo-500"
+                              style={{ width: `${percent}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {goal.currentValue ?? '-'}
+                            {goal.targetUnit ? ` ${goal.targetUnit}` : ''}
+                            {' / '}
+                            {goal.targetValue}
+                            {goal.targetUnit ? ` ${goal.targetUnit}` : ''}
+                            {goal.progressPercent != null
+                              ? ` · ${Number(goal.progressPercent).toFixed(0)}%`
+                              : ''}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">자동 추적 미지원</p>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  목표가 없습니다. Goals에서 주간 러닝·수면 목표를 추가해 보세요.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -255,7 +380,8 @@ export default function Dashboard() {
                         {insight.category || 'Insight'}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        Confidence: {insight.confidence ? `${(insight.confidence * 100).toFixed(0)}%` : '-'}
+                        Confidence:{' '}
+                        {insight.confidence ? `${(insight.confidence * 100).toFixed(0)}%` : '-'}
                       </span>
                     </div>
                   </div>
@@ -277,15 +403,13 @@ export default function Dashboard() {
               {data?.suggestedQuestions?.map((q, i) => (
                 <Button
                   key={i}
-                  variant="ghost"
-                  className="w-full justify-start text-left h-auto py-2 px-3 text-sm"
+                  variant="outline"
+                  className="w-full justify-start text-left h-auto py-2 px-3"
                   onClick={() => navigate('/ask', { state: { question: q } })}
                 >
-                  {q}
+                  <span className="text-sm line-clamp-2">{q}</span>
                 </Button>
-              )) || (
-                <p className="text-sm text-muted-foreground">Connect your data to get suggestions</p>
-              )}
+              ))}
             </CardContent>
           </Card>
         </div>
@@ -298,17 +422,15 @@ function DashboardSkeleton() {
   return (
     <div className="space-y-6">
       <Skeleton className="h-10 w-48" />
+      <Skeleton className="h-40 w-full" />
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className="h-28" />
         ))}
       </div>
       <div className="grid gap-4 lg:grid-cols-7">
-        <Skeleton className="lg:col-span-4 h-80" />
-        <div className="space-y-4 lg:col-span-3">
-          <Skeleton className="h-48" />
-          <Skeleton className="h-40" />
-        </div>
+        <Skeleton className="h-80 lg:col-span-4" />
+        <Skeleton className="h-80 lg:col-span-3" />
       </div>
     </div>
   );

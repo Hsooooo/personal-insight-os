@@ -108,7 +108,7 @@ public ProviderConnectionDto connectGarmin(Long userId, String email, String pas
 | **Rate Limit** | 동일 사용자 기준 최소 30초 간격 |
 | **청크 처리** | 30일 단위 청크 순차 처리 |
 | **백그라운드** | FULL 동기화는 `@Async("syncTaskExecutor")`로 비동기 실행 |
-| **자동 동기화** | Spring Scheduler, 매일 새벽 3시 (`auto_sync_enabled` 체크) |
+| **자동 동기화** | Spring Scheduler, 매일 정오 12:00 KST (`auto_sync_enabled` 체크, 전날 수면 반영 여유) |
 | **중복 처리** | PostgreSQL `ON CONFLICT ... DO UPDATE` (UPSERT) |
 | **동기화 이력** | `sync_logs` 테이블에 상태/기간/레코드 수/에러 저장 |
 | **수면 단계** | deep / light / rem / awake — Stacked Bar Chart로 비중 시각화 |
@@ -212,8 +212,8 @@ session.run("""
 | 항목 | 내용 |
 |------|------|
 | **구현 위치** | `DashboardController`, `DashboardService`, `Dashboard.tsx` |
-| **구성** | 4개 요약 카드 + 7일 트렌드 차트 + 인사이트 + 빠른 질문 |
-| **차트** | Recharts AreaChart (RHR + Stress) |
+| **구성** | 주간 브리핑 카드 + 4개 요약 카드 + 7일 트렌드 차트 + 목표 진행률 + 인사이트 + 빠른 질문 |
+| **차트** | Recharts AreaChart (RHR + Stress + Weight) |
 | **라우트** | `/` (홈) |
 
 ```tsx
@@ -375,6 +375,27 @@ public AskResponse ask(Long userId, AskRequest request) {
 | PostgreSQL에는 원천/정형 데이터를 저장하고, Neo4j에는 의미 있는 관계를 저장할 수 있는가? | ✅ |
 | 사용자가 자연어로 질문했을 때, 실제 데이터 근거를 기반으로 답변할 수 있는가? | ✅ |
 | 생성된 인사이트를 저장하고, 사용자가 맞음/틀림/애매함으로 피드백할 수 있는가? | ✅ |
+| 목표가 실제 운동·건강 데이터와 연결되어 진행률을 보여주는가? | ✅ |
+| 질문하지 않아도 주간 브리핑이 자동/수동으로 생성되는가? | ✅ |
+
+---
+
+## ✅ 목표 진행률 엔진
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `GoalProgressCalculator`, `GoalService`, `Goals.tsx` |
+| **유형** | `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
+| **출력** | `currentValue`, `progressPercent`, `paceStatus`, `projectedDate`, `warning` |
+
+## ✅ 자동 주간 브리핑
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `WeeklyBriefingService`, `WeeklyBriefingScheduleService`, `BriefingController`, `Dashboard.tsx` |
+| **스케줄** | 매주 일 13:00 KST (`briefing.schedule.cron`, sync 12:00 이후) |
+| **구성** | 지난주 통계 + 목표 진행률 + `ThinPatternDetector` 패턴 → Insight(`WEEKLY_BRIEFING`) |
+| **API** | `GET /api/briefings/latest`, `POST /api/briefings/generate` |
 
 ---
 

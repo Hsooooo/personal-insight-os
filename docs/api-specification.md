@@ -74,6 +74,11 @@ flowchart LR
         I5["DELETE /api/goals/{id}"]
     end
 
+    subgraph 브리핑["📰 주간 브리핑"]
+        BR1["GET /api/briefings/latest"]
+        BR2["POST /api/briefings/generate"]
+    end
+
     subgraph 설정["⚙️ 설정"]
         J1["GET /api/settings/llm-providers"]
         J2["POST /api/settings/llm-providers"]
@@ -85,6 +90,7 @@ flowchart LR
     style 대시보드 fill:#6366f1,color:#fff
     style 데이터소스 fill:#10b981,color:#fff
     style 인사이트 fill:#f59e0b,color:#fff
+    style 브리핑 fill:#8b5cf6,color:#fff
 ```
 
 ---
@@ -209,9 +215,41 @@ POST /api/auth/api-keys
     "최근 컨디션이 안 좋은 이유는?",
     "이번 주 훈련 강도는 적절해?",
     "러닝 기록이 좋았던 날들의 공통점은?"
+  ],
+  "latestBriefing": { "id": 142, "category": "WEEKLY_BRIEFING", "title": "2026-W28 주간 브리핑", "summary": "...", "evidences": [...] },
+  "activeGoals": [
+    {
+      "id": 1,
+      "title": "주간 러닝 40km",
+      "goalType": "WEEKLY_RUN_DISTANCE",
+      "targetValue": 40,
+      "targetUnit": "km",
+      "progressSupported": true,
+      "currentValue": 32.5,
+      "progressPercent": 81.3,
+      "paceStatus": "ON_TRACK",
+      "projectedDate": "2026-07-12",
+      "warning": null
+    }
   ]
 }
 ```
+
+---
+
+### 📰 Briefings API
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| GET | `/api/briefings/latest` | 최신 주간 브리핑 (없으면 `null`) |
+| POST | `/api/briefings/generate` | 주간 브리핑 생성 (body: `{ "force": true }` 시 같은 주 재생성) |
+
+**동작**
+- 지난주(월~일, Asia/Seoul) 통계 + ACTIVE 목표 진행률 + 규칙 기반 패턴을 모아 Insight(`category=WEEKLY_BRIEFING`)로 저장
+- Evidence 유형: `STATS` / `GOAL_PROGRESS` / `PATTERN`
+- 스케줄: `briefing.schedule.cron` (기본 `0 0 13 * * SUN` Asia/Seoul, Garmin sync 12:00 KST 이후)
+- 같은 ISO week 중복 생성 방지 (`force=true`면 기존 삭제 후 재생성)
+- LLM 미설정/실패 시 템플릿 fallback
 
 ---
 
@@ -403,6 +441,29 @@ PATCH /api/activities/123/tag
   "feedbackStatus": "CORRECT"
 }
 ```
+
+---
+
+### 🎯 Goals API
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| GET | `/api/goals` | 목표 목록 (진행률 필드 포함) |
+| POST | `/api/goals` | 목표 생성 |
+| GET | `/api/goals/{id}` | 목표 상세 |
+| PATCH | `/api/goals/{id}` | 목표 수정 |
+| DELETE | `/api/goals/{id}` | 목표 삭제 |
+
+**자동 추적 가능 `goalType`**
+
+| goalType | 현재값 | 단위 |
+|----------|--------|------|
+| `WEEKLY_RUN_DISTANCE` | 이번 주(월~오늘) 러닝 거리 합 | km |
+| `WEEKLY_ACTIVITY_COUNT` | 이번 주 활동 횟수 | 회 |
+| `SLEEP_HOURS` | 최근 7일 평균 수면 | h |
+| `WEIGHT_KG` | 최신 체중 | kg |
+
+**응답 추가 필드**: `progressSupported`, `currentValue`, `progressPercent`, `paceStatus` (`ON_TRACK`/`BEHIND`/`AHEAD`/`INSUFFICIENT_DATA`/`UNSUPPORTED`), `projectedDate`, `warning` (`OVERTRAINING_HINT`/`UNDERTRAINING_HINT`)
 
 ---
 

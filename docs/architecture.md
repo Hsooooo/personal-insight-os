@@ -143,6 +143,33 @@ sequenceDiagram
 
 ---
 
+## 데이터 흐름 (주간 브리핑)
+
+```mermaid
+sequenceDiagram
+    participant Sch as WeeklyBriefingScheduler
+    participant BE as WeeklyBriefingService
+    participant Stats as EvidenceStatisticsCalculator
+    participant Goal as GoalProgressCalculator
+    participant Pat as ThinPatternDetector
+    participant PG as PostgreSQL
+    participant OAI as OpenAI API
+
+    Sch->>BE: cron (일 04:00) / 수동 generate
+    BE->>Stats: 지난주 AskPeriod 통계
+    BE->>Goal: ACTIVE goals 진행률
+    BE->>Pat: changeRate 규칙 패턴
+    alt OpenAI 설정됨
+        BE->>OAI: 통계·목표·패턴 컨텍스트
+        OAI-->>BE: 주간 브리핑 문장
+    else fallback
+        BE->>BE: 템플릿 요약 + 행동 1~3개
+    end
+    BE->>PG: Insight(WEEKLY_BRIEFING) + Evidence 저장
+```
+
+---
+
 ## 데이터 흐름 (RAG v2 파이프라인)
 
 ```mermaid

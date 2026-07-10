@@ -1,6 +1,7 @@
 package com.pios.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.pios.common.AppTimeZones;
 import com.pios.domain.*;
 import com.pios.domain.enums.SyncStatus;
 import com.pios.repository.*;
@@ -384,12 +385,12 @@ public class GarminSyncExecutor {
                 text = text.substring(0, text.length() - 2);
             }
             return LocalDateTime.parse(text, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    .atZone(ZoneId.systemDefault())
+                    .atZone(AppTimeZones.KST)
                     .toInstant();
         } catch (Exception e) {
             try {
                 return LocalDateTime.parse(text.replace(" ", "T"), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                        .atZone(ZoneId.systemDefault())
+                        .atZone(AppTimeZones.KST)
                         .toInstant();
             } catch (Exception e2) {
                 try {

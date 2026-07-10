@@ -18,4 +18,6 @@ public class DashboardSummaryDto {
     private List<ActivityDto> last7DaysActivities;
     private List<InsightDto> recentInsights;
     private List<String> suggestedQuestions;
+    private InsightDto latestBriefing;
+    private List<GoalDto> activeGoals;
 }

@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface InsightEvidenceRepository extends JpaRepository<InsightEvidence, Long> {
     List<InsightEvidence> findByInsightId(Long insightId);
+
+    void deleteByInsightId(Long insightId);
 }

@@ -20,9 +20,11 @@ public class SyncScheduleService {
     private final GarminSyncService garminSyncService;
 
     /**
-     * 매일 새벽 3시에 자동 동기화 실행
+     * 매일 정오(KST 12:00)에 자동 동기화.
+     * 전날 수면이 Garmin에 충분히 반영된 뒤 수집하기 위함.
+     * zone을 Asia/Seoul로 명시해 컨테이너 UTC와 무관하게 KST 기준으로 동작한다.
      */
-    @Scheduled(cron = "${sync.schedule.cron:0 0 3 * * *}")
+    @Scheduled(cron = "${sync.schedule.cron:0 0 12 * * *}", zone = "${app.timezone:Asia/Seoul}")
     public void scheduledSync() {
         log.info("Starting scheduled Garmin sync");
 

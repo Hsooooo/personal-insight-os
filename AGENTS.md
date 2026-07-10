@@ -16,12 +16,13 @@
 ### MVP 기능
 - JWT 기반 사용자 로그인/회원가입
 - Garmin 데이터 연동 및 동기화 (Mock 데이터 생성)
-- 대시보드 (요약 카드, 7일 트렌드 차트, 최근 인사이트)
+- 대시보드 (주간 브리핑, 요약 카드, 7일 트렌드 차트, 목표 진행률, 최근 인사이트)
 - 활동/건강/수면 데이터 조회
 - 개인 지식 그래프 시각화 (Cytoscape) — 날짜/뷰/레이스 필터
 - 자연어 질의 (Ask My Data) + RAG 응답
 - 인사이트 저장 및 피드백
-- 목표 설정 및 관리
+- 목표 설정 및 실제 데이터 기반 진행률 추적
+- 자동 주간 브리핑 (통계·목표·패턴 → Insight 저장)
 - LLM Provider 설정
 - MCP(Model Context Protocol) 연동 — 외부 LLM이 PIOS 데이터를 읽을 수 있도록 생체스포츠 코치 페르소나 제공
 
@@ -191,7 +192,7 @@ mvn clean package -DskipTests
 6. GraphProjector 실행 → Neo4j 노드/엣지 생성
 7. `graph_node_mappings` 테이블에 매핑 정보 저장
 8. `sync_logs` COMPLETED/FAILED 상태 업데이트
-9. Spring Scheduler가 매일 03:00 자동 증분 동기화 실행
+9. Spring Scheduler가 매일 12:00 KST 자동 증분 동기화 실행 (전날 수면 반영 여유)
 
 ---
 
@@ -217,7 +218,8 @@ mvn clean package -DskipTests
 | 영역 | 엔드포인트 |
 |------|-----------|
 | 인증 | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/me` |
-| 대시보드 | `GET /api/dashboard/summary` |
+| 대시보드 | `GET /api/dashboard/summary` (latestBriefing, activeGoals 포함) |
+| 브리핑 | `GET /api/briefings/latest`, `POST /api/briefings/generate` |
 | 데이터 소스 | `GET /api/data-sources`, `POST /api/data-sources/garmin/connect`, `POST /api/data-sources/garmin/sync`, `GET /api/data-sources/garmin/sync-logs`, `POST /api/data-sources/garmin/mock`, `DELETE /api/data-sources/garmin` |
 | 활동 | `GET /api/activities` (이름/유형/거리/시간/심박/칼로리) |
 | 활동 | `GET /api/activities`, `GET /api/activities/{id}` |

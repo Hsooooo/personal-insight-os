@@ -19,4 +19,12 @@ public class GoalDto {
     private LocalDate startDate;
     private LocalDate targetDate;
     private String status;
+
+    /** 자동 추적 가능 여부 */
+    private Boolean progressSupported;
+    private BigDecimal currentValue;
+    private BigDecimal progressPercent;
+    private String paceStatus;
+    private LocalDate projectedDate;
+    private String warning;
 }

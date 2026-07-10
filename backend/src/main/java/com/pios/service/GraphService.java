@@ -1,5 +1,6 @@
 package com.pios.service;
 
+import com.pios.common.AppTimeZones;
 import com.pios.dto.GraphDataDto;
 import com.pios.dto.GraphNodeDto;
 import com.pios.dto.GraphRelationshipDto;
@@ -8,7 +9,6 @@ import org.neo4j.driver.Driver;
 import org.neo4j.driver.Session;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.util.*;
 
 @Service
@@ -21,7 +21,7 @@ public class GraphService {
         List<GraphNodeDto> nodes = new ArrayList<>();
         List<GraphRelationshipDto> relationships = new ArrayList<>();
 
-        String cutoffDate = days > 0 ? LocalDate.now().minusDays(days).toString() + "T00:00:00" : null;
+        String cutoffDate = days > 0 ? AppTimeZones.todayKst().minusDays(days).toString() + "T00:00:00" : null;
         boolean includeActivities = "all".equals(view) || "activities".equals(view);
         boolean includeCondition = "all".equals(view) || "condition".equals(view);
 

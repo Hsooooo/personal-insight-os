@@ -1,10 +1,13 @@
 package com.pios.service;
 
+import com.pios.common.AppTimeZones;
 import com.pios.domain.*;
 import com.pios.dto.*;
 import com.pios.repository.*;
+import com.pios.service.briefing.WeeklyBriefingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -18,9 +21,12 @@ public class DashboardService {
     private final GarminDailyHealthMetricRepository healthRepo;
     private final GarminSleepSessionRepository sleepRepo;
     private final InsightRepository insightRepo;
+    private final GoalService goalService;
+    private final WeeklyBriefingService weeklyBriefingService;
 
+    @Transactional(readOnly = true)
     public DashboardSummaryDto getSummary(Long userId) {
-        LocalDate today = LocalDate.now();
+        LocalDate today = AppTimeZones.todayKst();
         LocalDate weekAgo = today.minusDays(6);
         LocalDateTime weekAgoDateTime = weekAgo.atStartOfDay();
 
@@ -35,7 +41,14 @@ public class DashboardService {
         var last7Activities = activityRepo.findRecentByUserId(userId, weekAgoDateTime)
                 .stream().map(this::toActivityDto).toList();
         var recentInsights = insightRepo.findByUserIdOrderByCreatedAtDesc(userId).stream()
+                .filter(i -> !WeeklyBriefingService.CATEGORY.equals(i.getCategory()))
                 .limit(3).map(this::toInsightDto).toList();
+
+        var latestBriefing = weeklyBriefingService.getLatest(userId);
+        var activeGoals = goalService.getGoals(userId).stream()
+                .filter(g -> "ACTIVE".equalsIgnoreCase(g.getStatus()))
+                .limit(5)
+                .toList();
 
         return DashboardSummaryDto.builder()
                 .latestHealth(latestHealth)
@@ -50,6 +63,8 @@ public class DashboardService {
                         "이번 주 훈련 강도는 적절해?",
                         "러닝 기록이 좋았던 날들의 공통점은?"
                 ))
+                .latestBriefing(latestBriefing)
+                .activeGoals(activeGoals)
                 .build();
     }
 

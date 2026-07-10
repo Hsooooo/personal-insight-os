@@ -1,5 +1,6 @@
 package com.pios.service;
 
+import com.pios.common.AppTimeZones;
 import com.pios.domain.*;
 import com.pios.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -8,6 +9,7 @@ import org.neo4j.driver.Session;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.Map;
 
 @Service
@@ -36,8 +38,9 @@ public class GraphProjectorService {
                     });
 
             // Project health metrics
+            LocalDate today = AppTimeZones.todayKst();
             healthRepo.findByUserIdAndMetricDateBetweenOrderByMetricDateDesc(
-                    userId, java.time.LocalDate.now().minusDays(30), java.time.LocalDate.now())
+                    userId, today.minusDays(30), today)
                     .forEach(h -> {
                         var result = session.run(
                             """
@@ -65,7 +68,7 @@ public class GraphProjectorService {
 
             // Project sleep
             sleepRepo.findByUserIdAndSleepDateBetweenOrderBySleepDateDesc(
-                    userId, java.time.LocalDate.now().minusDays(30), java.time.LocalDate.now())
+                    userId, today.minusDays(30), today)
                     .forEach(s -> {
                         var result = session.run(
                             """

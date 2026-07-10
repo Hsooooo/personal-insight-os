@@ -24,6 +24,7 @@ services:
       dockerfile: Dockerfile
     container_name: pios-backend
     environment:
+      TZ: Asia/Seoul
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pios
       SPRING_DATASOURCE_USERNAME: pios
       SPRING_DATASOURCE_PASSWORD: pios123

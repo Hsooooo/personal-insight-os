@@ -47,7 +47,7 @@ public class DataSourceService {
         syncConfig.put("last_sync_date", null);
         syncConfig.put("sync_range_days", 7);
         syncConfig.put("auto_sync_enabled", true);
-        syncConfig.put("auto_sync_cron", "0 3 * * *");
+        syncConfig.put("auto_sync_cron", "0 12 * * *");
         conn.setSyncConfig(syncConfig);
         conn = providerRepo.save(conn);
         return toDto(conn);

@@ -289,6 +289,12 @@ export interface Goal {
   startDate: string;
   targetDate: string;
   status: string;
+  progressSupported?: boolean;
+  currentValue?: number | null;
+  progressPercent?: number | null;
+  paceStatus?: 'ON_TRACK' | 'BEHIND' | 'AHEAD' | 'INSUFFICIENT_DATA' | 'UNSUPPORTED' | string;
+  projectedDate?: string | null;
+  warning?: 'OVERTRAINING_HINT' | 'UNDERTRAINING_HINT' | string | null;
 }
 
 export interface ProviderConnection {
@@ -335,6 +341,8 @@ export interface DashboardSummary {
   last7DaysActivities: Activity[];
   recentInsights: Insight[];
   suggestedQuestions: string[];
+  latestBriefing?: Insight | null;
+  activeGoals?: Goal[];
 }
 
 export interface AskPeriod {

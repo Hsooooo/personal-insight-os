@@ -104,11 +104,13 @@ flowchart LR
 
 | 항목 | 내용 |
 |------|------|
-| **목적** | 오늘의 몸 상태, 최근 흐름, 인사이트 요약 |
-| **구성** | 4개 요약 카드 + 7일 트렌드 차트 + 인사이트 + 빠른 질문 + 주간 회고 복사 버튼 |
-| **차트** | Recharts AreaChart (RHR + Stress) |
+| **목적** | 오늘의 몸 상태, 최근 흐름, 주간 브리핑, 목표 진행률, 인사이트 요약 |
+| **구성** | 주간 브리핑 카드 + 4개 요약 카드 + 7일 트렌드 차트 + 목표 진행률 + 인사이트 + 빠른 질문 + 주간 회고 복사 버튼 |
+| **차트** | Recharts AreaChart (RHR + Stress + Weight) |
+| **주간 브리핑** | 서버 생성 Insight(`WEEKLY_BRIEFING`) 미리보기 + Generate/Regenerate 버튼 |
+| **목표 진행률** | ACTIVE 목표 최대 3개 미니 진행 바 |
 | **주간 회고 복사** | "Copy Weekly Report" 버튼 → 최근 7일 건강+수면+활동을 마크다운 테이블로 클립보드 복사 |
-| **API 호출** | `GET /api/dashboard/summary`, `GET /api/health/sleep?start=&end=`, `GET /api/activities?startTimeFrom=&startTimeTo=` |
+| **API 호출** | `GET /api/dashboard/summary`, `POST /api/briefings/generate`, `GET /api/health/sleep?start=&end=`, `GET /api/activities?startTimeFrom=&startTimeTo=` |
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -310,8 +312,9 @@ flowchart LR
 
 | 항목 | 내용 |
 |------|------|
-| **목적** | 개인 목표 설정 및 관리 |
-| **구성** | 목표 카드 그리드 + 등록 폼 |
+| **목적** | 개인 목표 설정 및 실제 데이터 기반 진행률 추적 |
+| **구성** | 목표 카드 그리드(진행률 바·pace 배지·경고) + 등록 폼(유형 템플릿·목표값·기간) |
+| **목표 유형** | `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
 | **API 호출** | `GET/POST/PATCH/DELETE /api/goals` |
 
 ---

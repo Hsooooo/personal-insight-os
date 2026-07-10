@@ -27,6 +27,10 @@ server:
   servlet:
     context-path: /
 
+# 스케줄(@Scheduled) 및 일 단위 집계 기준 타임존
+app:
+  timezone: Asia/Seoul
+
 jwt:
   secret: ${JWT_SECRET:pios-jwt-secret-key-2026-change-in-production}
   expiration: 86400000
@@ -50,7 +54,13 @@ sync:
   chunk-days: 30
   default-full-sync-months: 12
   schedule:
-    cron: "0 0 3 * * *"
+    # 전날 수면이 Garmin에 반영될 시간을 두고 KST 정오에 동기화
+    cron: "0 0 12 * * *"
+
+briefing:
+  schedule:
+    # 일요일 동기화(12:00) 이후 주간 브리핑
+    cron: "0 0 13 * * SUN"
 
 logging:
   level:

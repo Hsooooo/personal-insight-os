@@ -228,6 +228,11 @@ export const api = {
       fetchApi(`/api/goals/${id}`, { method: 'PATCH', body: JSON.stringify(goal) }),
     delete: (id: number): Promise<void> => fetchApi(`/api/goals/${id}`, { method: 'DELETE' }),
   },
+  briefings: {
+    latest: (): Promise<Insight | null> => fetchApi('/api/briefings/latest'),
+    generate: (force = false): Promise<Insight> =>
+      fetchApi('/api/briefings/generate', { method: 'POST', body: JSON.stringify({ force }) }),
+  },
   llmProviders: {
     list: (): Promise<LlmProvider[]> => fetchApi('/api/settings/llm-providers'),
     create: (provider: Partial<LlmProvider>): Promise<LlmProvider> =>

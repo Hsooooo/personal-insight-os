@@ -8,7 +8,24 @@
 
 ## [Unreleased]
 
+### Changed
+- Garmin 자동 동기화 시각을 **KST 12:00**으로 명시 고정 (`@Scheduled zone=Asia/Seoul`)
+  - 전날 수면이 Garmin에 반영될 여유를 두기 위한 의도된 시각
+  - 주간 브리핑은 일요일 **13:00 KST** (sync 이후)
+  - Docker backend에 `TZ=Asia/Seoul` 추가, 일 단위 집계는 `AppTimeZones.KST` 사용
+
 ### Added
+- **목표 진행률 엔진**
+  - `GoalProgressCalculator` — `WEEKLY_RUN_DISTANCE` / `WEEKLY_ACTIVITY_COUNT` / `SLEEP_HOURS` / `WEIGHT_KG` 자동 집계
+  - Goal API 응답에 `currentValue`, `progressPercent`, `paceStatus`, `projectedDate`, `warning` 추가
+  - Goals UI: 유형 템플릿·목표값·기간·진행률 바
+- **얇은 패턴 탐지**
+  - `ThinPatternDetector` — 수면 점수 급락, RHR 상승, 운동량 급증, 연속 수면 부족, 바디배터리 하락
+- **자동 주간 브리핑**
+  - `WeeklyBriefingService` + 일요일 04:00 스케줄러
+  - `GET /api/briefings/latest`, `POST /api/briefings/generate`
+  - Insight `category=WEEKLY_BRIEFING` + STATS/GOAL_PROGRESS/PATTERN evidence
+  - Dashboard 브리핑 카드·목표 진행률 미니 바
 - 그래프 뷰 필터링 (`GET /api/graph?days=&view=&raceCategory=`)
   - 날짜 윈도우: 7일 / 14일 / 30일 / 전체
   - 뷰 모드: 활동(activities) / 컨디션(condition) / 통합(all)
