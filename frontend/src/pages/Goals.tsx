@@ -295,6 +295,17 @@ function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: (id: number) => vo
           <p className="text-xs text-muted-foreground">이 유형은 자동 진행률 추적이 아직 지원되지 않습니다.</p>
         )}
 
+        {goal.blockers && goal.blockers.length > 0 && (
+          <div className="space-y-1 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            <p className="font-medium">이번 주 방해 요인</p>
+            <ul className="list-disc space-y-0.5 pl-4">
+              {goal.blockers.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {warn && (
           <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />

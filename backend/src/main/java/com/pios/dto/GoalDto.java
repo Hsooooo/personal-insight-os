@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data @Builder @NoArgsConstructor @AllArgsConstructor
 public class GoalDto {
@@ -27,4 +28,7 @@ public class GoalDto {
     private String paceStatus;
     private LocalDate projectedDate;
     private String warning;
+
+    /** 이번 주 진행을 막는 상위 1~2 요인 (규칙 기반) */
+    private List<String> blockers;
 }

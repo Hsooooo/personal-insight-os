@@ -5,6 +5,7 @@ import com.pios.common.AppTimeZones;
 import com.pios.domain.*;
 import com.pios.domain.enums.SyncStatus;
 import com.pios.repository.*;
+import com.pios.security.SecretCryptoService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -31,6 +32,7 @@ public class GarminSyncExecutor {
     private final GarminPythonClient pythonClient;
     private final GraphProjectorService graphProjector;
     private final WeatherService weatherService;
+    private final SecretCryptoService secretCrypto;
 
     @Value("${sync.chunk-days:30}")
     private int chunkDays;
@@ -292,7 +294,7 @@ public class GarminSyncExecutor {
     private String extractPassword(ProviderConnection conn) {
         Map<String, Object> auth = conn.getAuthPayload();
         if (auth != null && auth.get("password") != null) {
-            return auth.get("password").toString();
+            return secretCrypto.decrypt(auth.get("password").toString());
         }
         throw new IllegalStateException("Garmin password not found");
     }

@@ -35,6 +35,11 @@ jwt:
   secret: ${JWT_SECRET:pios-jwt-secret-key-2026-change-in-production}
   expiration: 86400000
 
+# AES key material for LLM/Garmin secrets at rest (defaults to JWT_SECRET)
+pios:
+  encryption-key: ${PIOS_ENCRYPTION_KEY:${JWT_SECRET:pios-jwt-secret-key-2026-change-in-production}}
+  mock-data-enabled: ${PIOS_MOCK_DATA_ENABLED:true}
+
 neo4j:
   uri: ${SPRING_NEO4J_URI:bolt://localhost:7687}
   username: ${SPRING_NEO4J_AUTHENTICATION_USERNAME:neo4j}

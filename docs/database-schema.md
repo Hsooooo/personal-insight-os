@@ -228,47 +228,56 @@ RAG v2에서 생성된 근거는 텍스트 요약과 함께 구조화된 수치 
 ```mermaid
 flowchart LR
     subgraph 노드["노드 타입"]
-        P["👤 Person<br/>{userId, name}"]
-        D["📅 Date<br/>{date}"]
-        A["🏃 Activity<br/>{name, type, distance}"]
-        S["😴 Sleep<br/>{date, score, duration}"]
-        H["❤️ HealthMetric<br/>{date, rhr, stress, weight}"]
-        G["🎯 Goal<br/>{title, type}"]
-        I["💡 Insight<br/>{title, category}"]
-        DS["📡 DataSource<br/>{type}"]
+        P["Person<br/>userId, name"]
+        A["Activity<br/>name, type, distance"]
+        S["Sleep<br/>date, score, duration"]
+        H["HealthMetric<br/>date, rhr, stress, weight"]
+        R["Race<br/>name, category"]
+        G["Goal<br/>title, goalType, status"]
+        Q["Question<br/>text, intent"]
+        I["Insight<br/>title, category, confidence"]
     end
 
     subgraph 관계["관계 타입"]
         R1["PERFORMED"]
         R2["HAS_SLEEP"]
         R3["HAS_METRIC"]
-        R4["OCCURRED_ON"]
-        R5["POSSIBLY_AFFECTS"]
-        R6["DERIVED_FROM"]
-        R7["ANSWERED_BY"]
-        R8["PROVIDED"]
+        R4["TAGGED_AS"]
+        R5["HAS_GOAL"]
+        R6["ASKED"]
+        R7["HAS_INSIGHT"]
+        R8["ANSWERED_BY"]
+        R9["DERIVED_FROM"]
+        R10["SUPPORTED_BY"]
     end
 
     P -->|PERFORMED| A
     P -->|HAS_SLEEP| S
     P -->|HAS_METRIC| H
-    A -->|OCCURRED_ON| D
-    S -->|OCCURRED_ON| D
-    H -->|MEASURED_ON| D
-    S -->|POSSIBLY_AFFECTS| A
+    P -->|HAS_GOAL| G
+    P -->|ASKED| Q
+    P -->|HAS_INSIGHT| I
+    A -->|TAGGED_AS| R
+    Q -->|ANSWERED_BY| I
     I -->|DERIVED_FROM| A
     I -->|DERIVED_FROM| S
     I -->|DERIVED_FROM| H
-    DS -->|PROVIDED| A
-    DS -->|PROVIDED| S
-    DS -->|PROVIDED| H
-
-    style P fill:#6366f1,color:#fff
-    style A fill:#10b981,color:#fff
-    style S fill:#8b5cf6,color:#fff
-    style H fill:#f43f5e,color:#fff
-    style I fill:#f59e0b,color:#fff
+    I -->|SUPPORTED_BY| A
 ```
+
+### 시크릿 저장
+
+| 컬럼 | 암호화 |
+|------|--------|
+| `llm_providers.api_key_encrypted` | AES-GCM (`ENC:` prefix). `SecretCryptoService` + 기동 시 평문 마이그레이션 |
+| `provider_connections.auth_payload.password` | 동일 AES-GCM. email은 평문 유지 |
+
+### 임베딩 / API 키 조회
+
+| 변경 | 설명 |
+|------|------|
+| `questions.embedding` / `insights.embedding` | `vector(1536)` + HNSW (cosine). V22 |
+| `api_keys.key_prefix` | raw key 앞 16자 인덱스. BCrypt 검증 후보 축소. V23 |
 
 ### 관계 속성
 

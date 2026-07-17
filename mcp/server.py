@@ -569,6 +569,173 @@ def register_tools(mcp: FastMCP):
 
             return "".join(lines)
 
+    @mcp.tool()
+    async def pios_create_or_update_goal(
+        title: str,
+        goal_type: str,
+        target_value: Optional[float] = None,
+        target_unit: Optional[str] = None,
+        description: Optional[str] = None,
+        start_date: Optional[str] = None,
+        target_date: Optional[str] = None,
+        goal_id: Optional[int] = None,
+        status: Optional[str] = None,
+    ) -> str:
+        """목표를 생성하거나 수정합니다. goal_id가 있으면 PATCH, 없으면 POST.
+
+        파괴적 삭제(DELETE)는 지원하지 않습니다. status로 ACTIVE/COMPLETED/CANCELLED 등을 설정할 수 있습니다.
+        """
+        if not title or not title.strip():
+            return "❌ title은 필수입니다."
+        if not goal_type or not goal_type.strip():
+            return "❌ goal_type은 필수입니다."
+
+        body = {
+            "title": title.strip(),
+            "goalType": goal_type.strip(),
+        }
+        if target_value is not None:
+            body["targetValue"] = target_value
+        if target_unit:
+            body["targetUnit"] = target_unit
+        if description is not None:
+            body["description"] = description
+        if start_date:
+            body["startDate"] = start_date
+        if target_date:
+            body["targetDate"] = target_date
+        if status:
+            body["status"] = status
+
+        async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+            if goal_id is not None:
+                resp = await client.patch(
+                    f"/goals/{goal_id}",
+                    json=body,
+                    headers=_get_headers("pios_create_or_update_goal"),
+                )
+            else:
+                resp = await client.post(
+                    "/goals",
+                    json=body,
+                    headers=_get_headers("pios_create_or_update_goal"),
+                )
+            resp.raise_for_status()
+            payload = resp.json()
+            if not payload.get("success"):
+                return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
+
+            g = payload.get("data", {}) or {}
+            blockers = g.get("blockers") or []
+            blocker_text = ""
+            if blockers:
+                blocker_text = "\n  방해 요인: " + "; ".join(blockers)
+            return (
+                f"✅ 목표 {'수정' if goal_id else '생성'} 완료\n"
+                f"- [{g.get('id')}] {g.get('title')} ({g.get('goalType')})\n"
+                f"  상태: {g.get('status')} | 진행: {g.get('progressPercent', '-')}%"
+                f"{blocker_text}"
+            )
+
+    @mcp.tool()
+    async def pios_save_insight(insight_id: int) -> str:
+        """인사이트를 저장(즐겨찾기)합니다."""
+        async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+            resp = await client.post(
+                f"/insights/{insight_id}/save",
+                headers=_get_headers("pios_save_insight"),
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if not payload.get("success"):
+                return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
+            data = payload.get("data", {}) or {}
+            return f"✅ 인사이트 저장됨: [{data.get('id')}] {data.get('title', '')}"
+
+    @mcp.tool()
+    async def pios_submit_feedback(insight_id: int, feedback_status: str) -> str:
+        """인사이트에 피드백을 제출합니다.
+
+        feedback_status: CORRECT | UNCLEAR | WRONG | IMPORTANT
+        """
+        status = (feedback_status or "").strip().upper()
+        if status not in {"CORRECT", "UNCLEAR", "WRONG", "IMPORTANT"}:
+            return "❌ feedback_status는 CORRECT, UNCLEAR, WRONG, IMPORTANT 중 하나여야 합니다."
+
+        async with httpx.AsyncClient(base_url=BASE_URL, timeout=30.0) as client:
+            resp = await client.post(
+                f"/insights/{insight_id}/feedback",
+                json={"feedbackStatus": status},
+                headers=_get_headers("pios_submit_feedback"),
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if not payload.get("success"):
+                return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
+            data = payload.get("data", {}) or {}
+            return (
+                f"✅ 피드백 반영: [{data.get('id')}] {data.get('title', '')} → {data.get('feedbackStatus')}"
+            )
+
+    @mcp.tool()
+    async def pios_trigger_sync(
+        sync_type: str = "INCREMENTAL",
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None,
+    ) -> str:
+        """Garmin 동기화를 트리거합니다. 서버 rate limit(30초)이 적용됩니다.
+
+        sync_type: INCREMENTAL | FULL
+        """
+        body = {"syncType": (sync_type or "INCREMENTAL").upper()}
+        if date_from:
+            body["dateFrom"] = date_from
+        if date_to:
+            body["dateTo"] = date_to
+
+        async with httpx.AsyncClient(base_url=BASE_URL, timeout=60.0) as client:
+            resp = await client.post(
+                "/data-sources/garmin/sync",
+                json=body,
+                headers=_get_headers("pios_trigger_sync"),
+            )
+            if resp.status_code == 429:
+                return "⏳ 동기화 rate limit — 잠시 후 다시 시도하세요."
+            resp.raise_for_status()
+            payload = resp.json()
+            if not payload.get("success"):
+                return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
+            log = payload.get("data", {}) or {}
+            return (
+                f"✅ 동기화 시작\n"
+                f"- logId: {log.get('id')} | type: {log.get('syncType')} | status: {log.get('status')}\n"
+                f"- 기간: {log.get('dateFrom')} ~ {log.get('dateTo')}"
+            )
+
+    @mcp.tool()
+    async def pios_generate_briefing(force: bool = False) -> str:
+        """주간 브리핑을 생성합니다. force=True이면 같은 주 기존 브리핑을 재생성합니다."""
+        async with httpx.AsyncClient(base_url=BASE_URL, timeout=90.0) as client:
+            resp = await client.post(
+                "/briefings/generate",
+                json={"force": bool(force)},
+                headers=_get_headers("pios_generate_briefing"),
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+            if not payload.get("success"):
+                return f"❌ API 오류: {payload.get('message', '알 수 없는 오류')}"
+            data = payload.get("data", {}) or {}
+            summary = data.get("summary", "")
+            if len(summary) > 800:
+                summary = summary[:800] + "…"
+            return (
+                f"✅ 주간 브리핑\n"
+                f"- [{data.get('id')}] {data.get('title', '')}\n"
+                f"- 신뢰도: {data.get('confidence', '-')}\n\n"
+                f"{summary}"
+            )
+
 
 def main():
     parser = argparse.ArgumentParser(description="PIOS Coach MCP Server")

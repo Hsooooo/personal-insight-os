@@ -34,6 +34,13 @@ MCP 서버는 **생체스포츠 코치(Bio-Sports Coach)** 페르소나를 가�
 | `pios_get_insights` | 인사이트 목록 조회 | `GET /api/insights` |
 | `pios_ask_coach` | 자연어 코칭 질문 (RAG) | `POST /api/ask` |
 | `pios_get_graph` | 개인 지식 그래프 조회 | `GET /api/graph` |
+| `pios_create_or_update_goal` | 목표 생성/수정 (삭제 없음) | `POST/PATCH /api/goals` |
+| `pios_save_insight` | 인사이트 저장 | `POST /api/insights/{id}/save` |
+| `pios_submit_feedback` | 인사이트 피드백 | `POST /api/insights/{id}/feedback` |
+| `pios_trigger_sync` | Garmin 동기화 트리거 (30초 rate limit) | `POST /api/data-sources/garmin/sync` |
+| `pios_generate_briefing` | 주간 브리핑 생성 | `POST /api/briefings/generate` |
+
+쓰기 tool은 계정 삭제·목표 삭제 등 파괴적 작업을 포함하지 않습니다.
 
 ### `pios_ask_coach` 응답 형식
 

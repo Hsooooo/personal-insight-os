@@ -11,9 +11,12 @@ import com.pios.repository.GoalRepository;
 import com.pios.repository.InsightEvidenceRepository;
 import com.pios.repository.InsightRepository;
 import com.pios.repository.UserRepository;
+import com.pios.service.FeedbackLearningService;
+import com.pios.service.GraphProjectorService;
 import com.pios.service.ask.EvidenceStatistics;
 import com.pios.service.ask.EvidenceStatisticsCalculator;
 import com.pios.service.ask.MetricStatistic;
+import com.pios.service.goal.GoalBlockerAnalyzer;
 import com.pios.service.goal.GoalProgressCalculator;
 import com.pios.service.pattern.DetectedPattern;
 import com.pios.service.pattern.ThinPatternDetector;
@@ -55,6 +58,9 @@ public class WeeklyBriefingService {
     private final InsightEvidenceRepository evidenceRepo;
     private final UserRepository userRepo;
     private final RestTemplate restTemplate;
+    private final GraphProjectorService graphProjector;
+    private final FeedbackLearningService feedbackLearningService;
+    private final GoalBlockerAnalyzer blockerAnalyzer;
 
     @Value("${openai.api-key:}")
     private String openaiApiKey;
@@ -86,6 +92,7 @@ public class WeeklyBriefingService {
             for (Insight old : existing) {
                 evidenceRepo.deleteByInsightId(old.getId());
                 insightRepo.delete(old);
+                graphProjector.deleteInsight(userId, old.getId());
             }
         }
 
@@ -101,7 +108,8 @@ public class WeeklyBriefingService {
                 .toList();
         List<DetectedPattern> patterns = patternDetector.detect(userId, stats, period.getEnd());
 
-        String summary = callLlmOrFallback(period, weekLabel, stats, goalSnapshots, patterns);
+        String feedbackGuidance = feedbackLearningService.buildGuidance(userId);
+        String summary = callLlmOrFallback(period, weekLabel, stats, goalSnapshots, patterns, feedbackGuidance);
         BigDecimal confidence = computeConfidence(stats);
 
         Insight insight = insightRepo.save(Insight.builder()
@@ -117,6 +125,7 @@ public class WeeklyBriefingService {
                 .build());
 
         saveEvidences(insight, stats, goalSnapshots, patterns, period);
+        graphProjector.projectInsight(userId, insight);
         return toDtoWithEvidences(insight);
     }
 
@@ -249,7 +258,8 @@ public class WeeklyBriefingService {
     }
 
     private String callLlmOrFallback(AskPeriod period, String weekLabel, EvidenceStatistics stats,
-                                     List<GoalProgressSnapshot> goals, List<DetectedPattern> patterns) {
+                                     List<GoalProgressSnapshot> goals, List<DetectedPattern> patterns,
+                                     String feedbackGuidance) {
         String context = buildContext(period, weekLabel, stats, goals, patterns);
         if (openaiApiKey == null || openaiApiKey.isBlank()) {
             return buildFallback(weekLabel, stats, goals, patterns);
@@ -268,7 +278,11 @@ public class WeeklyBriefingService {
                     2. 구성: (1) 한 줄 요약 (2) 운동·수면·회복 변화 (3) 목표 진행 (4) 주의할 패턴 (5) 다음 주 행동 1~3개
                     6. 행동은 구체적이고 실행 가능하게 쓰세요.
                     7. 300~500자 분량으로 간결하게 작성하세요.
+                    8. WRONG 피드백이 달린 과거 해석은 반복하지 말고, IMPORTANT는 우선 반영하세요.
                     """;
+            if (feedbackGuidance != null && !feedbackGuidance.isBlank()) {
+                systemPrompt = systemPrompt + "\n[사용자 피드백 학습]\n" + feedbackGuidance;
+            }
 
             Map<String, Object> body = Map.of(
                     "model", openaiModel,
@@ -325,6 +339,10 @@ public class WeeklyBriefingService {
                         .append(" ").append(snap.goal().getTargetUnit() != null ? snap.goal().getTargetUnit() : "")
                         .append(" (").append(p.getProgressPercent()).append("%, ")
                         .append(p.getPaceStatus()).append(")\n");
+                List<String> blockers = blockerAnalyzer.analyze(snap.goal());
+                for (String blocker : blockers) {
+                    sb.append("  · 방해 요인: ").append(blocker).append("\n");
+                }
             }
         }
 

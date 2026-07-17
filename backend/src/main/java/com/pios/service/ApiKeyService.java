@@ -25,6 +25,7 @@ public class ApiKeyService {
 
     private static final String KEY_PREFIX = "pios_";
     private static final int KEY_BYTES = 32;
+    private static final int LOOKUP_PREFIX_LEN = 16;
 
     @Transactional(readOnly = true)
     public List<ApiKeyResponse> listKeys(Long userId) {
@@ -42,6 +43,7 @@ public class ApiKeyService {
                 .userId(userId)
                 .name(name)
                 .keyHash(keyHash)
+                .keyPrefix(lookupPrefix(rawKey))
                 .build();
 
         ApiKey saved = apiKeyRepository.save(apiKey);
@@ -56,21 +58,35 @@ public class ApiKeyService {
         apiKeyRepository.deleteByIdAndUserId(keyId, userId);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public User validateApiKey(String rawKey) {
         if (rawKey == null || !rawKey.startsWith(KEY_PREFIX)) {
             return null;
         }
 
-        // 키 해시로 직접 조회는 불가능하므로 모든 키를 검사
-        // 실제 프로덕션에서는 더 효율적인 방식 필요
-        List<ApiKey> keys = apiKeyRepository.findAll();
-        for (ApiKey apiKey : keys) {
+        String prefix = lookupPrefix(rawKey);
+        List<ApiKey> candidates = apiKeyRepository.findByKeyPrefix(prefix);
+        if (candidates.isEmpty()) {
+            // Legacy rows without key_prefix — one-time fallback scan
+            candidates = apiKeyRepository.findAll().stream()
+                    .filter(k -> k.getKeyPrefix() == null || k.getKeyPrefix().isBlank())
+                    .toList();
+        }
+
+        for (ApiKey apiKey : candidates) {
             if (passwordEncoder.matches(rawKey, apiKey.getKeyHash())) {
+                if (apiKey.getKeyPrefix() == null || apiKey.getKeyPrefix().isBlank()) {
+                    apiKey.setKeyPrefix(prefix);
+                    apiKeyRepository.save(apiKey);
+                }
                 return userRepository.findById(apiKey.getUserId()).orElse(null);
             }
         }
         return null;
+    }
+
+    private String lookupPrefix(String rawKey) {
+        return rawKey.substring(0, Math.min(LOOKUP_PREFIX_LEN, rawKey.length()));
     }
 
     private String generateRawKey() {

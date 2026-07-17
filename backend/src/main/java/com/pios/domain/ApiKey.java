@@ -24,6 +24,10 @@ public class ApiKey {
     @Column(name = "key_hash", nullable = false, unique = true)
     private String keyHash;
 
+    /** Lookup prefix (first 16 chars of raw key) — avoids O(n) BCrypt scan */
+    @Column(name = "key_prefix", length = 32)
+    private String keyPrefix;
+
     @Column(length = 100)
     private String name;
 

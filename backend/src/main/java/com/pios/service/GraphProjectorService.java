@@ -21,6 +21,10 @@ public class GraphProjectorService {
     private final GarminDailyHealthMetricRepository healthRepo;
     private final GarminSleepSessionRepository sleepRepo;
     private final GraphNodeMappingRepository mappingRepo;
+    private final GoalRepository goalRepo;
+    private final QuestionRepository questionRepo;
+    private final InsightRepository insightRepo;
+    private final InsightEvidenceRepository evidenceRepo;
 
     @Transactional
     public void projectUserData(Long userId) {
@@ -92,7 +96,56 @@ public class GraphProjectorService {
                             saveMapping(userId, "garmin_sleep_sessions", s.getId(), String.valueOf(neoId), "Sleep");
                         }
                     });
+
+            goalRepo.findByUserId(userId).forEach(g -> projectGoalInternal(session, userId, g));
+            questionRepo.findByUserIdOrderByCreatedAtDesc(userId)
+                    .forEach(q -> projectQuestionInternal(session, userId, q));
+            insightRepo.findByUserIdOrderByCreatedAtDesc(userId)
+                    .forEach(i -> projectInsightInternal(session, userId, i));
         }
+    }
+
+    public void projectGoal(Long userId, Goal goal) {
+        try (Session session = neo4jDriver.session()) {
+            ensurePerson(session, userId);
+            projectGoalInternal(session, userId, goal);
+        }
+    }
+
+    public void deleteGoal(Long userId, Long goalId) {
+        try (Session session = neo4jDriver.session()) {
+            session.run(
+                "MATCH (g:Goal {sourceId: $sourceId, userId: $userId}) DETACH DELETE g",
+                Map.of("sourceId", goalId, "userId", userId)
+            );
+        }
+        mappingRepo.findBySourceTableAndSourceIdAndNodeType("goals", goalId, "Goal")
+                .ifPresent(mappingRepo::delete);
+    }
+
+    public void projectQuestion(Long userId, Question question) {
+        try (Session session = neo4jDriver.session()) {
+            ensurePerson(session, userId);
+            projectQuestionInternal(session, userId, question);
+        }
+    }
+
+    public void projectInsight(Long userId, Insight insight) {
+        try (Session session = neo4jDriver.session()) {
+            ensurePerson(session, userId);
+            projectInsightInternal(session, userId, insight);
+        }
+    }
+
+    public void deleteInsight(Long userId, Long insightId) {
+        try (Session session = neo4jDriver.session()) {
+            session.run(
+                "MATCH (i:Insight {sourceId: $sourceId, userId: $userId}) DETACH DELETE i",
+                Map.of("sourceId", insightId, "userId", userId)
+            );
+        }
+        mappingRepo.findBySourceTableAndSourceIdAndNodeType("insights", insightId, "Insight")
+                .ifPresent(mappingRepo::delete);
     }
 
     public void projectActivity(Long userId, Activity a) {
@@ -252,6 +305,142 @@ public class GraphProjectorService {
         if (tag.contains("하프")) return "하프";
         if (tag.contains("풀")) return "풀";
         return "custom";
+    }
+
+    private void ensurePerson(Session session, Long userId) {
+        session.run(
+            "MERGE (p:Person {userId: $userId}) SET p.name = 'User'",
+            Map.of("userId", userId)
+        );
+    }
+
+    private void projectGoalInternal(Session session, Long userId, Goal goal) {
+        var result = session.run(
+            """
+            MERGE (g:Goal {sourceId: $sourceId, userId: $userId})
+            SET g.title = $title, g.goalType = $goalType, g.status = $status,
+                g.targetValue = $targetValue, g.targetUnit = $targetUnit
+            WITH g
+            MATCH (p:Person {userId: $userId})
+            MERGE (p)-[:HAS_GOAL]->(g)
+            RETURN id(g) as neoId
+            """,
+            Map.of(
+                "sourceId", goal.getId(),
+                "userId", userId,
+                "title", goal.getTitle() != null ? goal.getTitle() : "Goal",
+                "goalType", goal.getGoalType() != null ? goal.getGoalType() : "",
+                "status", goal.getStatus() != null ? goal.getStatus() : "ACTIVE",
+                "targetValue", goal.getTargetValue() != null ? goal.getTargetValue().doubleValue() : 0.0,
+                "targetUnit", goal.getTargetUnit() != null ? goal.getTargetUnit() : ""
+            )
+        );
+        if (result.hasNext()) {
+            long neoId = result.next().get("neoId").asLong();
+            saveMapping(userId, "goals", goal.getId(), String.valueOf(neoId), "Goal");
+        }
+    }
+
+    private void projectQuestionInternal(Session session, Long userId, Question question) {
+        String text = question.getQuestionText() != null ? question.getQuestionText() : "";
+        String label = text.length() > 40 ? text.substring(0, 40) + "…" : text;
+        var result = session.run(
+            """
+            MERGE (q:Question {sourceId: $sourceId, userId: $userId})
+            SET q.text = $text, q.intent = $intent, q.label = $label
+            WITH q
+            MATCH (p:Person {userId: $userId})
+            MERGE (p)-[:ASKED]->(q)
+            RETURN id(q) as neoId
+            """,
+            Map.of(
+                "sourceId", question.getId(),
+                "userId", userId,
+                "text", text,
+                "intent", question.getIntent() != null ? question.getIntent() : "",
+                "label", label.isBlank() ? "Question" : label
+            )
+        );
+        if (result.hasNext()) {
+            long neoId = result.next().get("neoId").asLong();
+            saveMapping(userId, "questions", question.getId(), String.valueOf(neoId), "Question");
+        }
+    }
+
+    private void projectInsightInternal(Session session, Long userId, Insight insight) {
+        String title = insight.getTitle() != null ? insight.getTitle() : "Insight";
+        String label = title.length() > 40 ? title.substring(0, 40) + "…" : title;
+        var result = session.run(
+            """
+            MERGE (i:Insight {sourceId: $sourceId, userId: $userId})
+            SET i.title = $title, i.category = $category, i.confidence = $confidence,
+                i.isSaved = $isSaved, i.label = $label
+            WITH i
+            MATCH (p:Person {userId: $userId})
+            MERGE (p)-[:HAS_INSIGHT]->(i)
+            RETURN id(i) as neoId
+            """,
+            Map.of(
+                "sourceId", insight.getId(),
+                "userId", userId,
+                "title", title,
+                "category", insight.getCategory() != null ? insight.getCategory() : "",
+                "confidence", insight.getConfidence() != null ? insight.getConfidence().doubleValue() : 0.0,
+                "isSaved", Boolean.TRUE.equals(insight.getIsSaved()),
+                "label", label
+            )
+        );
+        if (result.hasNext()) {
+            long neoId = result.next().get("neoId").asLong();
+            saveMapping(userId, "insights", insight.getId(), String.valueOf(neoId), "Insight");
+        }
+
+        if (insight.getQuestion() != null && insight.getQuestion().getId() != null) {
+            session.run(
+                """
+                MATCH (q:Question {sourceId: $questionId, userId: $userId})
+                MATCH (i:Insight {sourceId: $insightId, userId: $userId})
+                MERGE (q)-[:ANSWERED_BY]->(i)
+                """,
+                Map.of(
+                    "questionId", insight.getQuestion().getId(),
+                    "insightId", insight.getId(),
+                    "userId", userId
+                )
+            );
+        }
+
+        for (InsightEvidence evidence : evidenceRepo.findByInsightId(insight.getId())) {
+            linkInsightToEvidenceSource(session, userId, insight.getId(), evidence);
+        }
+    }
+
+    private void linkInsightToEvidenceSource(Session session, Long userId, Long insightId, InsightEvidence evidence) {
+        if (evidence.getSourceTable() == null || evidence.getSourceId() == null) {
+            return;
+        }
+        String nodeLabel = switch (evidence.getSourceTable()) {
+            case "activities", "garmin_activities" -> "Activity";
+            case "garmin_sleep_sessions" -> "Sleep";
+            case "garmin_daily_health_metrics" -> "HealthMetric";
+            default -> null;
+        };
+        if (nodeLabel == null) {
+            return;
+        }
+        session.run(
+            """
+            MATCH (i:Insight {sourceId: $insightId, userId: $userId})
+            MATCH (n:%s {sourceId: $sourceId, userId: $userId})
+            MERGE (i)-[:DERIVED_FROM]->(n)
+            MERGE (i)-[:SUPPORTED_BY]->(n)
+            """.formatted(nodeLabel),
+            Map.of(
+                "insightId", insightId,
+                "userId", userId,
+                "sourceId", evidence.getSourceId()
+            )
+        );
     }
 
     private void saveMapping(Long userId, String table, Long sourceId, String neoId, String nodeType) {

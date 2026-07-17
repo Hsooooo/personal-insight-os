@@ -295,6 +295,7 @@ export interface Goal {
   paceStatus?: 'ON_TRACK' | 'BEHIND' | 'AHEAD' | 'INSUFFICIENT_DATA' | 'UNSUPPORTED' | string;
   projectedDate?: string | null;
   warning?: 'OVERTRAINING_HINT' | 'UNDERTRAINING_HINT' | string | null;
+  blockers?: string[];
 }
 
 export interface ProviderConnection {

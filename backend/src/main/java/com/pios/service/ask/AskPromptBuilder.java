@@ -10,8 +10,12 @@ import java.util.List;
 public class AskPromptBuilder {
 
     public static String buildSystemPrompt() {
-        return """
-                당신은 Personal Insight OS의 건강/울등 데이터 분석가입니다.
+        return buildSystemPrompt(null);
+    }
+
+    public static String buildSystemPrompt(String feedbackGuidance) {
+        StringBuilder sb = new StringBuilder("""
+                당신은 Personal Insight OS의 건강/운동 데이터 분석가입니다.
                 사용자의 Garmin 데이터를 기반으로 근거 있는 인사이트를 제공합니다.
 
                 규칙:
@@ -20,11 +24,23 @@ public class AskPromptBuilder {
                 3. 인과관계를 단정하지 말고 "관련 있어 보입니다", "함께 나타나고 있습니다" 등으로 표현하세요.
                 4. 의료 진단처럼 보이는 표현은 금지입니다.
                 5. 답변은 한국어로 400자 이내로 간결하게 작성하세요.
-                """;
+                6. 과거 유사 인사이트가 있으면 참고하되, WRONG 피드백이 달린 해석은 반복하지 마세요.
+                7. IMPORTANT 피드백이 달린 과거 인사이트는 우선적으로 인용·반영하세요.
+                """);
+        if (feedbackGuidance != null && !feedbackGuidance.isBlank()) {
+            sb.append("\n[사용자 피드백 학습]\n").append(feedbackGuidance).append("\n");
+        }
+        return sb.toString();
     }
 
     public static String buildUserPrompt(String question, AskIntent intent, AskPeriod period,
                                           EvidenceStatistics statistics, List<AskEvidence> evidences) {
+        return buildUserPrompt(question, intent, period, statistics, evidences, null);
+    }
+
+    public static String buildUserPrompt(String question, AskIntent intent, AskPeriod period,
+                                          EvidenceStatistics statistics, List<AskEvidence> evidences,
+                                          String similarInsightsBlock) {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("질문: %s\n", question));
         sb.append(String.format("의도: %s\n", intent.name()));
@@ -34,6 +50,11 @@ public class AskPromptBuilder {
         sb.append("[핵심 근거]\n");
         for (AskEvidence e : evidences) {
             sb.append(String.format("- %s: %s (%s)\n", e.getLabel(), e.getObservation(), e.getComparison()));
+        }
+
+        if (similarInsightsBlock != null && !similarInsightsBlock.isBlank()) {
+            sb.append("\n[유사 과거 인사이트]\n");
+            sb.append(similarInsightsBlock).append("\n");
         }
 
         sb.append("\n[세부 통계]\n");

@@ -287,7 +287,7 @@ mvn clean package -DskipTests
 - **인증**: JWT (HS256), 만료 24시간
 - **CORS**: `localhost:5173`, `localhost:3000` 허용 (개발 환경)
 - **CSRF**: Stateless JWT로 CSRF 비활성화
-- **DB 민감정보**: `llm_providers.api_key_encrypted` 필드 존재하나 현재 암호화 로직 미구현
+- **DB 민감정보**: `llm_providers.api_key_encrypted` 및 Garmin `auth_payload.password`는 AES-GCM(`SecretCryptoService`, `ENC:` prefix)으로 암호화. 키 재료는 `PIOS_ENCRYPTION_KEY`(기본 `JWT_SECRET`)
 
 ### 주의사항
 - `JWT_SECRET` 환경변수는 프로덕션에서 반드시 변경해야 합니다.
@@ -309,6 +309,8 @@ mvn clean package -DskipTests
 | `JWT_SECRET` | `pios-jwt-secret-key-2026-change-in-production` | JWT 서명 키 |
 | `OPENAI_API_KEY` | (빈 문자열) | OpenAI API Key (선택) |
 | `PIOS_MCP_API_KEY` | (없음) | MCP Server용 JWT 토큰 (외부 LLM 연동 시 필요) |
+| `PIOS_ENCRYPTION_KEY` | (`JWT_SECRET`) | LLM/Garmin 시크릿 AES 키 재료 |
+| `PIOS_MOCK_DATA_ENABLED` | `true` (로컬) / Docker `false` | Mock 데이터 API 허용 여부 |
 
 ---
 

@@ -207,7 +207,9 @@ sequenceDiagram
 - LLM은 백엔드가 계산한 통계와 근거를 **설명만** 하고, 수치를 재계산하지 않습니다.
 - 개인 기준선 비교를 위해 분석 기간 직전 동일 길이(기본 28일)의 데이터를 활용합니다.
 - 모든 날짜 계산은 `Asia/Seoul` 기준이며, 분석 기간은 최대 90일로 제한됩니다.
-- Neo4j 그래프 데이터는 현재 retrieval에 사용하지 않습니다.
+- `questions`/`insights.embedding`(pgvector)으로 유사 과거 인사이트를 검색해 프롬프트에 포함합니다.
+- IMPORTANT/WRONG 피드백은 `FeedbackLearningService`가 Ask·주간 브리핑 시스템 프롬프트에 주입합니다.
+- Neo4j 그래프 데이터는 현재 retrieval에 사용하지 않습니다(시각화·관계 탐색용).
 
 ---
 
@@ -245,9 +247,8 @@ sequenceDiagram
     BE->>PG: sync_log 완료 (status: COMPLETED)
     BE->>BE: GraphProjector 실행
     BE->>NEO: Person 노드 생성/업데이트
-    BE->>NEO: Activity/Sleep/HealthMetric 노드 생성<br/>(HealthMetric에 weight 속성 포함)
-    BE->>NEO: Race 노드 생성 (태그 기반 분류)
-    BE->>NEO: 관계 엣지 생성<br/>(PERFORMED, HAS_SLEEP, HAS_METRIC, TAGGED_AS)
+    BE->>NEO: Activity/Sleep/HealthMetric/Race 노드 생성
+    BE->>NEO: Goal/Question/Insight 노드 투영<br/>(HAS_GOAL, ASKED, HAS_INSIGHT, ANSWERED_BY, DERIVED_FROM)
     BE->>PG: graph_node_mappings 저장
 
     BE-->>FE: 동기화 완료 응답

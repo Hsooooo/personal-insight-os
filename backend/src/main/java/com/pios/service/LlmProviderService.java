@@ -5,6 +5,7 @@ import com.pios.domain.User;
 import com.pios.dto.LlmProviderDto;
 import com.pios.dto.LlmProviderRequest;
 import com.pios.repository.LlmProviderRepository;
+import com.pios.security.SecretCryptoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,9 +17,31 @@ import java.util.List;
 public class LlmProviderService {
 
     private final LlmProviderRepository llmRepo;
+    private final SecretCryptoService secretCrypto;
 
     public List<LlmProviderDto> getProviders(Long userId) {
         return llmRepo.findByUserId(userId).stream().map(this::toDto).toList();
+    }
+
+    /**
+     * Returns decrypted API key for an enabled provider, or null if none.
+     */
+    @Transactional
+    public String resolveDecryptedApiKey(Long userId) {
+        return llmRepo.findByUserId(userId).stream()
+                .filter(p -> Boolean.TRUE.equals(p.getEnabled()))
+                .findFirst()
+                .map(p -> migrateAndDecrypt(p))
+                .orElse(null);
+    }
+
+    public String resolveEmbeddingModel(Long userId) {
+        return llmRepo.findByUserId(userId).stream()
+                .filter(p -> Boolean.TRUE.equals(p.getEnabled()))
+                .findFirst()
+                .map(LlmProvider::getEmbeddingModel)
+                .filter(m -> m != null && !m.isBlank())
+                .orElse("text-embedding-3-small");
     }
 
     @Transactional
@@ -26,7 +49,7 @@ public class LlmProviderService {
         LlmProvider provider = LlmProvider.builder()
                 .user(User.builder().id(userId).build())
                 .providerName(request.getProviderName())
-                .apiKeyEncrypted(request.getApiKey())
+                .apiKeyEncrypted(secretCrypto.encrypt(request.getApiKey()))
                 .defaultChatModel(request.getDefaultChatModel())
                 .embeddingModel(request.getEmbeddingModel())
                 .enabled(request.getEnabled() != null ? request.getEnabled() : true)
@@ -44,13 +67,26 @@ public class LlmProviderService {
         }
         provider.setProviderName(request.getProviderName());
         if (request.getApiKey() != null && !request.getApiKey().isEmpty()) {
-            provider.setApiKeyEncrypted(request.getApiKey());
+            provider.setApiKeyEncrypted(secretCrypto.encrypt(request.getApiKey()));
         }
         provider.setDefaultChatModel(request.getDefaultChatModel());
         provider.setEmbeddingModel(request.getEmbeddingModel());
         provider.setEnabled(request.getEnabled());
         provider.setMonthlyBudgetLimit(request.getMonthlyBudgetLimit());
         return toDto(llmRepo.save(provider));
+    }
+
+    private String migrateAndDecrypt(LlmProvider provider) {
+        String stored = provider.getApiKeyEncrypted();
+        if (stored == null || stored.isBlank()) {
+            return null;
+        }
+        if (!secretCrypto.isEncrypted(stored)) {
+            provider.setApiKeyEncrypted(secretCrypto.encrypt(stored));
+            llmRepo.save(provider);
+            return stored;
+        }
+        return secretCrypto.decrypt(stored);
     }
 
     @Transactional

@@ -9,11 +9,14 @@ import com.pios.dto.SyncLogDto;
 import com.pios.repository.ActivityRepository;
 import com.pios.repository.ProviderConnectionRepository;
 import com.pios.repository.SyncLogRepository;
+import com.pios.security.SecretCryptoService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +29,10 @@ public class DataSourceService {
     private final SyncLogRepository syncLogRepo;
     private final GarminSyncService garminSyncService;
     private final MockDataService mockDataService;
+    private final SecretCryptoService secretCrypto;
+
+    @Value("${pios.mock-data-enabled:true}")
+    private boolean mockDataEnabled;
 
     public List<ProviderConnectionDto> getConnections(Long userId) {
         return providerRepo.findByUserId(userId).stream()
@@ -41,8 +48,11 @@ public class DataSourceService {
                         .providerType("GARMIN")
                         .build());
         conn.setConnectionStatus("CONNECTED");
-        conn.setAuthPayload(Map.of("email", email, "password", password));
-        java.util.Map<String, Object> syncConfig = new java.util.HashMap<>();
+        Map<String, Object> auth = new HashMap<>();
+        auth.put("email", email);
+        auth.put("password", secretCrypto.encrypt(password));
+        conn.setAuthPayload(auth);
+        Map<String, Object> syncConfig = new HashMap<>();
         syncConfig.put("full_sync_from", null);
         syncConfig.put("last_sync_date", null);
         syncConfig.put("sync_range_days", 7);
@@ -77,6 +87,9 @@ public class DataSourceService {
 
     @Transactional
     public ProviderConnectionDto generateMockData(Long userId) {
+        if (!mockDataEnabled) {
+            throw new IllegalArgumentException("Mock data generation is disabled");
+        }
         mockDataService.generateMockData(userId);
 
         ProviderConnection conn = providerRepo.findByUserIdAndProviderType(userId, "GARMIN")

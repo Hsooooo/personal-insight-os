@@ -261,7 +261,7 @@ POST /api/auth/api-keys
 | POST | `/api/data-sources/garmin/connect` | Garmin 계정 연결 |
 | POST | `/api/data-sources/garmin/sync` | Garmin 데이터 동기화 — 활동, 건강지표, 수면, **체중** 포함 (body: syncType, dateFrom, dateTo) |
 | GET | `/api/data-sources/garmin/sync-logs` | 동기화 이력 조회 |
-| POST | `/api/data-sources/garmin/mock` | Mock 데이터 생성 |
+| POST | `/api/data-sources/garmin/mock` | Mock 데이터 생성 (`PIOS_MOCK_DATA_ENABLED=true`일 때만) |
 | DELETE | `/api/data-sources/garmin` | Garmin 연결 해제 |
 
 ---
@@ -463,7 +463,7 @@ PATCH /api/activities/123/tag
 | `SLEEP_HOURS` | 최근 7일 평균 수면 | h |
 | `WEIGHT_KG` | 최신 체중 | kg |
 
-**응답 추가 필드**: `progressSupported`, `currentValue`, `progressPercent`, `paceStatus` (`ON_TRACK`/`BEHIND`/`AHEAD`/`INSUFFICIENT_DATA`/`UNSUPPORTED`), `projectedDate`, `warning` (`OVERTRAINING_HINT`/`UNDERTRAINING_HINT`)
+**응답 추가 필드**: `progressSupported`, `currentValue`, `progressPercent`, `paceStatus` (`ON_TRACK`/`BEHIND`/`AHEAD`/`INSUFFICIENT_DATA`/`UNSUPPORTED`), `projectedDate`, `warning` (`OVERTRAINING_HINT`/`UNDERTRAINING_HINT`), `blockers` (이번 주 방해 요인 문자열 배열, 최대 2개)
 
 ---
 

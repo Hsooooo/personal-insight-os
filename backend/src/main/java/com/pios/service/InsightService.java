@@ -18,6 +18,7 @@ public class InsightService {
 
     private final InsightRepository insightRepo;
     private final InsightEvidenceRepository evidenceRepo;
+    private final GraphProjectorService graphProjector;
 
     public List<InsightDto> getInsights(Long userId, String category, String feedbackStatus) {
         List<Insight> insights;
@@ -47,7 +48,9 @@ public class InsightService {
         var insight = insightRepo.findByIdAndUserId(insightId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Insight not found"));
         insight.setIsSaved(true);
-        return toDto(insightRepo.save(insight));
+        Insight saved = insightRepo.save(insight);
+        graphProjector.projectInsight(userId, saved);
+        return toDto(saved);
     }
 
     @Transactional
@@ -55,7 +58,9 @@ public class InsightService {
         var insight = insightRepo.findByIdAndUserId(insightId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Insight not found"));
         insight.setFeedbackStatus(request.getFeedbackStatus());
-        return toDto(insightRepo.save(insight));
+        Insight saved = insightRepo.save(insight);
+        graphProjector.projectInsight(userId, saved);
+        return toDto(saved);
     }
 
     @Transactional
@@ -63,6 +68,7 @@ public class InsightService {
         var insight = insightRepo.findByIdAndUserId(insightId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Insight not found"));
         insightRepo.delete(insight);
+        graphProjector.deleteInsight(userId, insightId);
     }
 
     private InsightDto toDto(Insight i) {

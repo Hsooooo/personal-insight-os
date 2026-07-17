@@ -14,6 +14,8 @@ public interface ApiKeyRepository extends JpaRepository<ApiKey, Long> {
 
     Optional<ApiKey> findByKeyHash(String keyHash);
 
+    List<ApiKey> findByKeyPrefix(String keyPrefix);
+
     void deleteByIdAndUserId(Long id, Long userId);
 
     boolean existsByIdAndUserId(Long id, Long userId);

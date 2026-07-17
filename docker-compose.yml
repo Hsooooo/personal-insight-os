@@ -32,6 +32,8 @@ services:
       SPRING_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USERNAME:-}
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:-}
       JWT_SECRET: pios-jwt-secret-key-2026-change-in-production
+      PIOS_ENCRYPTION_KEY: ${PIOS_ENCRYPTION_KEY:-${JWT_SECRET:-pios-jwt-secret-key-2026-change-in-production}}
+      PIOS_MOCK_DATA_ENABLED: ${PIOS_MOCK_DATA_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres:

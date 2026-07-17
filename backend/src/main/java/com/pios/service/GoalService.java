@@ -4,6 +4,7 @@ import com.pios.domain.Goal;
 import com.pios.domain.User;
 import com.pios.dto.GoalDto;
 import com.pios.repository.GoalRepository;
+import com.pios.service.goal.GoalBlockerAnalyzer;
 import com.pios.service.goal.GoalProgressCalculator;
 import com.pios.service.goal.GoalType;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,8 @@ public class GoalService {
 
     private final GoalRepository goalRepo;
     private final GoalProgressCalculator progressCalculator;
+    private final GoalBlockerAnalyzer blockerAnalyzer;
+    private final GraphProjectorService graphProjector;
 
     @Transactional(readOnly = true)
     public List<GoalDto> getGoals(Long userId) {
@@ -41,7 +44,9 @@ public class GoalService {
                 .targetDate(dto.getTargetDate())
                 .status("ACTIVE")
                 .build();
-        return toDto(goalRepo.save(goal));
+        Goal saved = goalRepo.save(goal);
+        graphProjector.projectGoal(userId, saved);
+        return toDto(saved);
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +74,9 @@ public class GoalService {
         if (dto.getStartDate() != null) goal.setStartDate(dto.getStartDate());
         if (dto.getTargetDate() != null) goal.setTargetDate(dto.getTargetDate());
         if (dto.getStatus() != null) goal.setStatus(dto.getStatus());
-        return toDto(goalRepo.save(goal));
+        Goal saved = goalRepo.save(goal);
+        graphProjector.projectGoal(userId, saved);
+        return toDto(saved);
     }
 
     @Transactional
@@ -80,6 +87,7 @@ public class GoalService {
             throw new IllegalArgumentException("Access denied");
         }
         goalRepo.delete(goal);
+        graphProjector.deleteGoal(userId, goalId);
     }
 
     private GoalDto toDto(Goal g) {
@@ -95,6 +103,7 @@ public class GoalService {
                 .paceStatus(progress.getPaceStatus())
                 .projectedDate(progress.getProjectedDate())
                 .warning(progress.getWarning())
+                .blockers(blockerAnalyzer.analyze(g))
                 .build();
     }
 }

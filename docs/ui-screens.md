@@ -149,7 +149,8 @@ flowchart LR
 | **동기화 범위** | Incremental (last 7 days) / Full - 3mo / 6mo / 1yr / All |
 | **Rate Limit** | 30초 쿨다운 (버튼에 타이머 표시) |
 | **Smart Polling** | 탭 visible 상태에서 sync-logs 5분마다 폴리, RUNNING 상태일 때만 활성화 |
-| **Mock 데이터** | 개발/테스트용 "Generate Mock Data" 버튼 별도 제공 |
+| **Mock 데이터** | Vite 개발 모드(`import.meta.env.DEV`)에서만 "Generate Mock Data" 버튼 노출. Docker/프로덕션은 `PIOS_MOCK_DATA_ENABLED=false`로 API도 차단 |
+| **Coming Soon** | Strava 등 추가 소스는 Unavailable 배지로 표시(미구현, 로드맵 Later) |
 
 ---
 

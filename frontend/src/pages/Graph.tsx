@@ -18,6 +18,7 @@ const NODE_STYLES: Record<string, { color: string; size: number }> = {
   Race:         { color: '#f59e0b', size: 32 },
   Goal:         { color: '#ec4899', size: 38 },
   Insight:      { color: '#06b6d4', size: 38 },
+  Question:     { color: '#64748b', size: 34 },
 };
 
 const EDGE_COLORS: Record<string, string> = {
@@ -29,6 +30,9 @@ const EDGE_COLORS: Record<string, string> = {
   DERIVED_FROM: 'rgba(6, 182, 212, 0.5)',
   ANSWERED_BY: 'rgba(236, 72, 153, 0.5)',
   SUPPORTED_BY: 'rgba(16, 185, 129, 0.5)',
+  HAS_GOAL: 'rgba(236, 72, 153, 0.45)',
+  ASKED: 'rgba(100, 116, 139, 0.5)',
+  HAS_INSIGHT: 'rgba(6, 182, 212, 0.45)',
 };
 
 const NODE_TYPE_LABELS: Record<string, string> = {
@@ -39,6 +43,7 @@ const NODE_TYPE_LABELS: Record<string, string> = {
   Race: 'Race',
   Goal: 'Goal',
   Insight: 'Insight',
+  Question: 'Question',
 };
 
 const EDGE_TYPE_LABELS: Record<string, string> = {
@@ -50,6 +55,9 @@ const EDGE_TYPE_LABELS: Record<string, string> = {
   DERIVED_FROM: 'DERIVED_FROM',
   ANSWERED_BY: 'ANSWERED_BY',
   SUPPORTED_BY: 'SUPPORTED_BY',
+  HAS_GOAL: 'HAS_GOAL',
+  ASKED: 'ASKED',
+  HAS_INSIGHT: 'HAS_INSIGHT',
 };
 
 interface FilterState {

@@ -57,6 +57,9 @@ public class AskService {
     private final GarminActivityLapRepository lapRepo;
     private final RestTemplate restTemplate;
     private final EvidenceStatisticsCalculator statisticsCalculator;
+    private final GraphProjectorService graphProjector;
+    private final EmbeddingService embeddingService;
+    private final FeedbackLearningService feedbackLearningService;
 
     @Value("${openai.api-key:}")
     private String openaiApiKey;
@@ -81,13 +84,21 @@ public class AskService {
                 .timeRangeEnd(parsedPeriod.getPeriod().getEnd())
                 .build();
         question = questionRepo.save(question);
+        graphProjector.projectQuestion(userId, question);
+
+        float[] questionEmbedding = embeddingService.embed(userId, questionText);
+        embeddingService.saveQuestionEmbedding(question.getId(), questionEmbedding);
+        var similarInsights = embeddingService.findSimilarInsights(userId, questionEmbedding, 5);
+        String similarBlock = embeddingService.formatSimilarInsightsForPrompt(similarInsights);
+        String feedbackGuidance = feedbackLearningService.buildGuidance(userId);
 
         // 2. 통계 계산
         EvidenceStatistics statistics = statisticsCalculator.calculate(userId, parsedPeriod.getPeriod());
 
         // 3. WORKOUT_SUMMARY 분기
         if (intent == AskIntent.WORKOUT_SUMMARY) {
-            return handleWorkoutSummary(userId, question, questionText, parsedPeriod.getPeriod(), statistics);
+            return handleWorkoutSummary(userId, question, questionText, parsedPeriod.getPeriod(), statistics,
+                    feedbackGuidance);
         }
 
         // 4. 근거/신뢰도 생성
@@ -95,13 +106,17 @@ public class AskService {
         var confidence = ConfidenceScorer.score(parsedPeriod.getPeriod(), statistics, intent);
 
         // 5. LLM 호출 또는 폴린지
-        String answer = callLlm(questionText, intent, parsedPeriod.getPeriod(), statistics, evidences);
+        String answer = callLlm(questionText, intent, parsedPeriod.getPeriod(), statistics, evidences,
+                similarBlock, feedbackGuidance);
 
         // 6. 인사이트 저장
         Insight insight = saveInsight(userId, question, intent, answer, confidence.getScore());
 
         // 7. 근거 저장
         saveEvidences(insight, evidences);
+        float[] insightEmbedding = embeddingService.embed(userId, insight.getTitle() + "\n" + insight.getSummary());
+        embeddingService.saveInsightEmbedding(insight.getId(), insightEmbedding);
+        graphProjector.projectInsight(userId, insight);
 
         return AskResponse.builder()
                 .questionId(question.getId())
@@ -116,7 +131,8 @@ public class AskService {
     }
 
     private AskResponse handleWorkoutSummary(Long userId, Question question, String questionText,
-                                              AskPeriod period, EvidenceStatistics statistics) {
+                                              AskPeriod period, EvidenceStatistics statistics,
+                                              String feedbackGuidance) {
         List<Activity> activities = activityRepo.findRecentByUserId(userId, period.getStart().atStartOfDay())
                 .stream()
                 .filter(a -> a.getStartTime() != null)
@@ -139,10 +155,13 @@ public class AskService {
         List<AskEvidence> evidences = AskEvidenceBuilder.buildFromActivities(activities, period);
         var confidence = ConfidenceScorer.score(period, statistics, AskIntent.WORKOUT_SUMMARY);
 
-        String answer = callLlmForWorkoutSummary(questionText, dataContext, statistics, evidences);
+        String answer = callLlmForWorkoutSummary(questionText, dataContext, statistics, evidences, feedbackGuidance);
 
         Insight insight = saveInsight(userId, question, AskIntent.WORKOUT_SUMMARY, answer, confidence.getScore());
         saveEvidences(insight, evidences);
+        float[] insightEmbedding = embeddingService.embed(userId, insight.getTitle() + "\n" + insight.getSummary());
+        embeddingService.saveInsightEmbedding(insight.getId(), insightEmbedding);
+        graphProjector.projectInsight(userId, insight);
 
         return AskResponse.builder()
                 .questionId(question.getId())
@@ -207,7 +226,8 @@ public class AskService {
     }
 
     private String callLlm(String question, AskIntent intent, com.pios.dto.AskPeriod period,
-                           EvidenceStatistics statistics, List<AskEvidence> evidences) {
+                           EvidenceStatistics statistics, List<AskEvidence> evidences,
+                           String similarInsightsBlock, String feedbackGuidance) {
         if (openaiApiKey == null || openaiApiKey.isBlank()) {
             return generateFallbackAnswer(evidences, period);
         }
@@ -216,8 +236,9 @@ public class AskService {
             headers.setContentType(MediaType.APPLICATION_JSON);
             headers.setBearerAuth(openaiApiKey);
 
-            String systemPrompt = AskPromptBuilder.buildSystemPrompt();
-            String userPrompt = AskPromptBuilder.buildUserPrompt(question, intent, period, statistics, evidences);
+            String systemPrompt = AskPromptBuilder.buildSystemPrompt(feedbackGuidance);
+            String userPrompt = AskPromptBuilder.buildUserPrompt(
+                    question, intent, period, statistics, evidences, similarInsightsBlock);
 
             Map<String, Object> body = Map.of(
                     "model", openaiModel,
@@ -249,7 +270,8 @@ public class AskService {
     }
 
     private String callLlmForWorkoutSummary(String question, String dataContext,
-                                            EvidenceStatistics statistics, List<AskEvidence> evidences) {
+                                            EvidenceStatistics statistics, List<AskEvidence> evidences,
+                                            String feedbackGuidance) {
         if (openaiApiKey == null || openaiApiKey.isBlank()) {
             return generateWorkoutFallbackAnswer(dataContext, evidences);
         }
@@ -259,16 +281,19 @@ public class AskService {
             headers.setBearerAuth(openaiApiKey);
 
             String systemPrompt = """
-                    당신은 Personal Insight OS의 울등 데이터 정리 도우미입니다.
+                    당신은 Personal Insight OS의 운동 데이터 정리 도우미입니다.
                     사용자의 Garmin 활동과 수동 웨이트 트레이닝 데이터를 날짜별로 정리해주세요.
 
                     규칙:
                     1. Garmin 활동은 랩(lap) 단위로 표 형태로 정리하세요.
                     2. 웨이트 트레이닝은 종목/세트 단위로 표 형태로 정리하세요.
-                    3. 각 울등 후 간단한 코멘트(강도, 특이사항 등)를 추가하세요.
+                    3. 각 운동 후 간단한 코멘트(강도, 특이사항 등)를 추가하세요.
                     4. 마지막에 전체 주간 요약(총 활동 횟수, 총 거리, 총 볼륨 등)을 달아주세요.
                     5. 답변은 한국어로 작성하세요.
                     """;
+            if (feedbackGuidance != null && !feedbackGuidance.isBlank()) {
+                systemPrompt = systemPrompt + "\n[사용자 피드백 학습]\n" + feedbackGuidance;
+            }
 
             StringBuilder userPrompt = new StringBuilder();
             userPrompt.append("질문: ").append(question).append("\n\n");

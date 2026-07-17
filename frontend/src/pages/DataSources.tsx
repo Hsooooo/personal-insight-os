@@ -342,17 +342,19 @@ export default function DataSources() {
                   </Button>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => mockMutation.mutate()}
-                    disabled={mockMutation.isPending}
-                  >
-                    {mockMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                    Generate Mock Data
-                  </Button>
-                </div>
+                {import.meta.env.DEV && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => mockMutation.mutate()}
+                      disabled={mockMutation.isPending}
+                    >
+                      {mockMutation.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                      Generate Mock Data
+                    </Button>
+                  </div>
+                )}
               </>
             ) : (
               <form
@@ -455,14 +457,19 @@ export default function DataSources() {
         <Card className="md:col-span-2">
           <CardHeader>
             <CardTitle>Coming Soon</CardTitle>
-            <CardDescription>More data sources on the roadmap</CardDescription>
+            <CardDescription>
+              Additional wearable sources are planned later — not available in this release
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-5">
               {['Strava', 'Apple Health', 'Oura Ring', 'Withings', 'Fitbit'].map((name) => (
-                <div key={name} className="flex items-center justify-between rounded-lg border p-3">
-                  <span className="text-sm font-medium">{name}</span>
-                  <Badge variant="outline">Soon</Badge>
+                <div
+                  key={name}
+                  className="flex items-center justify-between rounded-lg border border-dashed p-3 opacity-60"
+                >
+                  <span className="text-sm font-medium text-muted-foreground">{name}</span>
+                  <Badge variant="outline">Unavailable</Badge>
                 </div>
               ))}
             </div>

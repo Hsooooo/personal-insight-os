@@ -8,13 +8,23 @@
 
 ## [Unreleased]
 
+### Added
+- Neo4j Goal/Question/Insight projection (`HAS_GOAL`, `ASKED`, `HAS_INSIGHT`, `ANSWERED_BY`, `DERIVED_FROM`, `SUPPORTED_BY`) + graph API/UI support
+- AES-GCM encryption for LLM API keys and Garmin passwords (`SecretCryptoService`, startup migration)
+- pgvector embeddings on `questions`/`insights` with similarity search in Ask RAG
+- Feedback learning loop (IMPORTANT/WRONG) injected into Ask and weekly briefing prompts
+- Goal blockers (`GoalBlockerAnalyzer`) on Goals API/UI and briefing context
+- MCP write tools: create/update goal, save insight, submit feedback, trigger sync, generate briefing
+- API key prefix lookup (`api_keys.key_prefix`) to avoid O(n) BCrypt scans
+
 ### Changed
+- Mock data button only in Vite DEV; Docker defaults `PIOS_MOCK_DATA_ENABLED=false`
 - Garmin 자동 동기화 시각을 **KST 12:00**으로 명시 고정 (`@Scheduled zone=Asia/Seoul`)
   - 전날 수면이 Garmin에 반영될 여유를 두기 위한 의도된 시각
   - 주간 브리핑은 일요일 **13:00 KST** (sync 이후)
   - Docker backend에 `TZ=Asia/Seoul` 추가, 일 단위 집계는 `AppTimeZones.KST` 사용
 
-### Added
+### Added (earlier)
 - **목표 진행률 엔진**
   - `GoalProgressCalculator` — `WEEKLY_RUN_DISTANCE` / `WEEKLY_ACTIVITY_COUNT` / `SLEEP_HOURS` / `WEIGHT_KG` 자동 집계
   - Goal API 응답에 `currentValue`, `progressPercent`, `paceStatus`, `projectedDate`, `warning` 추가

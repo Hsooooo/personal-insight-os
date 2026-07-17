@@ -172,9 +172,10 @@ CREATE TABLE garmin_activities (
 |------|------|
 | **구현 위치** | `GraphProjectorService` |
 | **동작** | PostgreSQL 데이터 읽기 → Neo4j Cypher 실행 → 노드/관계 생성 → 매핑 저장 |
-| **생성 노드** | Person, Activity, Sleep, HealthMetric, Race |
-| **생성 관계** | PERFORMED, HAS_SLEEP, HAS_METRIC, TAGGED_AS (Activity→Race) |
+| **생성 노드** | Person, Activity, Sleep, HealthMetric, Race, Goal, Question, Insight |
+| **생성 관계** | PERFORMED, HAS_SLEEP, HAS_METRIC, TAGGED_AS, HAS_GOAL, ASKED, HAS_INSIGHT, ANSWERED_BY, DERIVED_FROM, SUPPORTED_BY |
 | **Race 노드** | `userTag` 기반 분류 노드. 속성: `name`, `category` (5K/10K/하프/풀/custom) |
+| **Goal/Insight** | Goal·Question·Insight는 CRUD/Ask/Briefing 시 증분 투영. `POST /api/admin/backfill`로 전체 재투영 |
 | **동기화** | 태그 수정 시 `updateActivityTag()`로 Neo4j 증분 업데이트 |
 
 ```java
@@ -344,7 +345,8 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **구현 위치** | `InsightController.feedback()`, `Ask.tsx`, `Insights.tsx` |
 | **피드백 상태** | `CORRECT` (맞음), `UNCLEAR` (애매함), `WRONG` (틀림), `IMPORTANT` (중요함) |
 | **UI** | 👍 / ❓ / 👎 / 💾 버튼 |
-| **향후 활용** | 피드백 기반 인사이트 개선 (MVP 이후) |
+| **학습 반영** | `FeedbackLearningService`가 최근 IMPORTANT/WRONG을 Ask·주간 브리핑 시스템 프롬프트에 주입 |
+| **벡터 RAG** | `EmbeddingService` + pgvector(`questions`/`insights.embedding`)로 유사 과거 인사이트 검색 |
 
 ---
 
@@ -384,9 +386,10 @@ public AskResponse ask(Long userId, AskRequest request) {
 
 | 항목 | 내용 |
 |------|------|
-| **구현 위치** | `GoalProgressCalculator`, `GoalService`, `Goals.tsx` |
+| **구현 위치** | `GoalProgressCalculator`, `GoalBlockerAnalyzer`, `GoalService`, `Goals.tsx` |
 | **유형** | `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
-| **출력** | `currentValue`, `progressPercent`, `paceStatus`, `projectedDate`, `warning` |
+| **출력** | `currentValue`, `progressPercent`, `paceStatus`, `projectedDate`, `warning`, `blockers` |
+| **방해 요인** | 활성 목표에 대해 수면/부하/진행 부족을 규칙으로 상위 1~2개 `blockers` 노출 |
 
 ## ✅ 자동 주간 브리핑
 
