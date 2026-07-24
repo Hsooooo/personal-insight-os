@@ -218,6 +218,8 @@ export const api = {
     feedback: (id: number, feedbackStatus: string): Promise<Insight> =>
       fetchApi(`/api/insights/${id}/feedback`, { method: 'POST', body: JSON.stringify({ feedbackStatus }) }),
     delete: (id: number): Promise<void> => fetchApi(`/api/insights/${id}`, { method: 'DELETE' }),
+    detectAnomalyAlerts: (): Promise<Insight[]> =>
+      fetchApi('/api/insights/anomaly-alerts/detect', { method: 'POST' }),
   },
   goals: {
     list: (): Promise<Goal[]> => fetchApi('/api/goals'),

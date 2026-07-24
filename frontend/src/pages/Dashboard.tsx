@@ -376,7 +376,10 @@ export default function Dashboard() {
                   >
                     <p className="text-sm font-medium line-clamp-2">{insight.summary}</p>
                     <div className="mt-2 flex items-center gap-2">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge
+                        variant={insight.category === 'ANOMALY_ALERT' ? 'destructive' : 'secondary'}
+                        className="text-xs"
+                      >
                         {insight.category || 'Insight'}
                       </Badge>
                       <span className="text-xs text-muted-foreground">

@@ -170,6 +170,30 @@ sequenceDiagram
 
 ---
 
+## 데이터 흐름 (이상 신호 알림)
+
+```mermaid
+sequenceDiagram
+    participant SCH as Scheduler (12:30 KST)
+    participant BE as AnomalyAlertService
+    participant PG as PostgreSQL
+    participant OAI as OpenAI
+    SCH->>BE: 전 사용자 이상 신호 감지
+    BE->>PG: 최근 3일 + 직전 28일 지표 조회
+    BE->>BE: ThinPatternDetector 규칙 평가 + 3일 중복 억제
+    alt 이상 신호 감지됨
+        BE->>OAI: 감지 패턴 컨텍스트
+        OAI-->>BE: 코칭 알림 문구 (실패 시 템플릿)
+        BE->>PG: Insight(ANOMALY_ALERT) + PATTERN Evidence 저장
+    end
+```
+
+- 감지 규칙은 주간 브리핑과 동일한 `ThinPatternDetector`를 재사용합니다.
+- 수동 트리거: `POST /api/insights/anomaly-alerts/detect` (Insights 화면 "Detect Anomalies" 버튼).
+- 생성된 알림은 Dashboard Recent Insights와 Insights 목록에 destructive 배지로 표시됩니다.
+
+---
+
 ## 데이터 흐름 (RAG v2 파이프라인)
 
 ```mermaid
@@ -208,7 +232,7 @@ sequenceDiagram
 - 개인 기준선 비교를 위해 분석 기간 직전 동일 길이(기본 28일)의 데이터를 활용합니다.
 - 모든 날짜 계산은 `Asia/Seoul` 기준이며, 분석 기간은 최대 90일로 제한됩니다.
 - `questions`/`insights.embedding`(pgvector)으로 유사 과거 인사이트를 검색해 프롬프트에 포함합니다.
-- IMPORTANT/WRONG 피드백은 `FeedbackLearningService`가 Ask·주간 브리핑 시스템 프롬프트에 주입합니다.
+- IMPORTANT/WRONG 피드백은 `FeedbackLearningService`가 Ask·주간 브리핑·이상 신호 알림 시스템 프롬프트에 주입합니다.
 - Neo4j 그래프 데이터는 현재 retrieval에 사용하지 않습니다(시각화·관계 탐색용).
 
 ---

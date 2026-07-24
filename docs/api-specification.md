@@ -64,6 +64,7 @@ flowchart LR
         H3["POST /api/insights/{id}/save"]
         H4["POST /api/insights/{id}/feedback"]
         H5["DELETE /api/insights/{id}"]
+        H6["POST /api/insights/anomaly-alerts/detect"]
     end
 
     subgraph 목표["🎯 목표"]
@@ -434,6 +435,13 @@ PATCH /api/activities/123/tag
 | POST | `/api/insights/{id}/save` | 인사이트 저장 |
 | POST | `/api/insights/{id}/feedback` | 피드백 등록 |
 | DELETE | `/api/insights/{id}` | 인사이트 삭제 |
+| POST | `/api/insights/anomaly-alerts/detect` | 이상 신호 감지 수동 실행 (최근 3일 vs 28일 기준선) |
+
+**이상 신호 알림 동작**
+- 매일 12:30 KST 스케줄(`alert.schedule.cron`, Garmin sync 12:00 이후) 또는 위 수동 엔드포인트로 실행
+- 최근 3일 지표를 직전 28일 기준선과 비교해 `ThinPatternDetector` 규칙으로 감지 (수면 점수 급락, RHR 상승, 운동량 급증, 연속 수면 부족, 바디 배터리 하락)
+- 감지 시 Insight(`category=ANOMALY_ALERT`) + `PATTERN` evidence로 저장되며 LLM 코칭 문구 포함 (미설정/실패 시 템플릿 fallback)
+- 동일 신호는 3일간 중복 생성하지 않고, 1회 실행당 최대 2건까지 생성
 
 **피드백 요청**
 ```json

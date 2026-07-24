@@ -22,7 +22,8 @@
 - 자연어 질의 (Ask My Data) + RAG 응답
 - 인사이트 저장 및 피드백
 - 목표 설정 및 실제 데이터 기반 진행률 추적
-- 자동 주간 브리핑 (통계·목표·패턴 → Insight 저장)
+- 자동 주간 브리핑 (통계·목표·패턴 → Insight 저장, 스포츠 캐스터 톤 내러티브)
+- 능동 이상 신호 알림 (매일 12:30 KST, 최근 3일 vs 28일 기준선 패턴 감지 → Insight 저장)
 - LLM Provider 설정
 - MCP(Model Context Protocol) 연동 — 외부 LLM이 PIOS 데이터를 읽을 수 있도록 생체스포츠 코치 페르소나 제공
 
@@ -193,6 +194,7 @@ mvn clean package -DskipTests
 7. `graph_node_mappings` 테이블에 매핑 정보 저장
 8. `sync_logs` COMPLETED/FAILED 상태 업데이트
 9. Spring Scheduler가 매일 12:00 KST 자동 증분 동기화 실행 (전날 수면 반영 여유)
+10. 12:30 KST `AnomalyAlertScheduleService`가 최근 3일 vs 28일 기준선 이상 신호를 감지해 Insight(`ANOMALY_ALERT`)로 저장 (3일 중복 억제, 실행당 최대 2건)
 
 ---
 
@@ -228,7 +230,7 @@ mvn clean package -DskipTests
 | 그래프 | `GET /api/graph?days=&view=&raceCategory=` |
 | 관리자 | `POST /api/admin/backfill` | 그래프 투영 재실행 |
 | 질의 | `POST /api/ask` |
-| 인사이트 | `GET /api/insights`, `POST /api/insights/{id}/save`, `POST /api/insights/{id}/feedback`, `DELETE /api/insights/{id}` |
+| 인사이트 | `GET /api/insights`, `POST /api/insights/{id}/save`, `POST /api/insights/{id}/feedback`, `DELETE /api/insights/{id}`, `POST /api/insights/anomaly-alerts/detect` |
 | 목표 | `GET /api/goals`, `POST /api/goals`, `PATCH /api/goals/{id}`, `DELETE /api/goals/{id}` |
 | 설정 | `GET /api/settings/llm-providers`, `POST /api/settings/llm-providers`, `PATCH /api/settings/llm-providers/{id}`, `DELETE /api/settings/llm-providers/{id}` |
 

@@ -5,10 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Lightbulb, Save, Bookmark, Trash2, ExternalLink } from 'lucide-react';
+import { Lightbulb, Save, Bookmark, Trash2, ExternalLink, AlertTriangle, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const categories = ['', '운동', '수면', '회복', '스트레스', '목표', '패턴'];
+const ANOMALY_CATEGORY = 'ANOMALY_ALERT';
+const categories = ['', '운동', '수면', '회복', '스트레스', '목표', '패턴', ANOMALY_CATEGORY];
 const feedbackStatuses = ['', 'CORRECT', 'UNCLEAR', 'WRONG', 'IMPORTANT'];
 
 export default function Insights() {
@@ -29,6 +30,20 @@ export default function Insights() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.insights.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['insights'] }),
+  });
+
+  const [detectMessage, setDetectMessage] = useState('');
+  const detectMutation = useMutation({
+    mutationFn: () => api.insights.detectAnomalyAlerts(),
+    onSuccess: (created) => {
+      queryClient.invalidateQueries({ queryKey: ['insights'] });
+      setDetectMessage(
+        created.length > 0
+          ? `${created.length} anomaly alert(s) detected.`
+          : 'No anomalies detected in the last 3 days.'
+      );
+    },
+    onError: () => setDetectMessage('Anomaly detection failed.'),
   });
 
   return (
@@ -59,6 +74,17 @@ export default function Insights() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+        <Button
+          variant="outline"
+          onClick={() => detectMutation.mutate()}
+          disabled={detectMutation.isPending}
+        >
+          <Activity className="mr-2 h-4 w-4" />
+          {detectMutation.isPending ? 'Detecting...' : 'Detect Anomalies'}
+        </Button>
+        {detectMessage && (
+          <span className="self-center text-sm text-muted-foreground">{detectMessage}</span>
+        )}
       </div>
 
       {isLoading ? (
@@ -75,7 +101,11 @@ export default function Insights() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
-                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      {insight.category === ANOMALY_CATEGORY ? (
+                        <AlertTriangle className="h-4 w-4 text-destructive" />
+                      ) : (
+                        <Lightbulb className="h-4 w-4 text-amber-500" />
+                      )}
                       <CardTitle className="text-base">{insight.title}</CardTitle>
                     </div>
                     <div className="flex items-center gap-1">
@@ -157,7 +187,11 @@ export default function Insights() {
                   )}
 
                   <div className="mt-3 flex items-center gap-2">
-                    {insight.category && <Badge variant="secondary">{insight.category}</Badge>}
+                    {insight.category && (
+                      <Badge variant={insight.category === ANOMALY_CATEGORY ? 'destructive' : 'secondary'}>
+                        {insight.category}
+                      </Badge>
+                    )}
                     {insight.confidence && (
                       <Badge variant="outline">
                         Confidence: {(insight.confidence * 100).toFixed(0)}%

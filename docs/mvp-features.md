@@ -398,7 +398,20 @@ public AskResponse ask(Long userId, AskRequest request) {
 | **구현 위치** | `WeeklyBriefingService`, `WeeklyBriefingScheduleService`, `BriefingController`, `Dashboard.tsx` |
 | **스케줄** | 매주 일 13:00 KST (`briefing.schedule.cron`, sync 12:00 이후) |
 | **구성** | 지난주 통계 + 목표 진행률 + `ThinPatternDetector` 패턴 → Insight(`WEEKLY_BRIEFING`) |
+| **톤** | LLM 프롬프트가 스포츠 캐스터 페르소나로 내러티브·인과 흐름 중심 브리핑 작성 |
 | **API** | `GET /api/briefings/latest`, `POST /api/briefings/generate` |
+
+---
+
+## ✅ 능동 이상 신호 알림
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `AnomalyAlertService`, `AnomalyAlertScheduleService`, `InsightController`, `Insights.tsx`, `Dashboard.tsx` |
+| **스케줄** | 매일 12:30 KST (`alert.schedule.cron`, Garmin sync 12:00 이후) |
+| **구성** | 최근 3일 vs 직전 28일 기준선 → `ThinPatternDetector` 패턴 감지 → Insight(`ANOMALY_ALERT`) + LLM 코칭 문구 |
+| **중복 억제** | 동일 신호 3일간 1회, 실행당 최대 2건 |
+| **API** | `POST /api/insights/anomaly-alerts/detect` (수동 실행) |
 
 ---
 

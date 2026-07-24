@@ -4,6 +4,7 @@ import com.pios.dto.ApiResponse;
 import com.pios.dto.FeedbackRequest;
 import com.pios.dto.InsightDto;
 import com.pios.service.InsightService;
+import com.pios.service.alert.AnomalyAlertService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +18,12 @@ import java.util.List;
 public class InsightController {
 
     private final InsightService insightService;
+    private final AnomalyAlertService anomalyAlertService;
+
+    @PostMapping("/anomaly-alerts/detect")
+    public ApiResponse<List<InsightDto>> detectAnomalyAlerts(@AuthenticationPrincipal Long userId) {
+        return ApiResponse.ok(anomalyAlertService.detectAndAlert(userId));
+    }
 
     @GetMapping
     public ApiResponse<List<InsightDto>> list(
