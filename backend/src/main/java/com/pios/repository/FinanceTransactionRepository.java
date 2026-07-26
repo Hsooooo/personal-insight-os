@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.Optional;
 public interface FinanceTransactionRepository extends JpaRepository<FinanceTransaction, Long> {
     List<FinanceTransaction> findByUserIdOrderByTransactionAtAscIdAsc(Long userId);
     List<FinanceTransaction> findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(Long userId, Long cycleId);
+    List<FinanceTransaction> findByUserIdAndTransactionAtBeforeOrderByTransactionAtAscIdAsc(Long userId, Instant before);
     Optional<FinanceTransaction> findByIdAndUserId(Long id, Long userId);
     Optional<FinanceTransaction> findByUserIdAndSourceFingerprint(Long userId, String sourceFingerprint);
     List<FinanceTransaction> findByUserIdAndSourceFingerprintIn(Long userId, Collection<String> fingerprints);

@@ -66,9 +66,12 @@ export interface FinanceAccount {
   openingBalanceDate: string | null;
   openingBalanceMemo: string | null;
   aliases: string[];
+  /** Seed openingBalance + net before the selected cycle start (API). FE may adjust for week. */
+  periodOpeningBalance: number;
   cycleIncome: number;
   cycleCashOut: number;
   cycleNetFlow: number;
+  /** periodOpeningBalance + cycleNetFlow (closing for selected period). */
   estimatedBalance: number;
 }
 

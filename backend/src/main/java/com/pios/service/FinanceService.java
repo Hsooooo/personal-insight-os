@@ -165,11 +165,21 @@ public class FinanceService {
 
     public List<FinanceAccountDto> getAccounts(Long userId, Long cycleId) {
         List<FinanceAccount> accounts = accountRepo.findByUserIdOrderByNameAsc(userId);
-        List<FinanceTransaction> transactions = cycleId == null
-                ? transactionRepo.findByUserIdOrderByTransactionAtAscIdAsc(userId)
-                : transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(userId, cycleId);
+        List<FinanceTransaction> cycleTransactions;
+        List<FinanceTransaction> priorTransactions;
+        if (cycleId == null) {
+            cycleTransactions = transactionRepo.findByUserIdOrderByTransactionAtAscIdAsc(userId);
+            priorTransactions = List.of();
+        } else {
+            FinanceCycle cycle = cycleRepo.findById(cycleId)
+                    .filter(c -> c.getUser().getId().equals(userId))
+                    .orElseThrow(() -> new IllegalArgumentException("Finance cycle not found"));
+            cycleTransactions = transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(userId, cycleId);
+            priorTransactions = transactionRepo.findByUserIdAndTransactionAtBeforeOrderByTransactionAtAscIdAsc(
+                    userId, cycle.getStartsAt());
+        }
         return accounts.stream()
-                .map(account -> toAccountDto(account, transactions))
+                .map(account -> toAccountDto(account, cycleTransactions, priorNetForAccount(account, priorTransactions)))
                 .toList();
     }
 
@@ -190,7 +200,7 @@ public class FinanceService {
                 .build());
         replaceAliases(userId, account, dto.getAliases());
         mapTransactionsForAccount(userId, account);
-        return toAccountDto(account, List.of());
+        return toAccountDto(account, List.of(), BigDecimal.ZERO);
     }
 
     @Transactional
@@ -217,7 +227,7 @@ public class FinanceService {
         FinanceAccount saved = accountRepo.save(account);
         replaceAliases(userId, saved, dto.getAliases());
         mapTransactionsForAccount(userId, saved);
-        return toAccountDto(saved, List.of());
+        return toAccountDto(saved, List.of(), BigDecimal.ZERO);
     }
 
     @Transactional
@@ -534,7 +544,11 @@ public class FinanceService {
                 .build();
     }
 
-    private FinanceAccountDto toAccountDto(FinanceAccount account, List<FinanceTransaction> cycleTransactions) {
+    private FinanceAccountDto toAccountDto(
+            FinanceAccount account,
+            List<FinanceTransaction> cycleTransactions,
+            BigDecimal priorNet
+    ) {
         Set<String> aliases = new HashSet<>(aliasesFor(account));
         BigDecimal income = cycleTransactions.stream()
                 .filter(t -> isAccountIncome(account, aliases, t))
@@ -542,9 +556,10 @@ public class FinanceService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal cashOut = cycleTransactions.stream()
                 .filter(t -> isAccountCashOut(account, t))
-                .map(FinanceTransaction::getAmount)
+                .map(this::transactionCashflowAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal opening = defaultAmount(account.getOpeningBalance());
+        BigDecimal periodOpening = opening.add(defaultAmount(priorNet));
         BigDecimal netFlow = income.subtract(cashOut);
         return FinanceAccountDto.builder()
                 .id(account.getId())
@@ -560,11 +575,34 @@ public class FinanceService {
                 .aliases(accountAliasRepo.findByAccountIdOrderByAliasNameAsc(account.getId()).stream()
                         .map(FinanceAccountAlias::getAliasName)
                         .toList())
+                .periodOpeningBalance(periodOpening)
                 .cycleIncome(income)
                 .cycleCashOut(cashOut)
                 .cycleNetFlow(netFlow)
-                .estimatedBalance(opening.add(netFlow))
+                .estimatedBalance(periodOpening.add(netFlow))
                 .build();
+    }
+
+    private BigDecimal priorNetForAccount(FinanceAccount account, List<FinanceTransaction> priorTransactions) {
+        if (priorTransactions == null || priorTransactions.isEmpty()) {
+            return BigDecimal.ZERO;
+        }
+        Set<String> aliases = new HashSet<>(aliasesFor(account));
+        LocalDate openingDate = account.getOpeningBalanceDate();
+        BigDecimal income = BigDecimal.ZERO;
+        BigDecimal cashOut = BigDecimal.ZERO;
+        for (FinanceTransaction transaction : priorTransactions) {
+            if (openingDate != null && transaction.getTransactionDate().isBefore(openingDate)) {
+                continue;
+            }
+            if (isAccountIncome(account, aliases, transaction)) {
+                income = income.add(transaction.getAmount());
+            }
+            if (isAccountCashOut(account, transaction)) {
+                cashOut = cashOut.add(transactionCashflowAmount(transaction));
+            }
+        }
+        return income.subtract(cashOut);
     }
 
     private boolean isAccountIncome(FinanceAccount account, Set<String> aliases, FinanceTransaction transaction) {

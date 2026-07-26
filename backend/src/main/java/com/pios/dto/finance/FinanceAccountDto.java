@@ -19,8 +19,11 @@ public class FinanceAccountDto {
     private LocalDate openingBalanceDate;
     private String openingBalanceMemo;
     private List<String> aliases;
+    /** Seed openingBalance + net of cashflow before the selected cycle/period start. */
+    private BigDecimal periodOpeningBalance;
     private BigDecimal cycleIncome;
     private BigDecimal cycleCashOut;
     private BigDecimal cycleNetFlow;
+    /** periodOpeningBalance + cycleNetFlow (closing balance for the selected period). */
     private BigDecimal estimatedBalance;
 }

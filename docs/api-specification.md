@@ -531,7 +531,13 @@ PATCH /api/activities/123/tag
 
 거래 응답은 원본 금액 `amount`와 분석용 금액 `cashflowAmount`, `spendingAmount`를 함께 내려준다. Actual Spending 합계와 카테고리 합계는 `spendingAmount`를 사용한다. 통신비 청구 row와 단말기할부금은 실제 청구/납부 소비로 포함하고, 휴대폰 `소액결제` 원거래는 아직 통장에서 빠지지 않은 `Deferred Spending`이면서 실제 사용 카테고리의 소비로 포함한다. External Cash Out은 `이체지출`과 deferred 소비를 제외한 외부 현금유출만 의미한다. Account Flow는 은행/현금/목적자금 계좌의 실제 입출금 흐름이고, Liability Flow는 소액결제/후불 같은 미정산 부채성 사용액과 정산액을 의미한다.
 
-계좌에는 기록 시작 전 잔액 보정을 위한 `openingBalance`, `openingBalanceDate`, `openingBalanceMemo`를 저장할 수 있다. 이 값은 거래/소비/수입으로 집계하지 않고, Accounts 응답의 `estimatedBalance = openingBalance + cycleNetFlow` 계산에만 사용한다.
+계좌에는 기록 시작 전 잔액 보정을 위한 `openingBalance`, `openingBalanceDate`, `openingBalanceMemo`를 저장할 수 있다. 이 값은 거래/소비/수입으로 집계하지 않는다. `GET /api/finance/accounts?cycleId=` 응답은 다음을 함께 내려준다.
+
+- `periodOpeningBalance` = `openingBalance` + 선택 cycle `startsAt` 이전 거래의 계좌별 net (이체 입출금 포함). `openingBalanceDate`가 있으면 그 날짜 이상 거래만 prior net에 포함한다.
+- `cycleIncome` / `cycleCashOut` / `cycleNetFlow` = 선택 cycle 구간의 In / Out / Net. Out은 `cashflowAmount` 기준.
+- `estimatedBalance` (Closing) = `periodOpeningBalance + cycleNetFlow`
+
+Overview Account Flow는 `Opening | In | Out | Net | Closing`으로 표시하며, week 선택 시 Opening은 cycle Opening에 해당 week 시작 전 구간 net을 더한 값이다.
 
 계좌 타입은 `BANK_ACCOUNT`, `MOBILE_PAYMENT`, `SAVINGS_GOAL`, `DEBT`, `INTERNAL`, `OTHER`를 사용하고, 역할은 `SALARY`, `LIVING`, `SUBSCRIPTION`, `SINKING_FUND`, `DEBT_REPAYMENT`, `PAYMENT_METHOD`, `OTHER`를 사용한다.
 

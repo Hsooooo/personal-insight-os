@@ -326,4 +326,9 @@ Finance 도메인은 PostgreSQL에 우선 저장하며, 이번 1차 구현에서
 
 `이체지출` 거래는 단일 원본 row로 저장하되, 계좌 흐름 계산 시 `asset`을 출금 계좌, `category`(`분류`)를 입금처 계좌 alias로 해석한다. 따라서 소비분석에는 포함하지 않고 계좌별 현금흐름에는 양방향으로 반영한다. Overview의 External Cash Out은 이체를 제외한 외부 현금유출이고, Account Flow는 이체 입출금까지 포함한 은행/현금/목적자금 계좌 흐름이다. `MOBILE_PAYMENT` 또는 `PAYMENT_METHOD` 계정과 `소액결제` 거래는 Account Flow 대신 Liability Flow에서 used/settled/net liability로 표시한다.
 
-`finance_accounts.opening_balance`는 기록 시작 전부터 존재하던 계좌 잔액 보정값이다. 거래 row로 만들지 않고 `opening_balance_date`, `opening_balance_memo`와 함께 계좌 상태값으로 보존하며, 추정 잔액은 `opening_balance + cycleNetFlow`로 계산한다.
+`finance_accounts.opening_balance`는 기록 시작 전부터 존재하던 계좌 잔액 seed이다. 거래 row로 만들지 않고 `opening_balance_date`, `opening_balance_memo`와 함께 계좌 상태값으로 보존한다. cycle별 Opening/Closing은 스키마에 저장하지 않고 계산한다.
+
+- `periodOpeningBalance` = `opening_balance` + 선택 cycle 시작 이전 거래 net
+- Closing(`estimatedBalance`) = `periodOpeningBalance + cycleNetFlow`
+
+따라서 급여 사이클을 바꿔도 이전 cycle 누적 잔액이 Opening에 반영된다.

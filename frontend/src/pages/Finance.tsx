@@ -204,30 +204,37 @@ function flowForAccount(transactions: FinanceTransaction[], accounts: FinanceAcc
   return map;
 }
 
-function accountFlowSummaries(accounts: FinanceAccount[], periodTransactions: FinanceTransaction[], cumulativeTransactions: FinanceTransaction[]) {
+function accountFlowSummaries(
+  accounts: FinanceAccount[],
+  periodTransactions: FinanceTransaction[],
+  prePeriodTransactions: FinanceTransaction[]
+) {
   const periodFlow = flowForAccount(periodTransactions, accounts);
-  const cumulativeFlow = flowForAccount(cumulativeTransactions, accounts);
+  const prePeriodFlow = flowForAccount(prePeriodTransactions, accounts);
   return accounts
     .map((account) => {
+      const cycleOpening = Number(account.periodOpeningBalance ?? account.openingBalance ?? 0);
       if (isLiabilityAccount(account)) {
         return {
           ...account,
+          periodOpeningBalance: cycleOpening,
           cycleIncome: 0,
           cycleCashOut: 0,
           cycleNetFlow: 0,
-          estimatedBalance: Number(account.openingBalance || 0),
+          estimatedBalance: cycleOpening,
         };
       }
       const period = periodFlow.get(account.id) || { income: 0, out: 0 };
-      const cumulative = cumulativeFlow.get(account.id) || { income: 0, out: 0 };
+      const prePeriod = prePeriodFlow.get(account.id) || { income: 0, out: 0 };
+      const periodOpeningBalance = cycleOpening + (prePeriod.income - prePeriod.out);
       const cycleNetFlow = period.income - period.out;
-      const cumulativeNetFlow = cumulative.income - cumulative.out;
       return {
         ...account,
+        periodOpeningBalance,
         cycleIncome: period.income,
         cycleCashOut: period.out,
         cycleNetFlow,
-        estimatedBalance: Number(account.openingBalance || 0) + cumulativeNetFlow,
+        estimatedBalance: periodOpeningBalance + cycleNetFlow,
       };
     });
 }
@@ -245,7 +252,15 @@ function formatFinanceWeeklySummary(
   transactions: FinanceTransaction[],
   range: { start: string; end: string },
   cycleLabel: string | undefined,
-  periodKind: 'cycle' | 'week' = 'week'
+  periodKind: 'cycle' | 'week' = 'week',
+  accountFlowRows: Array<{
+    name: string;
+    periodOpeningBalance: number;
+    cycleIncome: number;
+    cycleCashOut: number;
+    cycleNetFlow: number;
+    estimatedBalance: number;
+  }> = []
 ) {
   const rows = transactions.filter((tx) => tx.transactionDate >= range.start && tx.transactionDate <= range.end);
   const income = rows.filter((tx) => tx.flowType === '수입').reduce((sum, tx) => sum + Number(tx.amount), 0);
@@ -255,7 +270,6 @@ function formatFinanceWeeklySummary(
   const net = income - cashOut;
 
   const byCategory = new Map<string, number>();
-  const byAccount = new Map<string, { income: number; out: number }>();
   const byLiability = new Map<string, { used: number; settled: number }>();
   rows.forEach((tx) => {
     const spend = spendingAmount(tx);
@@ -268,24 +282,10 @@ function formatFinanceWeeklySummary(
       current.used += spend;
       current.settled += cashflowAmount(tx);
       byLiability.set(liability, current);
-      return;
-    }
-    const account = tx.accountName || tx.asset || 'Unmapped';
-    const current = byAccount.get(account) || { income: 0, out: 0 };
-    if (tx.flowType === '수입') current.income += Number(tx.amount);
-    if (tx.cashflowIncluded && tx.flowType !== '수입') current.out += cashflowAmount(tx);
-    byAccount.set(account, current);
-    if (tx.flowType === '이체지출' && tx.category) {
-      const destination = byAccount.get(tx.category) || { income: 0, out: 0 };
-      destination.income += Number(tx.amount);
-      byAccount.set(tx.category, destination);
     }
   });
 
   const topCategories = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]);
-  const accountRows = Array.from(byAccount.entries())
-    .sort((a, b) => Math.abs(b[1].income - b[1].out) - Math.abs(a[1].income - a[1].out))
-    .slice(0, 8);
   const liabilityRows = Array.from(byLiability.entries())
     .sort((a, b) => Math.abs(b[1].settled - b[1].used) - Math.abs(a[1].settled - a[1].used))
     .slice(0, 8);
@@ -309,12 +309,12 @@ function formatFinanceWeeklySummary(
   }
 
   md += `## Account Flow\n`;
-  if (accountRows.length === 0) {
+  if (accountFlowRows.length === 0) {
     md += `_No account flow in this period._\n\n`;
   } else {
-    md += `| Account | In | Out | Net |\n|---------|----|-----|-----|\n`;
-    accountRows.forEach(([account, summary]) => {
-      md += `| ${account} | ${money(summary.income)} | ${money(summary.out)} | ${money(summary.income - summary.out)} |\n`;
+    md += `| Account | Opening | In | Out | Net | Closing |\n|---------|--------:|---:|----:|----:|--------:|\n`;
+    accountFlowRows.forEach((summary) => {
+      md += `| ${summary.name} | ${money(summary.periodOpeningBalance)} | ${money(summary.cycleIncome)} | ${money(summary.cycleCashOut)} | ${money(summary.cycleNetFlow)} | ${money(summary.estimatedBalance)} |\n`;
     });
     md += `\n`;
   }
@@ -575,10 +575,12 @@ export default function Finance() {
     [selectedPeriod, transactions]
   );
 
-  const cumulativePeriodTransactions = useMemo(() => {
+  const prePeriodTransactions = useMemo(() => {
     const cycleStart = cyclePeriod(activeCycle, transactions || []).start;
-    return (transactions || []).filter((tx) => tx.transactionDate >= cycleStart && tx.transactionDate <= selectedPeriod.end);
-  }, [activeCycle, selectedPeriod.end, transactions]);
+    return (transactions || []).filter(
+      (tx) => tx.transactionDate >= cycleStart && tx.transactionDate < selectedPeriod.start
+    );
+  }, [activeCycle, selectedPeriod.start, transactions]);
 
   const totals = useMemo(() => {
     const list = selectedPeriodTransactions;
@@ -617,11 +619,11 @@ export default function Finance() {
   );
 
   const accountTotals = useMemo(() => {
-    return accountFlowSummaries(accounts || [], selectedPeriodTransactions, cumulativePeriodTransactions)
+    return accountFlowSummaries(accounts || [], selectedPeriodTransactions, prePeriodTransactions)
       .filter((account) => !isLiabilityAccount(account))
       .sort((a, b) => Math.abs(Number(b.cycleNetFlow)) - Math.abs(Number(a.cycleNetFlow)))
       .slice(0, 8);
-  }, [accounts, cumulativePeriodTransactions, selectedPeriodTransactions]);
+  }, [accounts, prePeriodTransactions, selectedPeriodTransactions]);
 
   const liabilityTotals = useMemo(() => {
     const map = new Map<string, { used: number; settled: number }>();
@@ -640,8 +642,8 @@ export default function Finance() {
   }, [selectedPeriodTransactions]);
 
   const accountCardSummaries = useMemo(
-    () => accountFlowSummaries(accounts || [], selectedPeriodTransactions, cumulativePeriodTransactions),
-    [accounts, cumulativePeriodTransactions, selectedPeriodTransactions]
+    () => accountFlowSummaries(accounts || [], selectedPeriodTransactions, prePeriodTransactions),
+    [accounts, prePeriodTransactions, selectedPeriodTransactions]
   );
 
   const transactionFilterOptions = useMemo(() => {
@@ -785,7 +787,13 @@ export default function Finance() {
   };
 
   const handleCopyFinanceWeeklySummary = async () => {
-    const report = formatFinanceWeeklySummary(transactions || [], selectedPeriod, activeCycle?.label, selectedPeriodKind);
+    const report = formatFinanceWeeklySummary(
+      transactions || [],
+      selectedPeriod,
+      activeCycle?.label,
+      selectedPeriodKind,
+      accountTotals
+    );
     await navigator.clipboard.writeText(report);
     setCopiedWeeklyFinance(true);
     toast.success(selectedPeriodKind === 'week' ? 'Finance weekly summary copied' : 'Finance cycle summary copied');
@@ -979,18 +987,20 @@ export default function Finance() {
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
-                <div className="min-w-[760px] space-y-2">
-                  <div className="grid grid-cols-[1.4fr_130px_130px_150px_150px] gap-3 px-3 text-xs font-medium text-muted-foreground">
+                <div className="min-w-[920px] space-y-2">
+                  <div className="grid grid-cols-[1.4fr_130px_130px_130px_130px_140px] gap-3 px-3 text-xs font-medium text-muted-foreground">
                     <span>Account</span>
+                    <span className="text-right">Opening</span>
                     <span className="text-right">In</span>
                     <span className="text-right">Out</span>
                     <span className="text-right">Net</span>
-                    <span className="text-right">Estimated</span>
+                    <span className="text-right">Closing</span>
                   </div>
                   {accountTotals.length === 0 && <p className="px-3 py-4 text-sm text-muted-foreground">No account flow in this cycle yet.</p>}
                   {accountTotals.map((account) => (
-                    <div key={account.id} className="grid grid-cols-[1.4fr_130px_130px_150px_150px] items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                    <div key={account.id} className="grid grid-cols-[1.4fr_130px_130px_130px_130px_140px] items-center gap-3 rounded-md border bg-background px-3 py-2 text-sm">
                       <span className="min-w-0 truncate font-medium">{account.name}</span>
+                      <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(account.periodOpeningBalance)}</span>
                       <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(account.cycleIncome)}</span>
                       <span className="whitespace-nowrap text-right text-muted-foreground tabular-nums">{money(account.cycleCashOut)}</span>
                       <span className="whitespace-nowrap text-right font-medium tabular-nums">{money(account.cycleNetFlow)}</span>
@@ -1201,12 +1211,13 @@ export default function Finance() {
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-5">
-                    <span>Opening<br /><strong>{money(account.openingBalance)}</strong></span>
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-6">
+                    <span>Seed<br /><strong>{money(account.openingBalance)}</strong></span>
+                    <span>Opening<br /><strong>{money(account.periodOpeningBalance)}</strong></span>
                     <span>In<br /><strong>{money(account.cycleIncome)}</strong></span>
                     <span>Out<br /><strong>{money(account.cycleCashOut)}</strong></span>
                     <span>Net<br /><strong>{money(account.cycleNetFlow)}</strong></span>
-                    <span>Estimated<br /><strong>{money(account.estimatedBalance)}</strong></span>
+                    <span>Closing<br /><strong>{money(account.estimatedBalance)}</strong></span>
                   </div>
                   <AccountOpeningBalanceEditor
                     account={account}
@@ -1423,7 +1434,7 @@ function AccountOpeningBalanceEditor({
           value={openingBalance}
           inputMode="numeric"
           onChange={(e) => setOpeningBalance(e.target.value)}
-          placeholder="Opening balance"
+          placeholder="Seed opening balance"
         />
         <Input
           value={openingBalanceDate}
