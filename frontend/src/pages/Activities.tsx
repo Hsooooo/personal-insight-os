@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { Activity, Dumbbell, FilterX, Plus, Search, Trash2, X, ClipboardPaste, Copy, Footprints, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
+import { Activity, Dumbbell, FilterX, Plus, RefreshCw, Search, Trash2, X, ClipboardPaste, Copy, Footprints, SlidersHorizontal, MoreHorizontal } from 'lucide-react';
 import { formatDateTime, formatDistance, formatDuration, formatPace, formatLapCopyText } from '@/lib/utils';
 import type { Activity as ActivityType, ActivityFilter, WeightTrainingRequest, GarminActivityLap } from '@/types';
 import {
@@ -408,10 +409,14 @@ function MobileFilterBar({
 function MobileActionMenu({
   onHevy,
   onWeight,
+  onSyncToday,
+  syncRunning,
   showForm,
 }: {
   onHevy: () => void;
   onWeight: () => void;
+  onSyncToday: () => void;
+  syncRunning: boolean;
   showForm: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -429,6 +434,18 @@ function MobileActionMenu({
             <SheetTitle>새 기록</SheetTitle>
           </SheetHeader>
           <div className="mt-4 space-y-2">
+            <Button
+              variant="outline"
+              className="w-full justify-start gap-2"
+              onClick={() => {
+                onSyncToday();
+                setOpen(false);
+              }}
+              disabled={syncRunning}
+            >
+              <RefreshCw className={`h-4 w-4 ${syncRunning ? 'animate-spin' : ''}`} />
+              오늘 동기화
+            </Button>
             <Button
               variant="outline"
               className="w-full justify-start gap-2"
@@ -838,6 +855,7 @@ function WeightTrainingForm({
 }
 
 export default function Activities() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState(0);
   const [filter, setFilter] = useState<ActivityFilter>({});
   const [draft, setDraft] = useState<ActivityFilter>({});
@@ -847,6 +865,57 @@ export default function Activities() {
   const [runningModalOpen, setRunningModalOpen] = useState(false);
   const [selectedRunningId, setSelectedRunningId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [todaySyncLogId, setTodaySyncLogId] = useState<number | null>(null);
+
+  // 운동 직후 오늘 하루치만 즉시 동기화 (최소 증분 단위)
+  const todaySyncMutation = useMutation({
+    mutationFn: () => {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Seoul' });
+      return api.dataSources.syncGarmin('INCREMENTAL', today, today);
+    },
+    onSuccess: (log) => {
+      toast.success('오늘 데이터 동기화를 시작했습니다');
+      setTodaySyncLogId(log.id);
+    },
+    onError: (err: Error) => toast.error(err.message || '동기화 요청 실패'),
+  });
+
+  useEffect(() => {
+    if (todaySyncLogId == null) return;
+    let cancelled = false;
+    let attempts = 0;
+    const poll = async () => {
+      try {
+        const log = await api.dataSources.getSyncLog(todaySyncLogId);
+        if (cancelled) return;
+        if (log.status === 'RUNNING') {
+          attempts++;
+          if (attempts < 60) {
+            setTimeout(poll, 2000);
+          } else {
+            toast.info('동기화 확인 시간 초과. 잠시 후 새로고침하세요.');
+            setTodaySyncLogId(null);
+          }
+          return;
+        }
+        setTodaySyncLogId(null);
+        if (log.status === 'COMPLETED') {
+          toast.success(`오늘 동기화 완료: 활동 ${log.activitiesCount}건, 건강 ${log.healthMetricsCount}건, 수면 ${log.sleepCount}건`);
+          queryClient.invalidateQueries({ queryKey: ['activities'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+        } else {
+          toast.error(`동기화 ${log.status}${log.errorMessage ? ': ' + log.errorMessage : ''}`);
+        }
+      } catch {
+        if (!cancelled) setTodaySyncLogId(null);
+      }
+    };
+    const timer = setTimeout(poll, 2000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [todaySyncLogId, queryClient]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['activities', page, filter],
@@ -929,6 +998,16 @@ export default function Activities() {
               size="sm"
               variant="outline"
               className="h-9 gap-1"
+              onClick={() => todaySyncMutation.mutate()}
+              disabled={todaySyncMutation.isPending || todaySyncLogId != null}
+            >
+              <RefreshCw className={`h-4 w-4 ${todaySyncLogId != null ? 'animate-spin' : ''}`} />
+              오늘 동기화
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 gap-1"
               onClick={() => setShowHevyDialog(true)}
             >
               <ClipboardPaste className="h-4 w-4" />
@@ -953,6 +1032,8 @@ export default function Activities() {
               setEditActivity(undefined);
               setShowForm((s) => !s);
             }}
+            onSyncToday={() => todaySyncMutation.mutate()}
+            syncRunning={todaySyncMutation.isPending || todaySyncLogId != null}
             showForm={showForm}
           />
         </div>

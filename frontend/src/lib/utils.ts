@@ -67,6 +67,10 @@ export function formatWeeklyReport(
     steps: number;
     caloriesTotal: number;
     weightKg: number | null;
+    averageSpo2?: number | null;
+    avgWakingRespiration?: number | null;
+    bodyBatteryCharged?: number | null;
+    vigorousIntensityMinutes?: number | null;
   }>,
   sleepSessions: Array<{
     sleepDate: string;
@@ -76,6 +80,9 @@ export function formatWeeklyReport(
     remSleepSeconds: number;
     awakeSeconds: number;
     sleepScore: number;
+    napSeconds?: number | null;
+    sleepNeedMinutes?: number | null;
+    hrvStatus?: string | null;
   }>,
   activities: Array<{
     activityType: string;
@@ -124,8 +131,8 @@ export function formatWeeklyReport(
   let md = `# Weekly Report: ${startDate} ~ ${endDate}\n\n`;
 
   md += `## Daily Health & Sleep\n`;
-  md += `| Date | RHR | Stress | Steps | Calories | Weight | Sleep | Deep | Light | REM | Awake | Score |\n`;
-  md += `|------|-----|--------|-------|----------|--------|-------|-------|-------|-----|-------|-------|\n`;
+  md += `| Date | RHR | Stress | Steps | Calories | Weight | SpO2 | Resp | BB+ | Vigorous | Sleep | Deep | Light | REM | Awake | Nap | Need | HRV | Score |\n`;
+  md += `|------|-----|--------|-------|----------|--------|------|------|-----|----------|-------|------|-------|-----|-------|-----|------|-----|-------|\n`;
 
   for (const date of sortedDates) {
     const { health, sleep } = dateMap.get(date)!;
@@ -134,13 +141,20 @@ export function formatWeeklyReport(
     const steps = health?.steps ?? '-';
     const cal = health?.caloriesTotal ?? '-';
     const weight = health?.weightKg ?? '-';
+    const spo2 = health?.averageSpo2 ?? '-';
+    const resp = health?.avgWakingRespiration ?? '-';
+    const bbCharged = health?.bodyBatteryCharged ?? '-';
+    const vigorous = health?.vigorousIntensityMinutes ?? '-';
     const total = sleep ? formatSleepDurationShort(sleep.totalSleepSeconds) : '-';
     const deep = sleep ? formatSleepDurationShort(sleep.deepSleepSeconds) : '-';
     const light = sleep ? formatSleepDurationShort(sleep.lightSleepSeconds) : '-';
     const rem = sleep ? formatSleepDurationShort(sleep.remSleepSeconds) : '-';
     const awake = sleep ? formatSleepDurationShort(sleep.awakeSeconds) : '-';
+    const nap = sleep?.napSeconds ? formatSleepDurationShort(sleep.napSeconds) : '-';
+    const need = sleep?.sleepNeedMinutes ? `${sleep.sleepNeedMinutes}m` : '-';
+    const hrv = sleep?.hrvStatus ?? '-';
     const score = sleep?.sleepScore ?? '-';
-    md += `| ${fmtDate(date)} | ${rhr} | ${stress} | ${steps} | ${cal} | ${weight} | ${total} | ${deep} | ${light} | ${rem} | ${awake} | ${score} |\n`;
+    md += `| ${fmtDate(date)} | ${rhr} | ${stress} | ${steps} | ${cal} | ${weight} | ${spo2} | ${resp} | ${bbCharged} | ${vigorous} | ${total} | ${deep} | ${light} | ${rem} | ${awake} | ${nap} | ${need} | ${hrv} | ${score} |\n`;
   }
 
   md += `\n## Activities (${activities.length})\n`;
