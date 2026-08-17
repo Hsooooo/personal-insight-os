@@ -20,4 +20,17 @@ public class HealthMetricDto {
     private Integer steps;
     private Integer caloriesTotal;
     private BigDecimal weightKg;
+    private BigDecimal averageSpo2;
+    private Integer lowestSpo2;
+    private BigDecimal avgWakingRespiration;
+    private BigDecimal floorsAscended;
+    private BigDecimal floorsDescended;
+    private Integer moderateIntensityMinutes;
+    private Integer vigorousIntensityMinutes;
+    private BigDecimal activeKilocalories;
+    private BigDecimal bmrKilocalories;
+    private Integer bodyBatteryAtWake;
+    private Integer bodyBatteryCharged;
+    private Integer bodyBatteryDrained;
+    private Integer totalDistanceMeters;
 }

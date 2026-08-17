@@ -194,6 +194,13 @@ erDiagram
 | 13 | `sync_logs` | 동기화 이력 (상태, 기간, 레코드 수, 에러) | 100~500 / 사용자 |
 | 14 | `exercises` | 사용자 정의 웨이트 트레이닝 종목 | 20~100 / 사용자 |
 | 15 | `refresh_tokens` | Refresh Token 저장 (SHA-256 hash, rotation/ revoke 지원) | 1~3 / 사용자 |
+| 16 | `garmin_daily_raw` | Garmin 일일 부가 엔드포인트 원문 (HRV/BodyBattery/Stress/HeartRate/Steps/Respiration/SpO2/TrainingReadiness/TrainingStatus), (user_id, metric_date, data_type) 유니크 upsert | 9 × 365 / 사용자/년 |
+
+### Garmin 구조화 확장 컬럼 (V24)
+
+- `garmin_sleep_sessions`: `nap_seconds`(낮잠), `avg_sleep_stress`, `sleep_need_minutes`(Garmin 수면 필요량), `hrv_status`
+- `garmin_daily_health_metrics`: `average_spo2`, `lowest_spo2`, `avg_waking_respiration`, `floors_ascended/descended`, `moderate/vigorous_intensity_minutes`, `active_kilocalories`, `bmr_kilocalories`, `body_battery_at_wake/charged/drained`, `total_distance_meters`
+- 기존 `raw_payload`(jsonb)에서 SQL 백필로 복구되며, Garmin 재수집 없이 적용됨
 
 ### `insight_evidences.evidence_data` JSONB
 

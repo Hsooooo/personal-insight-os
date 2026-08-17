@@ -48,6 +48,7 @@ flowchart LR
     subgraph 건강["❤️ 건강"]
         E1["GET /api/health/metrics"]
         E2["GET /api/health/sleep"]
+        E3["지표: RHR/HRV/스트레스/SpO2/호흡/층수/활동칼로리/바디배터리 + 수면: 낮잠/수면필요량/HRV상태"]
     end
 
     subgraph 그래프["🕸️ 그래프"]
@@ -260,7 +261,7 @@ POST /api/auth/api-keys
 |--------|-----------|------|
 | GET | `/api/data-sources` | 연결된 데이터 소스 목록 |
 | POST | `/api/data-sources/garmin/connect` | Garmin 계정 연결 |
-| POST | `/api/data-sources/garmin/sync` | Garmin 데이터 동기화 — 활동, 건강지표, 수면, **체중** 포함 (body: syncType, dateFrom, dateTo) |
+| POST | `/api/data-sources/garmin/sync` | Garmin 데이터 동기화 — 활동, 건강지표, 수면(낮잠 포함), **체중** + 일일 extras 9종 원문(`garmin_daily_raw`) 포함 (body: syncType, dateFrom, dateTo) |
 | GET | `/api/data-sources/garmin/sync-logs` | 동기화 이력 조회 |
 | POST | `/api/data-sources/garmin/mock` | Mock 데이터 생성 (`PIOS_MOCK_DATA_ENABLED=true`일 때만) |
 | DELETE | `/api/data-sources/garmin` | Garmin 연결 해제 |

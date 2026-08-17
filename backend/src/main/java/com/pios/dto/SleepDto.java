@@ -20,4 +20,8 @@ public class SleepDto {
     private Integer remSleepSeconds;
     private Integer awakeSeconds;
     private Integer sleepScore;
+    private Integer napSeconds;
+    private java.math.BigDecimal avgSleepStress;
+    private Integer sleepNeedMinutes;
+    private String hrvStatus;
 }

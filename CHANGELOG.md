@@ -17,6 +17,7 @@
 - MCP write tools: create/update goal, save insight, submit feedback, trigger sync, generate briefing
 - API key prefix lookup (`api_keys.key_prefix`) to avoid O(n) BCrypt scans
 - **능동 이상 신호 알림** — 매일 12:30 KST 최근 3일 vs 28일 기준선 패턴 감지(`AnomalyAlertService`), Insight(`ANOMALY_ALERT`) + LLM 코칭 문구, 수동 트리거 `POST /api/insights/anomaly-alerts/detect`, Insights/Dashboard UI 배지
+- **Garmin 데이터 전량 저장 (V24)** — 신규 `garmin_daily_raw` 범용 원문 테이블 + 일일 extras 9종(HRV/BodyBattery/Stress/HeartRate/Steps/Respiration/SpO2/TrainingReadiness/TrainingStatus) 수집, 수면(낮잠/수면필요량/HRV상태)·건강(SpO2/호흡/층수/활동칼로리/바디배터리 상세) 구조화 컬럼 + 기존 raw_payload SQL 백필, Health/Sleep API·Health 화면 낮잠 바 차트, RAG 통계에 평균 낮잠 메트릭 추가
 - **주간 브리핑 스토리텔링 톤** — LLM 프롬프트를 스포츠 캐스터 페르소나로 변경 (내러티브 + 지표 간 인과 흐름)
 
 ### Changed

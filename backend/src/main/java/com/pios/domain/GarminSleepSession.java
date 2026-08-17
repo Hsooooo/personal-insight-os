@@ -51,6 +51,18 @@ public class GarminSleepSession {
     @Column(name = "sleep_score")
     private Integer sleepScore;
 
+    @Column(name = "nap_seconds")
+    private Integer napSeconds;
+
+    @Column(name = "avg_sleep_stress", precision = 5, scale = 2)
+    private java.math.BigDecimal avgSleepStress;
+
+    @Column(name = "sleep_need_minutes")
+    private Integer sleepNeedMinutes;
+
+    @Column(name = "hrv_status", length = 20)
+    private String hrvStatus;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_payload", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> rawPayload;

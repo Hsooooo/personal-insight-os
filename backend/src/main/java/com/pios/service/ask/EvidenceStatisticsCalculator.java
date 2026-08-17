@@ -64,7 +64,8 @@ public class EvidenceStatisticsCalculator {
                         buildSleepAvg(currentSleep, baselineSleep, "totalSleepSeconds", "평균 수면 시간", "시간", s -> doubleValue(s.getTotalSleepSeconds()), 3600.0),
                         buildSleepAvg(currentSleep, baselineSleep, "sleepScore", "평균 수면 점수", "점", GarminSleepSession::getSleepScore, 1.0),
                         buildSleepAvg(currentSleep, baselineSleep, "deepSleepSeconds", "평균 딥슬립", "시간", s -> doubleValue(s.getDeepSleepSeconds()), 3600.0),
-                        buildSleepAvg(currentSleep, baselineSleep, "remSleepSeconds", "평균 REM 수면", "시간", s -> doubleValue(s.getRemSleepSeconds()), 3600.0)
+                        buildSleepAvg(currentSleep, baselineSleep, "remSleepSeconds", "평균 REM 수면", "시간", s -> doubleValue(s.getRemSleepSeconds()), 3600.0),
+                        buildSleepAvg(currentSleep, baselineSleep, "napSeconds", "평균 낮잠 시간", "분", s -> doubleValue(s.getNapSeconds()), 60.0)
                 ))
                 .activityMetrics(List.of(
                         buildActivityCount(currentActivities, baselineActivities),

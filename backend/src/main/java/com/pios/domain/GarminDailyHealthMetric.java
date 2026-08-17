@@ -52,6 +52,45 @@ public class GarminDailyHealthMetric {
     @Column(name = "weight_kg", precision = 8, scale = 2)
     private BigDecimal weightKg;
 
+    @Column(name = "average_spo2", precision = 5, scale = 2)
+    private BigDecimal averageSpo2;
+
+    @Column(name = "lowest_spo2")
+    private Integer lowestSpo2;
+
+    @Column(name = "avg_waking_respiration", precision = 5, scale = 2)
+    private BigDecimal avgWakingRespiration;
+
+    @Column(name = "floors_ascended", precision = 8, scale = 2)
+    private BigDecimal floorsAscended;
+
+    @Column(name = "floors_descended", precision = 8, scale = 2)
+    private BigDecimal floorsDescended;
+
+    @Column(name = "moderate_intensity_minutes")
+    private Integer moderateIntensityMinutes;
+
+    @Column(name = "vigorous_intensity_minutes")
+    private Integer vigorousIntensityMinutes;
+
+    @Column(name = "active_kilocalories", precision = 10, scale = 2)
+    private BigDecimal activeKilocalories;
+
+    @Column(name = "bmr_kilocalories", precision = 10, scale = 2)
+    private BigDecimal bmrKilocalories;
+
+    @Column(name = "body_battery_at_wake")
+    private Integer bodyBatteryAtWake;
+
+    @Column(name = "body_battery_charged")
+    private Integer bodyBatteryCharged;
+
+    @Column(name = "body_battery_drained")
+    private Integer bodyBatteryDrained;
+
+    @Column(name = "total_distance_meters")
+    private Integer totalDistanceMeters;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "raw_payload", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> rawPayload;

@@ -29,6 +29,7 @@ public class GarminSyncExecutor {
     private final GarminDailyHealthMetricRepository healthRepo;
     private final GarminSleepSessionRepository sleepRepo;
     private final GarminActivityLapRepository lapRepo;
+    private final GarminDailyRawRepository dailyRawRepo;
     private final GarminPythonClient pythonClient;
     private final GraphProjectorService graphProjector;
     private final WeatherService weatherService;
@@ -84,6 +85,7 @@ public class GarminSyncExecutor {
                 totalActivities += saveActivities(userId, data.get("activities"));
                 totalHealth += saveHealthMetrics(userId, data.get("health"));
                 totalSleep += saveSleepSessions(userId, data.get("sleep"));
+                saveDailyExtras(userId, data.get("extras"));
             } catch (Exception e) {
                 log.error("Chunk sync failed: {} to {}", chunk.from, chunk.to, e);
                 markPartial(syncLog, totalActivities, totalHealth, totalSleep, totalWeights, e.getMessage());
@@ -244,6 +246,19 @@ public class GarminSyncExecutor {
             metric.setBodyBatteryMax(getInt(node, "body_battery_max"));
             metric.setSteps(getInt(node, "steps"));
             metric.setCaloriesTotal(getInt(node, "calories_total"));
+            metric.setAverageSpo2(getDecimal(node, "average_spo2"));
+            metric.setLowestSpo2(getInt(node, "lowest_spo2"));
+            metric.setAvgWakingRespiration(getDecimal(node, "avg_waking_respiration"));
+            metric.setFloorsAscended(getDecimal(node, "floors_ascended"));
+            metric.setFloorsDescended(getDecimal(node, "floors_descended"));
+            metric.setModerateIntensityMinutes(getInt(node, "moderate_intensity_minutes"));
+            metric.setVigorousIntensityMinutes(getInt(node, "vigorous_intensity_minutes"));
+            metric.setActiveKilocalories(getDecimal(node, "active_kilocalories"));
+            metric.setBmrKilocalories(getDecimal(node, "bmr_kilocalories"));
+            metric.setBodyBatteryAtWake(getInt(node, "body_battery_at_wake"));
+            metric.setBodyBatteryCharged(getInt(node, "body_battery_charged"));
+            metric.setBodyBatteryDrained(getInt(node, "body_battery_drained"));
+            metric.setTotalDistanceMeters(getInt(node, "total_distance_meters"));
             metric.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
 
             healthRepo.save(metric);
@@ -275,9 +290,38 @@ public class GarminSyncExecutor {
             sleep.setRemSleepSeconds(getInt(node, "rem_sleep_seconds"));
             sleep.setAwakeSeconds(getInt(node, "awake_seconds"));
             sleep.setSleepScore(getInt(node, "sleep_score"));
+            sleep.setNapSeconds(getInt(node, "nap_seconds"));
+            sleep.setAvgSleepStress(getDecimal(node, "avg_sleep_stress"));
+            sleep.setSleepNeedMinutes(getInt(node, "sleep_need_minutes"));
+            sleep.setHrvStatus(getText(node, "hrv_status"));
             sleep.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
 
             sleepRepo.save(sleep);
+            count++;
+        }
+        return count;
+    }
+
+    private int saveDailyExtras(Long userId, JsonNode extrasNode) {
+        if (extrasNode == null || !extrasNode.isArray()) return 0;
+        int count = 0;
+        User user = User.builder().id(userId).build();
+
+        for (JsonNode node : extrasNode) {
+            LocalDate date = parseDate(getText(node, "metric_date"));
+            String dataType = getText(node, "data_type");
+            if (date == null || dataType == null || dataType.isEmpty()) continue;
+
+            GarminDailyRaw raw = dailyRawRepo
+                    .findByUserIdAndMetricDateAndDataType(userId, date, dataType)
+                    .orElseGet(() -> GarminDailyRaw.builder()
+                            .user(user)
+                            .metricDate(date)
+                            .dataType(dataType)
+                            .build());
+
+            raw.setPayload(jsonNodeToMap(node.get("payload")));
+            dailyRawRepo.save(raw);
             count++;
         }
         return count;

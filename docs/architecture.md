@@ -261,10 +261,10 @@ sequenceDiagram
 
     loop 30일 청크 단위
         BE->>PY: ProcessBuilder 실행<br/>(email, password, chunk_from, chunk_to)
-        PY->>GC: garminconnect API 호출<br/>(activities + splits + body_composition)
+        PY->>GC: garminconnect API 호출<br/>(activities + splits + body_composition + 일일 extras 9종)
         GC-->>PY: Raw JSON
-        PY-->>BE: activities + health + sleep + weights<br/>(activities에 laps 포함)
-        BE->>PG: UPSERT 저장 (activities, health, sleep, weights)
+        PY-->>BE: activities + health + sleep + weights + extras<br/>(activities에 laps 포함, extras는 HRV/BodyBattery/Stress/HeartRate/Steps/Respiration/SpO2/TrainingReadiness/TrainingStatus 일일 원문)
+        BE->>PG: UPSERT 저장 (activities, health, sleep, weights, garmin_daily_raw)
         BE->>PG: 랩 데이터 저장<br/>(garmin_activity_laps, delete-insert)
     end
 

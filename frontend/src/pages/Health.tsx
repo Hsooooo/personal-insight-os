@@ -44,6 +44,7 @@ export default function Health() {
     light: s.lightSleepSeconds ? Math.round(s.lightSleepSeconds / 3600 * 10) / 10 : 0,
     rem: s.remSleepSeconds ? Math.round(s.remSleepSeconds / 3600 * 10) / 10 : 0,
     awake: s.awakeSeconds ? Math.round(s.awakeSeconds / 3600 * 10) / 10 : 0,
+    nap: s.napSeconds ? Math.round(s.napSeconds / 3600 * 10) / 10 : 0,
     score: s.sleepScore,
   })) || [];
 
@@ -107,6 +108,7 @@ export default function Health() {
                   <Bar dataKey="light" stackId="sleep" fill="#818cf8" radius={[2, 2, 0, 0]} name="Light" />
                   <Bar dataKey="rem" stackId="sleep" fill="#a78bfa" radius={[2, 2, 0, 0]} name="REM" />
                   <Bar dataKey="awake" stackId="sleep" fill="#fbbf24" radius={[2, 2, 0, 0]} name="Awake" />
+                  <Bar dataKey="nap" fill="#2dd4bf" radius={[2, 2, 0, 0]} name="Nap" />
                 </BarChart>
               </ResponsiveContainer>
             )}

@@ -35,7 +35,16 @@ public class HealthService {
                 .restingHeartRate(h.getRestingHeartRate()).hrvAvg(h.getHrvAvg())
                 .stressAvg(h.getStressAvg()).bodyBatteryMin(h.getBodyBatteryMin())
                 .bodyBatteryMax(h.getBodyBatteryMax()).steps(h.getSteps())
-                .caloriesTotal(h.getCaloriesTotal()).weightKg(h.getWeightKg()).build();
+                .caloriesTotal(h.getCaloriesTotal()).weightKg(h.getWeightKg())
+                .averageSpo2(h.getAverageSpo2()).lowestSpo2(h.getLowestSpo2())
+                .avgWakingRespiration(h.getAvgWakingRespiration())
+                .floorsAscended(h.getFloorsAscended()).floorsDescended(h.getFloorsDescended())
+                .moderateIntensityMinutes(h.getModerateIntensityMinutes())
+                .vigorousIntensityMinutes(h.getVigorousIntensityMinutes())
+                .activeKilocalories(h.getActiveKilocalories()).bmrKilocalories(h.getBmrKilocalories())
+                .bodyBatteryAtWake(h.getBodyBatteryAtWake()).bodyBatteryCharged(h.getBodyBatteryCharged())
+                .bodyBatteryDrained(h.getBodyBatteryDrained()).totalDistanceMeters(h.getTotalDistanceMeters())
+                .build();
     }
 
     private SleepDto toSleepDto(GarminSleepSession s) {
@@ -44,6 +53,9 @@ public class HealthService {
                 .startTime(s.getStartTime()).endTime(s.getEndTime())
                 .totalSleepSeconds(s.getTotalSleepSeconds()).deepSleepSeconds(s.getDeepSleepSeconds())
                 .lightSleepSeconds(s.getLightSleepSeconds()).remSleepSeconds(s.getRemSleepSeconds())
-                .awakeSeconds(s.getAwakeSeconds()).sleepScore(s.getSleepScore()).build();
+                .awakeSeconds(s.getAwakeSeconds()).sleepScore(s.getSleepScore())
+                .napSeconds(s.getNapSeconds()).avgSleepStress(s.getAvgSleepStress())
+                .sleepNeedMinutes(s.getSleepNeedMinutes()).hrvStatus(s.getHrvStatus())
+                .build();
     }
 }

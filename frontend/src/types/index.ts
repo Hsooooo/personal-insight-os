@@ -233,6 +233,19 @@ export interface HealthMetric {
   steps: number;
   caloriesTotal: number;
   weightKg: number | null;
+  averageSpo2?: number | null;
+  lowestSpo2?: number | null;
+  avgWakingRespiration?: number | null;
+  floorsAscended?: number | null;
+  floorsDescended?: number | null;
+  moderateIntensityMinutes?: number | null;
+  vigorousIntensityMinutes?: number | null;
+  activeKilocalories?: number | null;
+  bmrKilocalories?: number | null;
+  bodyBatteryAtWake?: number | null;
+  bodyBatteryCharged?: number | null;
+  bodyBatteryDrained?: number | null;
+  totalDistanceMeters?: number | null;
 }
 
 export interface Sleep {
@@ -246,6 +259,10 @@ export interface Sleep {
   remSleepSeconds: number;
   awakeSeconds: number;
   sleepScore: number;
+  napSeconds?: number | null;
+  avgSleepStress?: number | null;
+  sleepNeedMinutes?: number | null;
+  hrvStatus?: string | null;
 }
 
 export interface Insight {

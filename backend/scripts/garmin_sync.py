@@ -14,6 +14,7 @@ Errors: JSON {"error": "..."} to stderr, exit code != 0
 
 import json
 import sys
+import time
 import traceback
 from datetime import datetime, timedelta, timezone
 
@@ -81,7 +82,7 @@ def fetch_activities(client, start_date, end_date):
     return results
 
 def fetch_health(client, date):
-    """일일 건강 지표 조회"""
+    """일일 건강 지표 조회 (SpO2/호흡/층수/활동칼로리/바디배터리 상세 포함)"""
     try:
         stats = client.get_stats(date.strftime("%Y-%m-%d"))
         return {
@@ -93,6 +94,19 @@ def fetch_health(client, date):
             "body_battery_max": stats.get("bodyBatteryDuringSleep", {}).get("max", 0) if isinstance(stats.get("bodyBatteryDuringSleep"), dict) else 0,
             "steps": stats.get("totalSteps", 0),
             "calories_total": stats.get("totalKilocalories", 0),
+            "average_spo2": stats.get("averageSpo2"),
+            "lowest_spo2": stats.get("lowestSpo2"),
+            "avg_waking_respiration": stats.get("avgWakingRespirationValue"),
+            "floors_ascended": stats.get("floorsAscended"),
+            "floors_descended": stats.get("floorsDescended"),
+            "moderate_intensity_minutes": stats.get("moderateIntensityMinutes"),
+            "vigorous_intensity_minutes": stats.get("vigorousIntensityMinutes"),
+            "active_kilocalories": stats.get("activeKilocalories"),
+            "bmr_kilocalories": stats.get("bmrKilocalories"),
+            "body_battery_at_wake": stats.get("bodyBatteryAtWakeTime"),
+            "body_battery_charged": stats.get("bodyBatteryChargedValue"),
+            "body_battery_drained": stats.get("bodyBatteryDrainedValue"),
+            "total_distance_meters": stats.get("totalDistanceMeters"),
             "raw_payload": stats
         }
     except Exception as e:
@@ -107,12 +121,13 @@ def _ms_to_iso(timestamp_ms):
 
 
 def fetch_sleep(client, date):
-    """수면 데이터 조회"""
+    """수면 데이터 조회 (낮잠/수면 필요량/HRV 상태 포함)"""
     try:
         sleep = client.get_sleep_data(date.strftime("%Y-%m-%d"))
         sleep_summary = sleep.get("dailySleepDTO", {})
         if not sleep_summary:
             return None
+        sleep_need = sleep_summary.get("sleepNeed", {})
         return {
             "sleep_date": date.strftime("%Y-%m-%d"),
             "start_time": _ms_to_iso(sleep_summary.get("sleepStartTimestampGMT")),
@@ -123,10 +138,48 @@ def fetch_sleep(client, date):
             "rem_sleep_seconds": sleep_summary.get("remSleepSeconds", 0),
             "awake_seconds": sleep_summary.get("awakeSleepSeconds", 0),
             "sleep_score": sleep_summary.get("sleepScores", {}).get("overall", {}).get("value", 0),
+            "nap_seconds": sleep_summary.get("napTimeSeconds", 0),
+            "avg_sleep_stress": sleep_summary.get("avgSleepStress"),
+            "sleep_need_minutes": sleep_need.get("actual") if isinstance(sleep_need, dict) else None,
+            "hrv_status": sleep.get("hrvStatus"),
             "raw_payload": sleep
         }
     except Exception as e:
         return None
+
+def fetch_daily_extras(client, date):
+    """일일 부가 엔드포인트 전량 수집 (원문 jsonb 저장용)
+
+    엔드포인트별 실패는 해당 항목만 스킵하고, 호출 사이 0.5초 간격으로
+    FULL 재동기화 시 Garmin rate limit을 완화한다.
+    """
+    date_str = date.strftime("%Y-%m-%d")
+    fetchers = [
+        ("HRV", lambda: client.get_hrv_data(date_str)),
+        ("BODY_BATTERY", lambda: client.get_body_battery(date_str, date_str)),
+        ("STRESS", lambda: client.get_stress_data(date_str)),
+        ("HEART_RATE", lambda: client.get_heart_rates(date_str)),
+        ("STEPS", lambda: client.get_steps_data(date_str)),
+        ("RESPIRATION", lambda: client.get_respiration_data(date_str)),
+        ("SPO2", lambda: client.get_spo2_data(date_str)),
+        ("TRAINING_READINESS", lambda: client.get_training_readiness(date_str)),
+        ("TRAINING_STATUS", lambda: client.get_training_status(date_str)),
+    ]
+    results = []
+    for data_type, fetch in fetchers:
+        try:
+            payload = fetch()
+            if payload:
+                results.append({
+                    "data_type": data_type,
+                    "metric_date": date_str,
+                    "payload": payload
+                })
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return results
+
 
 def fetch_body_composition(client, start_date, end_date):
     """체중/신체조성 데이터 조회 (기간 단위)"""
@@ -181,7 +234,7 @@ def main():
         print(json.dumps({"error": f"login failed: {e}"}), file=sys.stderr)
         sys.exit(1)
 
-    result = {"activities": [], "health": [], "sleep": [], "weights": []}
+    result = {"activities": [], "health": [], "sleep": [], "weights": [], "extras": []}
 
     try:
         if data_type in ("activities", "all"):
@@ -198,6 +251,7 @@ def main():
                     s = fetch_sleep(client, current)
                     if s:
                         result["sleep"].append(s)
+                result["extras"].extend(fetch_daily_extras(client, current))
                 current += timedelta(days=1)
 
         if data_type in ("health", "all"):
