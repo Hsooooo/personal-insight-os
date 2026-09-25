@@ -42,7 +42,7 @@ pios:
   # 키 교체 시 이전 키. 기동 시 이 키로 암호화된 값을 현재 키로 재암호화한다.
   encryption-key-legacy: ${PIOS_ENCRYPTION_KEY_LEGACY:}
   registration-enabled: ${PIOS_REGISTRATION_ENABLED:false}
-  mock-data-enabled: ${PIOS_MOCK_DATA_ENABLED:true}
+  mock-data-enabled: ${PIOS_MOCK_DATA_ENABLED:false}
 
 neo4j:
   uri: ${SPRING_NEO4J_URI:bolt://localhost:7687}

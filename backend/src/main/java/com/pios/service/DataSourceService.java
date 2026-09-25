@@ -31,7 +31,7 @@ public class DataSourceService {
     private final MockDataService mockDataService;
     private final SecretCryptoService secretCrypto;
 
-    @Value("${pios.mock-data-enabled:true}")
+    @Value("${pios.mock-data-enabled:false}")
     private boolean mockDataEnabled;
 
     public List<ProviderConnectionDto> getConnections(Long userId) {

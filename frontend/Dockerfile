@@ -1,7 +1,8 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package.json .
-RUN npm install
+# lock 파일 기준으로 설치해 빌드마다 의존성 버전이 달라지지 않게 한다
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 RUN npm run build
 

@@ -62,6 +62,12 @@ class AskServiceTest {
     private RestTemplate restTemplate;
     @Mock
     private EvidenceStatisticsCalculator statisticsCalculator;
+    @Mock
+    private GraphProjectorService graphProjector;
+    @Mock
+    private EmbeddingService embeddingService;
+    @Mock
+    private FeedbackLearningService feedbackLearningService;
 
     @InjectMocks
     private AskService askService;

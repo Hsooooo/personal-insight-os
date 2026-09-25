@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: ankane/pgvector:latest
+    # PostgreSQL 15.4 + pgvector 0.5.1 (운영 중인 이미지 digest로 고정. 메이저 업그레이드는 dump/restore 필요)
+    image: ankane/pgvector@sha256:956744bd14e9cbdf639c61c2a2a7c7c2c48a9c8cdd42f7de4ac034f4e96b90f8
     container_name: pios-postgres
     environment:
       POSTGRES_USER: pios
