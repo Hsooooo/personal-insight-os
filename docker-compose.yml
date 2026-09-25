@@ -4,10 +4,11 @@ services:
     container_name: pios-postgres
     environment:
       POSTGRES_USER: pios
-      POSTGRES_PASSWORD: pios123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pios123}
       POSTGRES_DB: pios
+    # 호스트 로컬에서만 접근 (외부 노출 금지)
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -27,14 +28,18 @@ services:
       TZ: Asia/Seoul
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pios
       SPRING_DATASOURCE_USERNAME: pios
-      SPRING_DATASOURCE_PASSWORD: pios123
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-pios123}
       SPRING_NEO4J_URI: ${NEO4J_URI:-}
       SPRING_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USERNAME:-}
       SPRING_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:-}
-      JWT_SECRET: pios-jwt-secret-key-2026-change-in-production
-      PIOS_ENCRYPTION_KEY: ${PIOS_ENCRYPTION_KEY:-${JWT_SECRET:-pios-jwt-secret-key-2026-change-in-production}}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      PIOS_ENCRYPTION_KEY: ${PIOS_ENCRYPTION_KEY:?PIOS_ENCRYPTION_KEY must be set in .env}
+      PIOS_ENCRYPTION_KEY_LEGACY: ${PIOS_ENCRYPTION_KEY_LEGACY:-}
+      PIOS_REGISTRATION_ENABLED: ${PIOS_REGISTRATION_ENABLED:-false}
       PIOS_MOCK_DATA_ENABLED: ${PIOS_MOCK_DATA_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - garmin_tokens:/app/data/garmin-tokens
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,8 +55,9 @@ services:
     environment:
       PIOS_API_URL: http://backend:8080/api
       PIOS_API_KEY: ${PIOS_MCP_API_KEY:-}
+    # 외부 접근은 Caddy(/mcp)를 통해서만
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     depends_on:
       - backend
     networks:
@@ -88,6 +94,7 @@ services:
 
 volumes:
   postgres_data:
+  garmin_tokens:
   caddy_data:
   caddy_config:
 

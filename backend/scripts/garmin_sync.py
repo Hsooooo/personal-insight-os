@@ -4,7 +4,11 @@ Garmin Connect 데이터 동기화 스크립트
 Java 백엔드에서 ProcessBuilder로 호출
 
 Usage:
-    python garmin_sync.py <email> <password> <from_date> <to_date> <data_type>
+    GARMIN_EMAIL=... GARMIN_PASSWORD=... [GARMIN_TOKENSTORE=<dir>] \
+        python garmin_sync.py <from_date> <to_date> <data_type>
+
+자격증명은 프로세스 인자(ps로 노출됨) 대신 환경변수로 받는다.
+GARMIN_TOKENSTORE가 있으면 저장된 세션 토큰을 재사용하고, 없거나 만료 시에만 로그인 후 토큰을 저장한다.
 
 data_type: activities | health | sleep | all
 
@@ -13,6 +17,7 @@ Errors: JSON {"error": "..."} to stderr, exit code != 0
 """
 
 import json
+import os
 import sys
 import time
 import traceback
@@ -211,15 +216,16 @@ def fetch_body_composition(client, start_date, end_date):
         return []
 
 def main():
-    if len(sys.argv) < 6:
-        print(json.dumps({"error": "Usage: garmin_sync.py <email> <password> <from_date> <to_date> <data_type>"}), file=sys.stderr)
+    if len(sys.argv) < 4:
+        print(json.dumps({"error": "Usage: garmin_sync.py <from_date> <to_date> <data_type>"}), file=sys.stderr)
         sys.exit(1)
 
-    email = sys.argv[1]
-    password = sys.argv[2]
-    from_date = parse_date(sys.argv[3])
-    to_date = parse_date(sys.argv[4])
-    data_type = sys.argv[5]
+    email = os.environ.get("GARMIN_EMAIL", "")
+    password = os.environ.get("GARMIN_PASSWORD", "")
+    tokenstore = os.environ.get("GARMIN_TOKENSTORE") or None
+    from_date = parse_date(sys.argv[1])
+    to_date = parse_date(sys.argv[2])
+    data_type = sys.argv[3]
 
     try:
         from garminconnect import Garmin
@@ -229,7 +235,8 @@ def main():
 
     try:
         client = Garmin(email, password)
-        client.login()
+        # tokenstore가 있으면 토큰 로드를 먼저 시도하고, 실패 시 자격증명 로그인 후 토큰을 저장한다
+        client.login(tokenstore)
     except Exception as e:
         print(json.dumps({"error": f"login failed: {e}"}), file=sys.stderr)
         sys.exit(1)

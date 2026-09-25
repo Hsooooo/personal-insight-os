@@ -25,18 +25,35 @@ public class SecretCryptoService {
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
 
+    private static final int MIN_KEY_LENGTH = 32;
+
     @Value("${pios.encryption-key}")
     private String encryptionKeyMaterial;
 
+    @Value("${pios.encryption-key-legacy:}")
+    private String legacyKeyMaterial;
+
     private SecretKey secretKey;
+    private SecretKey legacyKey;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @PostConstruct
     void init() {
+        if (encryptionKeyMaterial == null || encryptionKeyMaterial.length() < MIN_KEY_LENGTH) {
+            throw new IllegalStateException("pios.encryption-key must be at least " + MIN_KEY_LENGTH + " characters");
+        }
+        this.secretKey = deriveKey(encryptionKeyMaterial);
+        if (legacyKeyMaterial != null && !legacyKeyMaterial.isBlank()
+                && !legacyKeyMaterial.equals(encryptionKeyMaterial)) {
+            this.legacyKey = deriveKey(legacyKeyMaterial);
+        }
+    }
+
+    private static SecretKey deriveKey(String material) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(encryptionKeyMaterial.getBytes(StandardCharsets.UTF_8));
-            this.secretKey = new SecretKeySpec(digest, "AES");
+                    .digest(material.getBytes(StandardCharsets.UTF_8));
+            return new SecretKeySpec(digest, "AES");
         } catch (Exception e) {
             throw new IllegalStateException("Failed to initialize SecretCryptoService", e);
         }
@@ -44,6 +61,29 @@ public class SecretCryptoService {
 
     public boolean isEncrypted(String value) {
         return value != null && value.startsWith(PREFIX);
+    }
+
+    /**
+     * True when the value is encrypted but cannot be decrypted with the current key
+     * (i.e. it was encrypted with the legacy key and needs re-encryption).
+     */
+    public boolean needsReencryption(String value) {
+        if (!isEncrypted(value)) {
+            return false;
+        }
+        try {
+            decryptWith(value, secretKey);
+            return false;
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /**
+     * Decrypts with the current key, falling back to the legacy key, and re-encrypts with the current key.
+     */
+    public String reencrypt(String value) {
+        return encrypt(decrypt(value));
     }
 
     public String encrypt(String plaintext) {
@@ -79,17 +119,28 @@ public class SecretCryptoService {
             return value;
         }
         try {
-            byte[] decoded = Base64.getDecoder().decode(value.substring(PREFIX.length()));
-            ByteBuffer buffer = ByteBuffer.wrap(decoded);
-            byte[] iv = new byte[GCM_IV_LENGTH];
-            buffer.get(iv);
-            byte[] ciphertext = new byte[buffer.remaining()];
-            buffer.get(ciphertext);
-            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
-            cipher.init(Cipher.DECRYPT_MODE, secretKey, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+            return decryptWith(value, secretKey);
         } catch (Exception e) {
+            if (legacyKey != null) {
+                try {
+                    return decryptWith(value, legacyKey);
+                } catch (Exception ignored) {
+                    // fall through
+                }
+            }
             throw new IllegalStateException("Failed to decrypt secret", e);
         }
+    }
+
+    private String decryptWith(String value, SecretKey key) throws Exception {
+        byte[] decoded = Base64.getDecoder().decode(value.substring(PREFIX.length()));
+        ByteBuffer buffer = ByteBuffer.wrap(decoded);
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        buffer.get(iv);
+        byte[] ciphertext = new byte[buffer.remaining()];
+        buffer.get(ciphertext);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
+        return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
     }
 }

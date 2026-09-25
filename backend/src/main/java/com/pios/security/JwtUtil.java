@@ -2,6 +2,7 @@ package com.pios.security;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -19,6 +20,13 @@ public class JwtUtil {
     private long expiration;
 
     private static final long REFRESH_EXPIRATION = 604800000; // 7 days
+
+    @PostConstruct
+    void validateSecret() {
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < 32) {
+            throw new IllegalStateException("jwt.secret must be at least 32 bytes (set JWT_SECRET)");
+        }
+    }
 
     private SecretKey getSigningKey() {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
@@ -65,10 +73,10 @@ public class JwtUtil {
         return claims.get("type", String.class);
     }
 
-    public boolean validateToken(String token) {
+    public boolean validateAccessToken(String token) {
         try {
-            parseToken(token);
-            return true;
+            Claims claims = parseToken(token);
+            return "access".equals(claims.get("type", String.class));
         } catch (Exception e) {
             return false;
         }

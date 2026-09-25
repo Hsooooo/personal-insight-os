@@ -10,7 +10,7 @@ WORKDIR /app
 
 # Python3 + pip 설치 (garminconnect 라이브러리용)
 RUN apk add --no-cache python3 py3-pip && \
-    pip3 install --break-system-packages garminconnect>=0.3.0
+    pip3 install --break-system-packages 'garminconnect==0.3.2'
 
 COPY --from=builder /app/target/*.jar app.jar
 COPY scripts ./scripts

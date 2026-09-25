@@ -16,7 +16,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * One-time lazy migration: encrypt plaintext LLM API keys and Garmin passwords on startup.
+ * Startup migration for LLM API keys and Garmin passwords:
+ * encrypts plaintext rows and re-encrypts rows still encrypted with the legacy key.
  */
 @Slf4j
 @Component
@@ -33,8 +34,12 @@ public class SecretMigrationRunner implements ApplicationRunner {
         int llmMigrated = 0;
         for (LlmProvider provider : llmRepo.findAll()) {
             String key = provider.getApiKeyEncrypted();
-            if (key != null && !key.isBlank() && !secretCrypto.isEncrypted(key)) {
-                provider.setApiKeyEncrypted(secretCrypto.encrypt(key));
+            if (key == null || key.isBlank()) {
+                continue;
+            }
+            String migrated = migrate(key, "llmProvider id=" + provider.getId());
+            if (migrated != null) {
+                provider.setApiKeyEncrypted(migrated);
                 llmRepo.save(provider);
                 llmMigrated++;
             }
@@ -47,9 +52,10 @@ public class SecretMigrationRunner implements ApplicationRunner {
                 continue;
             }
             String password = auth.get("password").toString();
-            if (!secretCrypto.isEncrypted(password)) {
+            String migrated = migrate(password, "providerConnection id=" + conn.getId());
+            if (migrated != null) {
                 Map<String, Object> updated = new HashMap<>(auth);
-                updated.put("password", secretCrypto.encrypt(password));
+                updated.put("password", migrated);
                 conn.setAuthPayload(updated);
                 providerRepo.save(conn);
                 garminMigrated++;
@@ -57,8 +63,27 @@ public class SecretMigrationRunner implements ApplicationRunner {
         }
 
         if (llmMigrated > 0 || garminMigrated > 0) {
-            log.info("Encrypted plaintext secrets on startup: llmProviders={}, garminConnections={}",
+            log.info("Migrated secrets on startup: llmProviders={}, garminConnections={}",
                     llmMigrated, garminMigrated);
+        }
+    }
+
+    /**
+     * Returns the value encrypted with the current key, or null when no change is needed / possible.
+     */
+    private String migrate(String value, String label) {
+        if (!secretCrypto.isEncrypted(value)) {
+            return secretCrypto.encrypt(value);
+        }
+        if (!secretCrypto.needsReencryption(value)) {
+            return null;
+        }
+        try {
+            return secretCrypto.reencrypt(value);
+        } catch (Exception e) {
+            log.error("Cannot decrypt secret for {} with current or legacy key. "
+                    + "Set PIOS_ENCRYPTION_KEY_LEGACY to the previous key.", label);
+            return null;
         }
     }
 }

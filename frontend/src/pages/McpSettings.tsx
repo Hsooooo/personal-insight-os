@@ -12,35 +12,17 @@ import { toast } from 'sonner';
 import { Copy, Check, Trash2, Key, AlertTriangle, Lock, Bot } from 'lucide-react';
 import type { ApiKey } from '@/types';
 
-const LS_KEY_PREFIX = 'pios_mcp_key_';
+// 이전 버전이 localStorage에 보관하던 API 키 원문을 제거한다 (원문은 발급 직후 1회만 노출)
+const LEGACY_LS_KEY_PREFIX = 'pios_mcp_key_';
 
-function getStoredKey(keyId: number): string | null {
+function purgeLegacyStoredKeys() {
   try {
-    return localStorage.getItem(LS_KEY_PREFIX + keyId) || null;
-  } catch {
-    return null;
-  }
-}
-
-function storeKey(keyId: number, rawKey: string) {
-  try {
-    localStorage.setItem(LS_KEY_PREFIX + keyId, rawKey);
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith(LEGACY_LS_KEY_PREFIX))
+      .forEach((k) => localStorage.removeItem(k));
   } catch {
     // ignore
   }
-}
-
-function removeStoredKey(keyId: number) {
-  try {
-    localStorage.removeItem(LS_KEY_PREFIX + keyId);
-  } catch {
-    // ignore
-  }
-}
-
-function maskKey(rawKey: string | null | undefined): string {
-  if (!rawKey || !rawKey.startsWith('pios_')) return '••••••••';
-  return rawKey.slice(0, 6) + '••••' + rawKey.slice(-4);
 }
 
 export default function McpSettings() {
@@ -53,17 +35,17 @@ export default function McpSettings() {
   const [agent, setAgent] = useState('kimi');
 
   const apiBaseUrl = `${window.location.origin}/api`;
-  const mcpUrl = `${window.location.protocol}//${window.location.hostname}:8001/mcp`;
+  // MCP 서버는 Caddy(/mcp)를 통해서만 외부에 노출된다
+  const mcpUrl = `${window.location.origin}/mcp`;
 
   const { data: keys, isLoading } = useQuery({
     queryKey: ['apiKeys'],
     queryFn: api.apiKeys.list,
   });
 
-  const keysWithLocal = (keys || []).map((k) => {
-    const raw = getStoredKey(k.id);
-    return { ...k, _localKey: raw };
-  });
+  useEffect(() => {
+    purgeLegacyStoredKeys();
+  }, []);
 
   useEffect(() => {
     if (newKey) {
@@ -75,7 +57,6 @@ export default function McpSettings() {
     mutationFn: api.apiKeys.create,
     onSuccess: (data) => {
       if (data.key) {
-        storeKey(data.id, data.key);
         setNewKey(data);
       }
       setNewKeyName('');
@@ -91,7 +72,7 @@ export default function McpSettings() {
     mutationFn: api.apiKeys.delete,
     onSuccess: (_, id) => {
       if (selectedKeyId === id) setSelectedKeyId(null);
-      removeStoredKey(id);
+      if (newKey?.id === id) setNewKey(null);
       queryClient.invalidateQueries({ queryKey: ['apiKeys'] });
       toast.success('API 키가 삭제되었습니다');
     },
@@ -109,9 +90,10 @@ export default function McpSettings() {
     setTimeout(() => setCopied(null), 2000);
   };
 
-  const selectedKey = keysWithLocal.find((k) => k.id === selectedKeyId);
-  const apiKey = newKey?.key || selectedKey?._localKey || 'YOUR_API_KEY_HERE';
-  const apiKeyReady = !!(newKey?.key || selectedKey?._localKey);
+  // 원문 키는 이번 세션에서 방금 발급한 키만 알 수 있다
+  const selectedRawKey = newKey && newKey.id === selectedKeyId ? newKey.key : undefined;
+  const apiKey = selectedRawKey || 'YOUR_API_KEY_HERE';
+  const apiKeyReady = !!selectedRawKey;
 
   return (
     <div className="space-y-6">
@@ -166,11 +148,11 @@ export default function McpSettings() {
 
           {isLoading ? (
             <div className="h-20 rounded-lg border bg-muted animate-pulse" />
-          ) : keysWithLocal.length > 0 ? (
+          ) : keys && keys.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm font-medium">발행된 키 목록</p>
               <div className="space-y-1">
-                {keysWithLocal.map((key) => (
+                {(keys || []).map((key) => (
                   <div
                     key={key.id}
                     className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm cursor-pointer ${selectedKeyId === key.id ? 'bg-accent border-accent' : ''}`}
@@ -185,10 +167,8 @@ export default function McpSettings() {
                         className="h-3.5 w-3.5"
                       />
                       <span className="font-medium">{key.name}</span>
-                      {key._localKey ? (
-                        <Badge variant="secondary" className="text-xs font-mono">{maskKey(key._localKey)}</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-xs text-muted-foreground">키 보관 안 됨</Badge>
+                      {newKey?.id === key.id && (
+                        <Badge variant="secondary" className="text-xs">방금 발급</Badge>
                       )}
                       <Badge variant="outline" className="text-xs">{new Date(key.createdAt).toLocaleDateString('ko-KR')}</Badge>
                     </div>
@@ -203,12 +183,10 @@ export default function McpSettings() {
                   </div>
                 ))}
               </div>
-              {keysWithLocal.some((k) => !k._localKey) && (
-                <p className="text-xs text-muted-foreground">
-                  <AlertTriangle className="inline h-3 w-3 mr-1" />
-                  "키 보관 안 됨" 표시는 이 브라우저에서 발급 직후 저장하지 않았거나 다른 기기에서 발급한 키입니다. 해당 키를 사용하려면 삭제 후 재발급하세요.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                <AlertTriangle className="inline h-3 w-3 mr-1" />
+                보안을 위해 키 원문은 발급 직후에만 표시되며 브라우저에 저장되지 않습니다. 키를 잃어버렸다면 삭제 후 재발급하세요.
+              </p>
             </div>
           ) : null}
         </CardContent>

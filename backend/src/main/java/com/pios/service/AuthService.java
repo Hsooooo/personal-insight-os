@@ -9,6 +9,8 @@ import com.pios.repository.RefreshTokenRepository;
 import com.pios.repository.UserRepository;
 import com.pios.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,8 +30,14 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
+    @Value("${pios.registration-enabled:false}")
+    private boolean registrationEnabled;
+
     @Transactional
     public AuthResponse register(AuthRequest request) {
+        if (!registrationEnabled) {
+            throw new AccessDeniedException("Registration is disabled");
+        }
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new IllegalArgumentException("Email already exists");
         }

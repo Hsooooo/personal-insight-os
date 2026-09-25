@@ -30,7 +30,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
             String token = header.substring(7);
-            if (jwtUtil.validateToken(token)) {
+            // refresh 토큰은 API 인증에 사용할 수 없다
+            if (jwtUtil.validateAccessToken(token)) {
                 Long userId = jwtUtil.extractUserId(token);
                 String email = jwtUtil.extractEmail(token);
                 UsernamePasswordAuthenticationToken auth =

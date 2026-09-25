@@ -28,6 +28,14 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'pios-auth',
+      // access 토큰은 메모리에만 보관 (XSS 시 탈취 범위 축소).
+      // 새로고침 후에는 httpOnly refresh 쿠키로 재발급된다.
+      version: 1,
+      partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
+      migrate: (persisted) => {
+        const { user = null, isAuthenticated = false } = (persisted ?? {}) as Partial<AuthState>;
+        return { user, isAuthenticated };
+      },
     }
   )
 );

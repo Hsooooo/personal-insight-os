@@ -11,7 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.*;
@@ -34,12 +34,16 @@ public class GarminSyncExecutor {
     private final GraphProjectorService graphProjector;
     private final WeatherService weatherService;
     private final SecretCryptoService secretCrypto;
+    private final TransactionTemplate transactionTemplate;
 
     @Value("${sync.chunk-days:30}")
     private int chunkDays;
 
+    /**
+     * 전체 동기화를 하나의 트랜잭션으로 묶지 않는다. Garmin 호출(청크당 최대 수십 초) 동안 DB 커넥션을 잡지 않도록
+     * 청크 저장만 트랜잭션으로 감싸고, SyncLog 상태 기록은 각각 독립적으로 커밋되게 한다.
+     */
     @Async("syncTaskExecutor")
-    @Transactional
     public void runSyncAsync(Long userId, Long syncLogId, LocalDate fromDate, LocalDate toDate) {
         if (syncLogId == null) {
             log.error("syncLogId is null, cannot start sync for user {}", userId);
@@ -74,18 +78,28 @@ public class GarminSyncExecutor {
 
             try {
                 GarminPythonClient.SyncResult result = pythonClient.fetch(
-                        email, password, chunk.from, chunk.to, GarminPythonClient.DataType.ALL);
+                        userId, email, password, chunk.from, chunk.to, GarminPythonClient.DataType.ALL);
                 JsonNode data = result.data();
 
+                // 체중은 실패해도 나머지 저장에 영향이 없도록 별도 트랜잭션
                 try {
-                    totalWeights += saveWeights(userId, data.get("weights"));
+                    Integer weights = transactionTemplate.execute(status -> saveWeights(userId, data.get("weights")));
+                    totalWeights += weights != null ? weights : 0;
                 } catch (Exception e) {
                     log.warn("Weight sync failed for chunk {} to {}: {}", chunk.from, chunk.to, e.getMessage());
                 }
-                totalActivities += saveActivities(userId, data.get("activities"));
-                totalHealth += saveHealthMetrics(userId, data.get("health"));
-                totalSleep += saveSleepSessions(userId, data.get("sleep"));
-                saveDailyExtras(userId, data.get("extras"));
+                int[] counts = transactionTemplate.execute(status -> {
+                    int activities = saveActivities(userId, data.get("activities"));
+                    int health = saveHealthMetrics(userId, data.get("health"));
+                    int sleep = saveSleepSessions(userId, data.get("sleep"));
+                    saveDailyExtras(userId, data.get("extras"));
+                    return new int[]{activities, health, sleep};
+                });
+                if (counts != null) {
+                    totalActivities += counts[0];
+                    totalHealth += counts[1];
+                    totalSleep += counts[2];
+                }
             } catch (Exception e) {
                 log.error("Chunk sync failed: {} to {}", chunk.from, chunk.to, e);
                 markPartial(syncLog, totalActivities, totalHealth, totalSleep, totalWeights, e.getMessage());

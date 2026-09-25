@@ -8,6 +8,19 @@
 
 ## [Unreleased]
 
+### Security
+- **시크릿 fail-fast** — `JWT_SECRET`/`PIOS_ENCRYPTION_KEY` 기본값 제거(compose `:?`, 32바이트 이상 검증), 암호화 키를 JWT 시크릿과 분리. `PIOS_ENCRYPTION_KEY_LEGACY`로 이전 키 복호화 + 기동 시 재암호화
+- Postgres(5432)/MCP(8001) 포트를 `127.0.0.1`에만 바인딩, MCP 외부 접근은 Caddy `/mcp` 경유
+- Garmin 자격증명을 프로세스 인자 대신 환경변수로 전달 (`ps` 노출 제거)
+- refresh 토큰으로 API 인증 불가 (access 타입만 허용), 미인증 응답 403 → 401 (프론트 refresh 흐름 정상화)
+- access 토큰 localStorage 저장 중단(메모리 보관, 새로고침 시 refresh 쿠키로 재발급), MCP API 키 원문 localStorage 저장 제거
+- 인증 없이 허용하는 경로를 `login`/`register`/`refresh`로 축소, 회원가입 기본 비활성화 (`PIOS_REGISTRATION_ENABLED`)
+
+### Fixed
+- backend Dockerfile의 `garminconnect>=0.3.0`이 셸 리다이렉트로 해석되던 문제 → `garminconnect==0.3.2` 고정
+- Garmin 동기화를 청크 단위 트랜잭션으로 분리 (Garmin 호출 중 DB 커넥션 점유 제거, 실패 상태 롤백 방지), 사용자별 Garmin 세션 토큰 캐시(`garmin_tokens` 볼륨)로 청크마다 재로그인 제거
+- `POST /api/admin/backfill` 비동기 실행(202) + 사용자별 5분 쿨다운
+
 ### Added
 - Neo4j Goal/Question/Insight projection (`HAS_GOAL`, `ASKED`, `HAS_INSIGHT`, `ANSWERED_BY`, `DERIVED_FROM`, `SUPPORTED_BY`) + graph API/UI support
 - AES-GCM encryption for LLM API keys and Garmin passwords (`SecretCryptoService`, startup migration)

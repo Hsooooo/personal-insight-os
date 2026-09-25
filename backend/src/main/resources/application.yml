@@ -31,13 +31,17 @@ server:
 app:
   timezone: Asia/Seoul
 
+# 기본값 없음: 환경변수 미설정 시 기동 실패 (fail-fast)
 jwt:
-  secret: ${JWT_SECRET:pios-jwt-secret-key-2026-change-in-production}
+  secret: ${JWT_SECRET}
   expiration: 86400000
 
-# AES key material for LLM/Garmin secrets at rest (defaults to JWT_SECRET)
 pios:
-  encryption-key: ${PIOS_ENCRYPTION_KEY:${JWT_SECRET:pios-jwt-secret-key-2026-change-in-production}}
+  # AES key material for LLM/Garmin secrets at rest (JWT_SECRET과 별도로 관리)
+  encryption-key: ${PIOS_ENCRYPTION_KEY}
+  # 키 교체 시 이전 키. 기동 시 이 키로 암호화된 값을 현재 키로 재암호화한다.
+  encryption-key-legacy: ${PIOS_ENCRYPTION_KEY_LEGACY:}
+  registration-enabled: ${PIOS_REGISTRATION_ENABLED:false}
   mock-data-enabled: ${PIOS_MOCK_DATA_ENABLED:true}
 
 neo4j:
@@ -53,6 +57,8 @@ garmin:
   python:
     script-path: scripts/garmin_sync.py
     timeout-seconds: 120
+  # 사용자별 Garmin 세션 토큰 캐시 (청크마다 재로그인 방지)
+  token-dir: ${GARMIN_TOKEN_DIR:data/garmin-tokens}
 
 sync:
   rate-limit-seconds: 30
