@@ -10,10 +10,10 @@ ProviderConnection
 - Garmin, Obsidian, Notion 등 외부 데이터 연결 정보
 
 Activity
-- 운등 기록
+- 운동 기록
 
 ActivityLap
-- 운등 구간 기록
+- 운동 구간 기록
 
 Sleep
 - 수면 기록

@@ -2,7 +2,7 @@
 
 모든 주요 변경 사항은 이 파일에 기록됩니다.
 
-형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)를 따륩니다.
+형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.0.0/)를 따릅니다.
 
 ---
 
@@ -20,6 +20,16 @@
 - backend Dockerfile의 `garminconnect>=0.3.0`이 셸 리다이렉트로 해석되던 문제 → `garminconnect==0.3.2` 고정
 - Garmin 동기화를 청크 단위 트랜잭션으로 분리 (Garmin 호출 중 DB 커넥션 점유 제거, 실패 상태 롤백 방지), 사용자별 Garmin 세션 토큰 캐시(`garmin_tokens` 볼륨)로 청크마다 재로그인 제거
 - `POST /api/admin/backfill` 비동기 실행(202) + 사용자별 5분 쿨다운
+- MCP 서버 `mcp<2` 고정 (mcp 2.x에서 `mcp.server.fastmcp` 제거로 기동 실패)
+- frontend Docker 빌드를 `package-lock.json` 기반 `npm ci`로 변경, postgres 이미지를 운영 digest(PG 15.4 + pgvector 0.5.1)로 고정
+- `AskServiceTest` 누락 mock 추가 (기존 3건 실패)
+
+### Changed
+- GitHub Actions CI 추가 (backend `mvn test`, frontend `npm run build`, Python 스크립트 컴파일)
+- 보안 회귀 테스트 추가: 암호화 키 교체/재암호화, access·refresh 토큰 구분, 회원가입 차단
+- `Finance.tsx`(1622줄 → 113줄) / `Activities.tsx`(1410줄 → 202줄)를 `components/finance/`, `components/activities/`로 분리 (동작 변경 없음)
+- 초기 기획 문서(`codex/`, `kimi/`, `personal_insight_os_mvp_deliverables.md`)를 `docs/archive/`로 이동, README 실행 방법을 현재 구성에 맞게 갱신
+- mock 데이터 기본값 비활성화, `__pycache__` ignore, 서비스별 `.dockerignore` 추가
 
 ### Added
 - Neo4j Goal/Question/Insight projection (`HAS_GOAL`, `ASKED`, `HAS_INSIGHT`, `ANSWERED_BY`, `DERIVED_FROM`, `SUPPORTED_BY`) + graph API/UI support
@@ -70,11 +80,11 @@
   - `V8__add_exercises_table.sql` — `exercises` 테이블 생성 + 기존 데이터 마이그레이션
   - `GET /api/activities/exercises` — 사용자별 종목명 목록
   - `Activities.tsx` — 기존 종목 `<select>` 또는 새 종목 직접 입력
-- **AI 운등 요약 (WORKOUT_SUMMARY)**
-  - `AskService` — "이번주 운등", "훈련 일지" 등 키워드 감지
+- **AI 운동 요약 (WORKOUT_SUMMARY)**
+  - `AskService` — "이번주 운동", "훈련 일지" 등 키워드 감지
   - `GarminActivityLapRepository` — 랩 데이터 조회
   - Garmin 활동은 랩 단위, 웨이트는 종목/세트 단위로 표 형태 포맷팅
-  - LLM 프롬프트: 주간 운등 요약 + 총평
+  - LLM 프롬프트: 주간 운동 요약 + 총평
 - **Garmin 랩(lap) 데이터 동기화 저장**
   - Python `garmin_sync.py` — `get_activity_splits()` 호출, 랩 데이터를 activity JSON에 `laps` 키로 첨부
   - Java `GarminSyncService` — `GarminActivityLapRepository` 주입, activity 저장 후 랩 데이터 delete-insert 저장

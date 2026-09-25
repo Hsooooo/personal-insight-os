@@ -6,7 +6,7 @@
 
 ## 1. 프로젝트 개요
 
-**Personal Insight OS (PIOS)**는 개인의 건강, 운등, 기록 데이터를 도메인별 노드와 관계 그래프로 구조화하고, LLM 기반 RAG를 통해 근거 있는 개인화 인사이트를 제공하는 웹서비스입니다.
+**Personal Insight OS (PIOS)**는 개인의 건강, 운동, 기록 데이터를 도메인별 노드와 관계 그래프로 구조화하고, LLM 기반 RAG를 통해 근거 있는 개인화 인사이트를 제공하는 웹서비스입니다.
 
 - 사용자의 Garmin 데이터를 수집하여 PostgreSQL에 원천/정형 데이터를 저장합니다.
 - 수집된 데이터를 도메인 모델(Activity, Sleep, HealthMetric 등)로 변환하여 Neo4j 그래프에 노드/엣지를 생성합니다.
@@ -364,4 +364,4 @@ mvn clean package -DskipTests
 - `docs/ui-screens.md` — 화면별 스토리보드
 - `docs/getting-started.md` — 개발 환경 설정
 - `docs/mcp-integration.md` — MCP 연동 가이드 (아키텍처, 도구 목록, 클라이언트 설정)
-- `personal_insight_os_mvp_deliverables.md` — 1차 기획 산출물 (도메인 모델, RAG 파이프라인 등)
+- `docs/archive/` — 초기 기획 초안 (`personal_insight_os_mvp_deliverables.md`, codex/kimi 분할본). 더 이상 갱신하지 않음

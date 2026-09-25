@@ -1,6 +1,6 @@
 # Personal Insight OS
 
-> 개인의 건강, 운등, 기록 데이터를 도메인별 노드와 관계 그래프로 구조화하고, LLM 기반 RAG를 통해 근거 있는 개인화 인사이트를 제공하는 웹서비스
+> 개인의 건강, 운동, 기록 데이터를 도메인별 노드와 관계 그래프로 구조화하고, LLM 기반 RAG를 통해 근거 있는 개인화 인사이트를 제공하는 웹서비스
 
 ## Architecture
 
@@ -29,27 +29,36 @@
 ### Prerequisites
 - Docker & Docker Compose
 - (Optional) OpenAI API Key for LLM insights
+- (Optional) Neo4j 인스턴스 (외부/클라우드, `NEO4J_*` 환경변수)
 
-### Run
+### Environment
 
 ```bash
-# 1. Clone and navigate
-cd personal-insight-os
-
-# 2. Set environment (optional)
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
-
-# 3. Start all services
-docker-compose up --build
-
-# 4. Open browser
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8080
+# 필수: 값이 없으면 docker compose / 백엔드가 기동을 거부한다
+#   JWT_SECRET           openssl rand -base64 48
+#   PIOS_ENCRYPTION_KEY  openssl rand -base64 48   (JWT_SECRET과 다른 값)
 ```
 
-### Default Accounts
-- PostgreSQL: `pios` / `pios123`
+- 회원가입은 기본 비활성화입니다. 첫 계정을 만들 때만 `PIOS_REGISTRATION_ENABLED=true`로 기동하세요.
+- 암호화 키를 교체할 때는 이전 값을 `PIOS_ENCRYPTION_KEY_LEGACY`에 넣고 기동하면 저장된 비밀값이 새 키로 재암호화됩니다.
+
+### Run (Docker Compose)
+
+```bash
+docker compose up -d --build
+```
+
+- 외부 진입점은 Caddy(80/443) 하나입니다: `/api` → backend, `/mcp` → MCP 서버, 그 외 → frontend.
+- Postgres(5432)와 MCP(8001)는 `127.0.0.1`에만 바인딩됩니다.
+
+### Local Development
+
+```bash
+docker compose up -d postgres          # DB만 컨테이너로
+cd backend && JWT_SECRET=... PIOS_ENCRYPTION_KEY=... mvn spring-boot:run   # :8080
+cd frontend && npm install && npm run dev                                  # :5173
+```
 
 ## MVP Features
 
@@ -62,7 +71,7 @@ docker-compose up --build
 - [x] 기본 대시보드 (차트, 요약)
 - [x] 개인 그래프 조회 (Cytoscape) — 날짜/뷰/레이스 필터 지원
 - [x] 웨이트 트레이닝 종목명 선택 (기존 목록 + 신규 입력)
-- [x] AI 운등 요약 (이번주 운등 정리)
+- [x] AI 운동 요약 (이번주 운동 정리)
 - [x] LLM Provider API Key 등록
 - [x] Ask My Data 자연어 질의
 - [x] 근거 기반 RAG 응답
@@ -91,8 +100,8 @@ docker-compose up --build
 - Pretendard (font)
 
 ### Infrastructure
-- PostgreSQL 16 + pgvector
-- Neo4j (외부/클로드 인스턴스)
+- PostgreSQL 15 + pgvector 0.5.1
+- Neo4j (외부/클라우드 인스턴스)
 - Docker Compose + Caddy
 
 ## Project Structure
@@ -129,14 +138,15 @@ docker-compose up --build
 │       ├── stores/
 │       ├── lib/
 │       └── types/
-└── kimi/docs/           # 기획 문서
+├── mcp/                 # MCP 서버 (Python, streamable-http)
+└── docs/                # 설계/운영 문서 (docs/archive: 초기 기획 초안)
 ```
 
 ## Screens
 
 1. **Dashboard** — 요약 카드, 7일 트렌드 차트, 최근 인사이트, 빠른 질문
 2. **Data Sources** — Garmin 연결/동기화
-3. **Activities** — 운등 목록 및 필터
+3. **Activities** — 운동 목록 및 필터
 4. **Health Timeline** — 수면, 심박, 스트레스, 걸음수 차트
 5. **Personal Graph** — Neo4j 그래프 시각화 (Cytoscape) — 날짜/활동/컨디션/레이스 필터
 6. **Ask My Data** — 자연어 질의 + 근거 기반 답변
@@ -146,18 +156,13 @@ docker-compose up --build
 
 ## Development
 
-### Backend Only
+### Tests & CI
 ```bash
-cd backend
-./mvnw spring-boot:run
+cd backend && mvn test          # 백엔드 단위 테스트
+cd frontend && npm run build    # 타입 체크 + 빌드
 ```
 
-### Frontend Only
-```bash
-cd frontend
-npm install
-npm run dev
-```
+GitHub Actions(`.github/workflows/ci.yml`)가 push/PR마다 위 두 가지와 Python 스크립트 컴파일을 검사합니다.
 
 ### API Documentation
 

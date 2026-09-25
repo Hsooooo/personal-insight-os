@@ -38,7 +38,7 @@
 MVP는 다음 질문에 답할 수 있으면 성공입니다.
 
 ```text
-Garmin 데이터를 수집해서 내 운등/수면/건강 지표를 조회할 수 있는가?
+Garmin 데이터를 수집해서 내 운동/수면/건강 지표를 조회할 수 있는가?
 
 수집된 데이터를 Activity, Sleep, HealthMetric, Date, Insight 같은 도메인으로 변환할 수 있는가?
 
