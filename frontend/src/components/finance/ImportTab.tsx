@@ -77,8 +77,8 @@ export function ImportTab() {
       <CardContent className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
           <div className="space-y-2">
-            <Label>Export file</Label>
-            <Input type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            <Label htmlFor="finance-import-file">Export file</Label>
+            <Input id="finance-import-file" type="file" accept=".xlsx" onChange={(e) => setFile(e.target.files?.[0] || null)} />
           </div>
           <Button onClick={handlePreview} disabled={previewMutation.isPending}>
             {previewMutation.isPending ? <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
@@ -118,7 +118,7 @@ export function ImportTab() {
                       <TableCell className="min-w-36 text-xs">{row.cycleLabel}</TableCell>
                       <TableCell>
                         {row.status === 'NEEDS_REVIEW' ? (
-                          <select
+                          <select aria-label="검토 처리 방식"
                             value={reviewActions[row.rowId] || 'skip'}
                             onChange={(e) => setReviewActions({ ...reviewActions, [row.rowId]: e.target.value as 'create' | 'skip' })}
                             className="h-8 rounded-md border border-input bg-background px-2 text-xs"

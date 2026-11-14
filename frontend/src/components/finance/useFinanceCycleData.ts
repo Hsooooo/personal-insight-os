@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import {
@@ -22,28 +22,42 @@ export function useFinanceCycleData() {
   const [selectedCycleId, setSelectedCycleId] = useState<number | undefined>();
   const [selectedWeekKey, setSelectedWeekKey] = useState('ALL');
 
-  const { data: cycles, isLoading: cyclesLoading } = useQuery({
+  const cyclesQuery = useQuery({
     queryKey: ['financeCycles'],
     queryFn: api.finance.cycles,
   });
+  const { data: cycles, isLoading: cyclesLoading } = cyclesQuery;
 
   const activeCycleId = selectedCycleId || cycles?.[0]?.id;
   const activeCycle = cycles?.find((cycle) => cycle.id === activeCycleId);
 
-  const { data: transactions, isLoading: transactionsLoading } = useQuery({
+  const transactionsQuery = useQuery({
     queryKey: ['financeTransactions', activeCycleId],
-    queryFn: () => api.finance.transactions(activeCycleId),
+    queryFn: ({ signal }) => api.finance.transactions(activeCycleId, { signal }),
     enabled: !!activeCycleId,
   });
+  const { data: transactions, isLoading: transactionsLoading } = transactionsQuery;
 
-  const { data: accounts } = useQuery({
+  const accountsQuery = useQuery({
     queryKey: ['financeAccounts', activeCycleId],
-    queryFn: () => api.finance.accounts(activeCycleId),
+    queryFn: ({ signal }) => api.finance.accounts(activeCycleId, { signal }),
   });
+  const { data: accounts } = accountsQuery;
 
-  useEffect(() => {
+  /** 주요 조회(주기·거래·계좌) 중 첫 번째 오류 */
+  const loadError = cyclesQuery.error ?? transactionsQuery.error ?? accountsQuery.error ?? null;
+  const retryLoad = () => {
+    if (cyclesQuery.isError) void cyclesQuery.refetch();
+    if (transactionsQuery.isError) void transactionsQuery.refetch();
+    if (accountsQuery.isError) void accountsQuery.refetch();
+  };
+
+  // 주기가 바뀌면 주 선택을 초기화한다 (렌더 중 상태 조정)
+  const [weekKeyCycleId, setWeekKeyCycleId] = useState(activeCycleId);
+  if (weekKeyCycleId !== activeCycleId) {
+    setWeekKeyCycleId(activeCycleId);
     setSelectedWeekKey('ALL');
-  }, [activeCycleId]);
+  }
 
   const weekOptions = useMemo(
     () => buildFinanceWeekOptions(activeCycle, transactions || []),
@@ -156,6 +170,8 @@ export function useFinanceCycleData() {
   }, [accounts, selectedPeriodTransactions]);
 
   return {
+    loadError,
+    retryLoad,
     cycles,
     cyclesLoading,
     selectedCycleId,

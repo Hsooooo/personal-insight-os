@@ -1,9 +1,8 @@
-import { useAuthStore } from '@/stores/authStore';
+import { fetchApi, type RequestOptions } from '@/lib/apiClient';
 import type {
   Activity,
   ActivityFilter,
   ApiKey,
-  ApiResponse,
   AskRequest,
   AskResponse,
   AuthResponse,
@@ -30,121 +29,36 @@ import type {
   FinanceTransaction,
   RecurringBill,
   RecurringBillVersion,
+  OAuthAuthorizationRequest,
+  OAuthDecisionResponse,
+  OAuthGrant,
 } from '@/types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+export { ApiError, isApiError, getErrorMessage, setUnauthorizedHandler, refreshSession } from '@/lib/apiClient';
+export type { ApiErrorCode, RequestOptions } from '@/lib/apiClient';
 
-let isRefreshing = false;
-let refreshSubscribers: Array<() => void> = [];
-
-function onRefreshed() {
-  refreshSubscribers.forEach((cb) => cb());
-  refreshSubscribers = [];
-}
-
-async function doRefresh(): Promise<boolean> {
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as ApiResponse<AuthResponse>;
-    if (!data.success || !data.data) return false;
-    useAuthStore.getState().setAuth(data.data.token, data.data.user);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function redirectToLogin() {
-  if (typeof window === 'undefined') return;
-  if (window.location.pathname === '/login') return;
-  useAuthStore.getState().logout();
-  window.location.href = '/login';
-}
-
-async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = useAuthStore.getState().token;
-  const url = `${API_BASE}${path}`;
-
-  const isFormData = options.body instanceof FormData;
-  const headers: Record<string, string> = {
-    ...(!isFormData ? { 'Content-Type': 'application/json' } : {}),
-    ...((options.headers as Record<string, string>) || {}),
-  };
-
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      ...options,
-      headers,
-      credentials: 'include',
-    });
-  } catch {
-    redirectToLogin();
-    throw new Error('Network error');
-  }
-
-  if (response.status === 401) {
-    // Avoid infinite loop on refresh endpoint itself
-    if (path === '/api/auth/refresh') {
-      redirectToLogin();
-      throw new Error('Unauthorized');
-    }
-
-    if (!isRefreshing) {
-      isRefreshing = true;
-      const success = await doRefresh();
-      isRefreshing = false;
-
-      if (success) {
-        onRefreshed();
-        // Retry original request with new token
-        return fetchApi(path, options);
-      } else {
-        refreshSubscribers = [];
-        redirectToLogin();
-        throw new Error('Session expired');
-      }
-    } else {
-      // Wait for refresh to complete then retry
-      await new Promise<void>((resolve) => {
-        refreshSubscribers.push(resolve);
-      });
-      return fetchApi(path, options);
-    }
-  }
-
-  const data = (await response.json()) as ApiResponse<T>;
-
-  if (!response.ok || !data.success) {
-    throw new Error(data.message || `HTTP ${response.status}`);
-  }
-
-  return data.data;
-}
 
 export const api = {
   auth: {
     login: (email: string, password: string): Promise<AuthResponse> =>
-      fetchApi('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+      fetchApi('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }), skipAuthRefresh: true }),
     register: (email: string, password: string, displayName?: string): Promise<AuthResponse> =>
-      fetchApi('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password, displayName }) }),
-    me: (): Promise<User> => fetchApi('/api/auth/me'),
-    logout: (): Promise<void> => fetchApi('/api/auth/logout', { method: 'POST' }),
+      fetchApi('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, displayName }),
+        skipAuthRefresh: true,
+      }),
+    me: (opts?: RequestOptions): Promise<User> =>
+      fetchApi('/api/auth/me', { signal: opts?.signal }),
+    logout: (): Promise<void> => fetchApi('/api/auth/logout', { method: 'POST', skipAuthRefresh: true }),
   },
   dashboard: {
-    summary: (): Promise<DashboardSummary> => fetchApi('/api/dashboard/summary'),
+    summary: (opts?: RequestOptions): Promise<DashboardSummary> =>
+      fetchApi('/api/dashboard/summary', { signal: opts?.signal }),
   },
   dataSources: {
-    list: (): Promise<ProviderConnection[]> => fetchApi('/api/data-sources'),
+    list: (opts?: RequestOptions): Promise<ProviderConnection[]> =>
+      fetchApi('/api/data-sources', { signal: opts?.signal }),
     connectGarmin: (email: string, password: string): Promise<ProviderConnection> =>
       fetchApi('/api/data-sources/garmin/connect', { method: 'POST', body: JSON.stringify({ email, password }) }),
     syncGarmin: (syncType?: string, dateFrom?: string, dateTo?: string): Promise<SyncLog> =>
@@ -152,14 +66,16 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ syncType, dateFrom, dateTo }),
       }),
-    getSyncLogs: (): Promise<SyncLog[]> => fetchApi('/api/data-sources/garmin/sync-logs'),
-    getSyncLog: (id: number): Promise<SyncLog> => fetchApi(`/api/data-sources/garmin/sync-logs/${id}`),
+    getSyncLogs: (opts?: RequestOptions): Promise<SyncLog[]> =>
+      fetchApi('/api/data-sources/garmin/sync-logs', { signal: opts?.signal }),
+    getSyncLog: (id: number, opts?: RequestOptions): Promise<SyncLog> =>
+      fetchApi(`/api/data-sources/garmin/sync-logs/${id}`, { signal: opts?.signal }),
     generateMockData: (): Promise<ProviderConnection> =>
       fetchApi('/api/data-sources/garmin/mock', { method: 'POST' }),
     disconnectGarmin: (): Promise<void> => fetchApi('/api/data-sources/garmin', { method: 'DELETE' }),
   },
   activities: {
-    list: (page = 0, size = 20, filter?: ActivityFilter): Promise<Page<Activity>> => {
+    list: (page = 0, size = 20, filter?: ActivityFilter, opts?: RequestOptions): Promise<Page<Activity>> => {
       const params = new URLSearchParams({ page: String(page), size: String(size) });
       if (filter?.activityType) params.append('activityType', filter.activityType);
       if (filter?.userTag !== undefined) params.append('userTag', filter.userTag);
@@ -170,10 +86,12 @@ export const api = {
       if (filter?.maxDistance) params.append('maxDistance', filter.maxDistance);
       if (filter?.sortBy) params.append('sortBy', filter.sortBy);
       if (filter?.sortDir) params.append('sortDir', filter.sortDir);
-      return fetchApi(`/api/activities?${params.toString()}`);
+      return fetchApi(`/api/activities?${params.toString()}`, { signal: opts?.signal });
     },
-    get: (id: number): Promise<Activity> => fetchApi(`/api/activities/${id}`),
-    getLaps: (id: number): Promise<GarminActivityLap[]> => fetchApi(`/api/activities/${id}/laps`),
+    get: (id: number, opts?: RequestOptions): Promise<Activity> =>
+      fetchApi(`/api/activities/${id}`, { signal: opts?.signal }),
+    getLaps: (id: number, opts?: RequestOptions): Promise<GarminActivityLap[]> =>
+      fetchApi(`/api/activities/${id}/laps`, { signal: opts?.signal }),
     updateTag: (id: number, userTag: string): Promise<Activity> =>
       fetchApi(`/api/activities/${id}/tag`, { method: 'PATCH', body: JSON.stringify({ userTag }) }),
     createWeightTraining: (data: WeightTrainingRequest): Promise<Activity> =>
@@ -182,23 +100,23 @@ export const api = {
       fetchApi(`/api/activities/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
     deleteWeightTraining: (id: number): Promise<void> =>
       fetchApi(`/api/activities/${id}`, { method: 'DELETE' }),
-    getExerciseNames: (): Promise<string[]> =>
-      fetchApi('/api/activities/exercises'),
+    getExerciseNames: (opts?: RequestOptions): Promise<string[]> =>
+      fetchApi('/api/activities/exercises', { signal: opts?.signal }),
   },
   health: {
-    metrics: (start: string, end: string): Promise<HealthMetric[]> =>
-      fetchApi(`/api/health/metrics?start=${start}&end=${end}`),
-    sleep: (start: string, end: string): Promise<Sleep[]> =>
-      fetchApi(`/api/health/sleep?start=${start}&end=${end}`),
+    metrics: (start: string, end: string, opts?: RequestOptions): Promise<HealthMetric[]> =>
+      fetchApi(`/api/health/metrics?start=${start}&end=${end}`, { signal: opts?.signal }),
+    sleep: (start: string, end: string, opts?: RequestOptions): Promise<Sleep[]> =>
+      fetchApi(`/api/health/sleep?start=${start}&end=${end}`, { signal: opts?.signal }),
   },
   graph: {
-    get: (days?: number, view?: string, raceCategory?: string): Promise<GraphData> => {
+    get: (days?: number, view?: string, raceCategory?: string, opts?: RequestOptions): Promise<GraphData> => {
       const params = new URLSearchParams();
       if (days !== undefined) params.append('days', String(days));
       if (view) params.append('view', view);
       if (raceCategory) params.append('raceCategory', raceCategory);
       const qs = params.toString();
-      return fetchApi(`/api/graph${qs ? '?' + qs : ''}`);
+      return fetchApi(`/api/graph${qs ? '?' + qs : ''}`, { signal: opts?.signal });
     },
   },
   ask: {
@@ -206,14 +124,16 @@ export const api = {
       fetchApi('/api/ask', { method: 'POST', body: JSON.stringify({ question } satisfies AskRequest) }),
   },
   insights: {
-    list: (category?: string, feedbackStatus?: string): Promise<Insight[]> => {
+    list: (category?: string, feedbackStatus?: string, opts?: RequestOptions): Promise<Insight[]> => {
       const params = new URLSearchParams();
       if (category) params.append('category', category);
       if (feedbackStatus) params.append('feedbackStatus', feedbackStatus);
-      return fetchApi(`/api/insights?${params.toString()}`);
+      return fetchApi(`/api/insights?${params.toString()}`, { signal: opts?.signal });
     },
-    saved: (): Promise<Insight[]> => fetchApi('/api/insights/saved'),
-    get: (id: number): Promise<Insight> => fetchApi(`/api/insights/${id}`),
+    saved: (opts?: RequestOptions): Promise<Insight[]> =>
+      fetchApi('/api/insights/saved', { signal: opts?.signal }),
+    get: (id: number, opts?: RequestOptions): Promise<Insight> =>
+      fetchApi(`/api/insights/${id}`, { signal: opts?.signal }),
     save: (id: number): Promise<Insight> => fetchApi(`/api/insights/${id}/save`, { method: 'POST' }),
     feedback: (id: number, feedbackStatus: string): Promise<Insight> =>
       fetchApi(`/api/insights/${id}/feedback`, { method: 'POST', body: JSON.stringify({ feedbackStatus }) }),
@@ -222,21 +142,25 @@ export const api = {
       fetchApi('/api/insights/anomaly-alerts/detect', { method: 'POST' }),
   },
   goals: {
-    list: (): Promise<Goal[]> => fetchApi('/api/goals'),
+    list: (opts?: RequestOptions): Promise<Goal[]> =>
+      fetchApi('/api/goals', { signal: opts?.signal }),
     create: (goal: Partial<Goal>): Promise<Goal> =>
       fetchApi('/api/goals', { method: 'POST', body: JSON.stringify(goal) }),
-    get: (id: number): Promise<Goal> => fetchApi(`/api/goals/${id}`),
+    get: (id: number, opts?: RequestOptions): Promise<Goal> =>
+      fetchApi(`/api/goals/${id}`, { signal: opts?.signal }),
     update: (id: number, goal: Partial<Goal>): Promise<Goal> =>
       fetchApi(`/api/goals/${id}`, { method: 'PATCH', body: JSON.stringify(goal) }),
     delete: (id: number): Promise<void> => fetchApi(`/api/goals/${id}`, { method: 'DELETE' }),
   },
   briefings: {
-    latest: (): Promise<Insight | null> => fetchApi('/api/briefings/latest'),
+    latest: (opts?: RequestOptions): Promise<Insight | null> =>
+      fetchApi('/api/briefings/latest', { signal: opts?.signal }),
     generate: (force = false): Promise<Insight> =>
       fetchApi('/api/briefings/generate', { method: 'POST', body: JSON.stringify({ force }) }),
   },
   llmProviders: {
-    list: (): Promise<LlmProvider[]> => fetchApi('/api/settings/llm-providers'),
+    list: (opts?: RequestOptions): Promise<LlmProvider[]> =>
+      fetchApi('/api/settings/llm-providers', { signal: opts?.signal }),
     create: (provider: Partial<LlmProvider>): Promise<LlmProvider> =>
       fetchApi('/api/settings/llm-providers', { method: 'POST', body: JSON.stringify(provider) }),
     update: (id: number, provider: Partial<LlmProvider>): Promise<LlmProvider> =>
@@ -244,18 +168,31 @@ export const api = {
     delete: (id: number): Promise<void> => fetchApi(`/api/settings/llm-providers/${id}`, { method: 'DELETE' }),
   },
   apiKeys: {
-    list: (): Promise<ApiKey[]> => fetchApi('/api/auth/api-keys'),
+    list: (opts?: RequestOptions): Promise<ApiKey[]> =>
+      fetchApi('/api/auth/api-keys', { signal: opts?.signal }),
     create: (name: string): Promise<ApiKey> =>
       fetchApi('/api/auth/api-keys', { method: 'POST', body: JSON.stringify({ name }) }),
     delete: (id: number): Promise<void> => fetchApi(`/api/auth/api-keys/${id}`, { method: 'DELETE' }),
   },
+  oauth: {
+    getRequest: (requestId: string, opts?: RequestOptions): Promise<OAuthAuthorizationRequest> =>
+      fetchApi(`/api/oauth/requests/${encodeURIComponent(requestId)}`, { signal: opts?.signal }),
+    decide: (requestId: string, approve: boolean): Promise<OAuthDecisionResponse> =>
+      fetchApi(`/api/oauth/requests/${encodeURIComponent(requestId)}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ approve }),
+      }),
+    grants: (opts?: RequestOptions): Promise<OAuthGrant[]> => fetchApi('/api/oauth/grants', { signal: opts?.signal }),
+    revokeGrant: (id: number): Promise<void> => fetchApi(`/api/oauth/grants/${id}`, { method: 'DELETE' }),
+  },
   finance: {
-    cycles: (): Promise<FinanceCycle[]> => fetchApi('/api/finance/cycles'),
-    accounts: (cycleId?: number): Promise<FinanceAccount[]> => {
+    cycles: (opts?: RequestOptions): Promise<FinanceCycle[]> =>
+      fetchApi('/api/finance/cycles', { signal: opts?.signal }),
+    accounts: (cycleId?: number, opts?: RequestOptions): Promise<FinanceAccount[]> => {
       const params = new URLSearchParams();
       if (cycleId) params.append('cycleId', String(cycleId));
       const qs = params.toString();
-      return fetchApi(`/api/finance/accounts${qs ? '?' + qs : ''}`);
+      return fetchApi(`/api/finance/accounts${qs ? '?' + qs : ''}`, { signal: opts?.signal });
     },
     createAccount: (account: Partial<FinanceAccount>): Promise<FinanceAccount> =>
       fetchApi('/api/finance/accounts', { method: 'POST', body: JSON.stringify(account) }),
@@ -265,11 +202,11 @@ export const api = {
       fetchApi(`/api/finance/accounts/${id}`, { method: 'DELETE' }),
     autoMapAccounts: (): Promise<FinanceAccountAutoMapResponse> =>
       fetchApi('/api/finance/accounts/auto-map', { method: 'POST' }),
-    transactions: (cycleId?: number): Promise<FinanceTransaction[]> => {
+    transactions: (cycleId?: number, opts?: RequestOptions): Promise<FinanceTransaction[]> => {
       const params = new URLSearchParams();
       if (cycleId) params.append('cycleId', String(cycleId));
       const qs = params.toString();
-      return fetchApi(`/api/finance/transactions${qs ? '?' + qs : ''}`);
+      return fetchApi(`/api/finance/transactions${qs ? '?' + qs : ''}`, { signal: opts?.signal });
     },
     updateTransactionTime: (id: number, request: { time: string }): Promise<FinanceTransaction> =>
       fetchApi(`/api/finance/transactions/${id}/time`, { method: 'PATCH', body: JSON.stringify(request) }),
@@ -282,7 +219,8 @@ export const api = {
     },
     confirmImport: (request: FinanceImportConfirmRequest): Promise<FinanceImportConfirmResponse> =>
       fetchApi('/api/finance/import/confirm', { method: 'POST', body: JSON.stringify(request) }),
-    recurringBills: (): Promise<RecurringBill[]> => fetchApi('/api/finance/recurring-bills'),
+    recurringBills: (opts?: RequestOptions): Promise<RecurringBill[]> =>
+      fetchApi('/api/finance/recurring-bills', { signal: opts?.signal }),
     createRecurringBill: (bill: Partial<RecurringBill>): Promise<RecurringBill> =>
       fetchApi('/api/finance/recurring-bills', { method: 'POST', body: JSON.stringify(bill) }),
     createRecurringBillVersion: (templateId: number, version: Partial<RecurringBillVersion>): Promise<RecurringBillVersion> =>

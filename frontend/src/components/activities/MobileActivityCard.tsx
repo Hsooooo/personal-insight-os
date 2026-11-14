@@ -14,8 +14,17 @@ export function MobileActivityCard({
   const running = isRunningType(activity.activityType);
   return (
     <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
-      className="rounded-lg border bg-card p-4 active:bg-muted/60 cursor-pointer transition-colors"
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      aria-label={`${activity.activityName} 상세 보기`}
+      className="rounded-lg border bg-card p-4 active:bg-muted/60 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">

@@ -116,7 +116,7 @@ export function OverviewTab({
                           <Cell key={entry.name} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(value: number) => money(value)} />
+                      <Tooltip formatter={(value) => money(Number(value ?? 0))} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">

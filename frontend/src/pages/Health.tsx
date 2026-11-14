@@ -16,21 +16,40 @@ import {
   Bar,
 } from 'recharts';
 import { formatDate } from '@/lib/utils';
+import { QueryError } from '@/components/common/QueryError';
+import { ChartDataTable } from '@/components/common/ChartDataTable';
 
 export default function Health() {
   const [days] = useState(14);
-  const end = new Date().toISOString().split('T')[0];
-  const start = new Date(Date.now() - days * 86400000).toISOString().split('T')[0];
+  // 조회 범위는 화면 진입 시점 기준으로 고정한다
+  const [{ start, end }] = useState(() => {
+    const now = Date.now();
+    return {
+      end: new Date(now).toISOString().split('T')[0],
+      start: new Date(now - days * 86400000).toISOString().split('T')[0],
+    };
+  });
 
-  const { data: metrics, isLoading: metricsLoading } = useQuery({
+  const metricsQuery = useQuery({
     queryKey: ['health-metrics', start, end],
-    queryFn: () => api.health.metrics(start, end),
+    queryFn: ({ signal }) => api.health.metrics(start, end, { signal }),
   });
+  const metrics = metricsQuery.data;
+  const metricsLoading = metricsQuery.isPending;
 
-  const { data: sleep, isLoading: sleepLoading } = useQuery({
+  const sleepQuery = useQuery({
     queryKey: ['health-sleep', start, end],
-    queryFn: () => api.health.sleep(start, end),
+    queryFn: ({ signal }) => api.health.sleep(start, end, { signal }),
   });
+  const sleep = sleepQuery.data;
+  const sleepLoading = sleepQuery.isPending;
+
+  const metricsError = metricsQuery.isError ? (
+    <QueryError compact error={metricsQuery.error} onRetry={() => void metricsQuery.refetch()} className="h-64" />
+  ) : null;
+  const sleepError = sleepQuery.isError ? (
+    <QueryError compact error={sleepQuery.error} onRetry={() => void sleepQuery.refetch()} className="h-64" />
+  ) : null;
 
   const rhrData = metrics?.slice().reverse().map((m) => ({
     date: formatDate(m.metricDate),
@@ -53,6 +72,11 @@ export default function Health() {
     weight: m.weightKg,
   })) || [];
 
+  const stepsData = metrics?.slice().reverse().map((m) => ({
+    date: formatDate(m.metricDate),
+    steps: m.steps,
+  })) || [];
+
   return (
     <div className="space-y-6">
       <div>
@@ -72,16 +96,21 @@ export default function Health() {
           <CardContent>
             {metricsLoading ? (
               <Skeleton className="h-64" />
+            ) : metricsError ? (
+              metricsError
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={rhrData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
-                  <Tooltip contentStyle={{ borderRadius: '8px' }} />
-                  <Line type="monotone" dataKey="rhr" stroke="#f43f5e" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={rhrData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ borderRadius: '8px' }} />
+                    <Line type="monotone" dataKey="rhr" stroke="#f43f5e" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <ChartDataTable caption="안정시 심박" rows={rhrData} columns={[{ key: 'date', label: '날짜' }, { key: 'rhr', label: '안정시 심박 (bpm)' }]} />
+              </>
             )}
           </CardContent>
         </Card>
@@ -94,23 +123,28 @@ export default function Health() {
           <CardContent>
             {sleepLoading ? (
               <Skeleton className="h-64" />
+            ) : sleepError ? (
+              sleepError
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={sleepData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} label={{ value: 'h', angle: -90, position: 'insideLeft', fontSize: 10 }} />
-                  <Tooltip
-                    contentStyle={{ borderRadius: '8px' }}
-                    formatter={(value: number, name: string) => [`${value}h`, name]}
-                  />
-                  <Bar dataKey="deep" stackId="sleep" fill="#4f46e5" radius={[2, 2, 0, 0]} name="Deep" />
-                  <Bar dataKey="light" stackId="sleep" fill="#818cf8" radius={[2, 2, 0, 0]} name="Light" />
-                  <Bar dataKey="rem" stackId="sleep" fill="#a78bfa" radius={[2, 2, 0, 0]} name="REM" />
-                  <Bar dataKey="awake" stackId="sleep" fill="#fbbf24" radius={[2, 2, 0, 0]} name="Awake" />
-                  <Bar dataKey="nap" fill="#2dd4bf" radius={[2, 2, 0, 0]} name="Nap" />
-                </BarChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={sleepData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} label={{ value: 'h', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+                    <Tooltip
+                      contentStyle={{ borderRadius: '8px' }}
+                      formatter={(value, name) => [`${value ?? '-'}h`, name]}
+                    />
+                    <Bar dataKey="deep" stackId="sleep" fill="#4f46e5" radius={[2, 2, 0, 0]} name="Deep" />
+                    <Bar dataKey="light" stackId="sleep" fill="#818cf8" radius={[2, 2, 0, 0]} name="Light" />
+                    <Bar dataKey="rem" stackId="sleep" fill="#a78bfa" radius={[2, 2, 0, 0]} name="REM" />
+                    <Bar dataKey="awake" stackId="sleep" fill="#fbbf24" radius={[2, 2, 0, 0]} name="Awake" />
+                    <Bar dataKey="nap" fill="#2dd4bf" radius={[2, 2, 0, 0]} name="Nap" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <ChartDataTable caption="수면 시간" rows={sleepData} columns={[{ key: 'date', label: '날짜' }, { key: 'deep', label: 'Deep (h)' }, { key: 'light', label: 'Light (h)' }, { key: 'rem', label: 'REM (h)' }, { key: 'awake', label: 'Awake (h)' }, { key: 'nap', label: 'Nap (h)' }]} />
+              </>
             )}
           </CardContent>
         </Card>
@@ -123,16 +157,21 @@ export default function Health() {
           <CardContent>
             {sleepLoading ? (
               <Skeleton className="h-64" />
+            ) : sleepError ? (
+              sleepError
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={sleepData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
-                  <Tooltip contentStyle={{ borderRadius: '8px' }} />
-                  <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={sleepData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} />
+                    <Tooltip contentStyle={{ borderRadius: '8px' }} />
+                    <Line type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+                <ChartDataTable caption="수면 점수" rows={sleepData} columns={[{ key: 'date', label: '날짜' }, { key: 'score', label: '수면 점수' }]} />
+              </>
             )}
           </CardContent>
         </Card>
@@ -145,19 +184,21 @@ export default function Health() {
           <CardContent>
             {metricsLoading ? (
               <Skeleton className="h-64" />
+            ) : metricsError ? (
+              metricsError
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={metrics?.slice().reverse().map((m) => ({
-                  date: formatDate(m.metricDate),
-                  steps: m.steps,
-                })) || []}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ borderRadius: '8px' }} />
-                  <Bar dataKey="steps" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={250}>
+                  <BarChart data={stepsData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ borderRadius: '8px' }} />
+                    <Bar dataKey="steps" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+                <ChartDataTable caption="걸음 수" rows={stepsData} columns={[{ key: 'date', label: '날짜' }, { key: 'steps', label: '걸음 수' }]} />
+              </>
             )}
           </CardContent>
         </Card>
@@ -173,16 +214,21 @@ export default function Health() {
           <CardContent>
             {metricsLoading ? (
               <Skeleton className="h-64" />
+            ) : metricsError ? (
+              metricsError
             ) : (
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={weightData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
-                  <Tooltip contentStyle={{ borderRadius: '8px' }} formatter={(value: number) => [`${value} kg`, 'Weight']} />
-                  <Line type="monotone" dataKey="weight" stroke="#0ea5e9" strokeWidth={2} dot={false} connectNulls />
-                </LineChart>
-              </ResponsiveContainer>
+              <>
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={weightData}>
+                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                    <XAxis dataKey="date" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis fontSize={12} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ borderRadius: '8px' }} formatter={(value) => [`${value ?? '-'} kg`, 'Weight']} />
+                    <Line type="monotone" dataKey="weight" stroke="#0ea5e9" strokeWidth={2} dot={false} connectNulls />
+                  </LineChart>
+                </ResponsiveContainer>
+                <ChartDataTable caption="체중" rows={weightData} columns={[{ key: 'date', label: '날짜' }, { key: 'weight', label: '체중 (kg)' }]} />
+              </>
             )}
           </CardContent>
         </Card>

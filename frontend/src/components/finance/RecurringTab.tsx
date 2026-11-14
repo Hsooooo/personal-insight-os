@@ -85,15 +85,15 @@ export function RecurringTab({
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Template</Label>
-                <select value={versionTemplateId} onChange={(e) => setVersionTemplateId(e.target.value ? Number(e.target.value) : '')} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <Label htmlFor="recurring-version-template">Template</Label>
+                <select id="recurring-version-template" value={versionTemplateId} onChange={(e) => setVersionTemplateId(e.target.value ? Number(e.target.value) : '')} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                   <option value="">Select template</option>
                   {recurringBills?.map((bill) => <option key={bill.id} value={bill.id}>{bill.name}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Effective Cycle</Label>
-                <select value={versionCycleId} onChange={(e) => setVersionCycleId(e.target.value ? Number(e.target.value) : '')} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <Label htmlFor="recurring-version-cycle">Effective Cycle</Label>
+                <select id="recurring-version-cycle" value={versionCycleId} onChange={(e) => setVersionCycleId(e.target.value ? Number(e.target.value) : '')} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                   <option value="">No cycle selected</option>
                   {cycles?.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.label}</option>)}
                 </select>
@@ -102,9 +102,9 @@ export function RecurringTab({
             <div className="space-y-2">
               {versionItems.map((item, idx) => (
                 <div key={idx} className="grid grid-cols-[1fr_120px_120px] gap-2">
-                  <Input value={item.itemName} onChange={(e) => updateVersionItem(idx, 'itemName', e.target.value)} />
-                  <Input type="number" value={item.amount} onChange={(e) => updateVersionItem(idx, 'amount', e.target.value)} />
-                  <Input value={item.itemType} onChange={(e) => updateVersionItem(idx, 'itemType', e.target.value)} />
+                  <Input aria-label={`항목 ${idx + 1} 이름`} value={item.itemName} onChange={(e) => updateVersionItem(idx, 'itemName', e.target.value)} />
+                  <Input aria-label={`항목 ${idx + 1} 금액`} type="number" value={item.amount} onChange={(e) => updateVersionItem(idx, 'amount', e.target.value)} />
+                  <Input aria-label={`항목 ${idx + 1} 유형`} value={item.itemType} onChange={(e) => updateVersionItem(idx, 'itemType', e.target.value)} />
                 </div>
               ))}
             </div>
@@ -130,8 +130,8 @@ export function RecurringTab({
                   <p className="font-medium">{bill.name}</p>
                   <p className="text-sm text-muted-foreground">{bill.provider} · {bill.category}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => deleteBillMutation.mutate(bill.id)}>
-                  <Trash2 className="h-4 w-4" />
+                <Button variant="ghost" size="icon" onClick={() => deleteBillMutation.mutate(bill.id)} aria-label={`${bill.name} 정기 지출 삭제`}>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
               <div className="mt-3 space-y-2">

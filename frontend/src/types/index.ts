@@ -468,3 +468,39 @@ export interface Page<T> {
   number: number;
   size: number;
 }
+
+// ── OAuth (MCP authorization) ─────────────────────────────
+
+export type OAuthScope = 'mcp:read' | 'mcp:write' | (string & {});
+
+/** GET /api/oauth/requests/{requestId} */
+export interface OAuthAuthorizationRequest {
+  requestId: string;
+  clientName: string | null;
+  clientId: string;
+  /** 전체 redirect_uri */
+  redirectUri: string;
+  /** redirect_uri의 host(:port) — 표시용 */
+  redirectHost?: string | null;
+  scopes: OAuthScope[];
+  expiresAt: string;
+}
+
+/** POST /api/oauth/requests/{requestId}/decision */
+export interface OAuthDecisionRequest {
+  approve: boolean;
+}
+
+export interface OAuthDecisionResponse {
+  redirectUrl: string;
+}
+
+/** GET /api/oauth/grants */
+export interface OAuthGrant {
+  id: number;
+  clientId: string;
+  clientName: string | null;
+  scopes: OAuthScope[];
+  createdAt: string;
+  lastUsedAt: string | null;
+}

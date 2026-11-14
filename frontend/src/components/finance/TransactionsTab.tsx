@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -101,10 +101,13 @@ export function TransactionsTab({
     income: filteredTransactions.filter((t) => t.flowType === '수입').reduce((sum, t) => sum + Number(t.amount), 0),
   }), [filteredTransactions]);
 
-  useEffect(() => {
+  // 필터 결과가 바뀌면 보이지 않게 된 선택을 해제한다 (렌더 중 상태 조정)
+  const [selectionPrunedFor, setSelectionPrunedFor] = useState(filteredTransactions);
+  if (selectionPrunedFor !== filteredTransactions) {
+    setSelectionPrunedFor(filteredTransactions);
     const visibleIds = new Set(filteredTransactions.map((tx) => tx.id));
     setSelectedTransactionIds((ids) => ids.filter((id) => visibleIds.has(id)));
-  }, [filteredTransactions]);
+  }
 
   const resetTransactionFilters = () => setTransactionFilters(initialFilters);
 
@@ -142,34 +145,34 @@ export function TransactionsTab({
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1.4fr_0.8fr_0.9fr_0.9fr_0.9fr_0.8fr_0.8fr]">
           <div className="relative">
             <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
+            <Input aria-label="거래 검색"
               value={transactionFilters.search}
               onChange={(e) => setTransactionFilters({ ...transactionFilters, search: e.target.value })}
               className="pl-9"
               placeholder="Search account, memo, category"
             />
           </div>
-          <select value={transactionFilters.flowType} onChange={(e) => setTransactionFilters({ ...transactionFilters, flowType: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <select aria-label="흐름 필터" value={transactionFilters.flowType} onChange={(e) => setTransactionFilters({ ...transactionFilters, flowType: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="ALL">All flows</option>
             {transactionFilterOptions.flowTypes.map((flow) => <option key={flow} value={flow}>{flow}</option>)}
           </select>
-          <select value={transactionFilters.account} onChange={(e) => setTransactionFilters({ ...transactionFilters, account: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <select aria-label="계좌 필터" value={transactionFilters.account} onChange={(e) => setTransactionFilters({ ...transactionFilters, account: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="ALL">All accounts</option>
             {transactionFilterOptions.accounts.map((account) => <option key={account} value={account}>{account}</option>)}
           </select>
-          <select value={transactionFilters.category} onChange={(e) => setTransactionFilters({ ...transactionFilters, category: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <select aria-label="카테고리 필터" value={transactionFilters.category} onChange={(e) => setTransactionFilters({ ...transactionFilters, category: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="ALL">All categories</option>
             {transactionFilterOptions.categories.map((category) => <option key={category} value={category}>{category}</option>)}
           </select>
-          <select value={transactionFilters.inclusion} onChange={(e) => setTransactionFilters({ ...transactionFilters, inclusion: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+          <select aria-label="포함 여부 필터" value={transactionFilters.inclusion} onChange={(e) => setTransactionFilters({ ...transactionFilters, inclusion: e.target.value })} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
             <option value="ALL">All flags</option>
             <option value="CASH">Cashflow</option>
             <option value="SPEND">Spending</option>
             <option value="ADJUSTED">Adjusted</option>
             <option value="UNMAPPED">Unmapped</option>
           </select>
-          <Input type="date" value={transactionFilters.from} onChange={(e) => setTransactionFilters({ ...transactionFilters, from: e.target.value })} />
-          <Input type="date" value={transactionFilters.to} onChange={(e) => setTransactionFilters({ ...transactionFilters, to: e.target.value })} />
+          <Input aria-label="시작일" type="date" value={transactionFilters.from} onChange={(e) => setTransactionFilters({ ...transactionFilters, from: e.target.value })} />
+          <Input aria-label="종료일" type="date" value={transactionFilters.to} onChange={(e) => setTransactionFilters({ ...transactionFilters, to: e.target.value })} />
         </div>
       </CardHeader>
       <CardContent>
@@ -316,15 +319,18 @@ function TransactionTimeEditor({
   const currentTime = seoulTime(transaction.transactionAt);
   const changed = time !== currentTime;
 
-  useEffect(() => {
+  // 서버 값이 바뀌면 입력값을 동기화한다 (렌더 중 상태 조정)
+  const [syncedTime, setSyncedTime] = useState(currentTime);
+  if (syncedTime !== currentTime) {
+    setSyncedTime(currentTime);
     setTime(currentTime);
-  }, [currentTime]);
+  }
 
   return (
     <div className="space-y-1">
       <p className="font-medium">{transaction.transactionDate}</p>
       <div className="flex items-center gap-2">
-        <Input
+        <Input aria-label="거래 시간"
           type="time"
           value={time}
           onChange={(e) => setTime(e.target.value)}

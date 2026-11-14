@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -10,6 +12,8 @@ import { LogOut, Menu } from 'lucide-react';
 export function Header() {
   const { user, logout } = useAuthStore();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     try {
@@ -18,7 +22,8 @@ export function Header() {
       // ignore server errors on logout
     } finally {
       logout();
-      window.location.href = '/login';
+      queryClient.clear();
+      navigate('/login', { replace: true });
     }
   };
 
@@ -67,8 +72,8 @@ export function Header() {
                 <p className="truncate text-xs text-muted-foreground">{user.email}</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={handleLogout}>
-              <LogOut className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="로그아웃" title="로그아웃">
+              <LogOut className="h-4 w-4" aria-hidden="true" />
             </Button>
           </>
         )}

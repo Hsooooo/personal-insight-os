@@ -30,6 +30,7 @@ export function ActivityTagCell({ activity }: { activity: ActivityType }) {
               autoFocus
               className="h-7 w-28 rounded border border-input px-2 text-xs"
               placeholder="태그 입력"
+              aria-label="태그 입력"
               value={customValue}
               onChange={(e) => setCustomValue(e.target.value)}
               onKeyDown={(e) => {
@@ -42,12 +43,14 @@ export function ActivityTagCell({ activity }: { activity: ActivityType }) {
               }}
             />
             <button
+              type="button"
               className="h-7 rounded bg-primary px-2 text-xs text-primary-foreground"
               onClick={() => customValue.trim() && updateTagMutation.mutate({ id: activity.id, tag: customValue.trim() })}
             >
               저장
             </button>
             <button
+              type="button"
               className="h-7 rounded border px-2 text-xs"
               onClick={() => setCustomInput(false)}
             >
@@ -63,6 +66,7 @@ export function ActivityTagCell({ activity }: { activity: ActivityType }) {
         <select
           autoFocus
           className="h-7 w-32 rounded border border-input px-1 text-xs"
+          aria-label="태그 선택"
           onChange={(e) => {
             const value = e.target.value;
             if (value === '__custom__') {
@@ -88,16 +92,19 @@ export function ActivityTagCell({ activity }: { activity: ActivityType }) {
   }
 
   return (
-    <TableCell
-      className="cursor-pointer"
-      onClick={() => setEditing(true)}
-      title="클릭하여 태그 변경"
-    >
-      {activity.userTag ? (
-        <Badge className={getTagColor(activity.userTag)}>{activity.userTag}</Badge>
-      ) : (
-        <span className="text-xs text-muted-foreground hover:text-foreground">+ 태그</span>
-      )}
+    <TableCell className="cursor-pointer" onClick={() => setEditing(true)} title="클릭하여 태그 변경">
+      <button
+        type="button"
+        className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label={activity.userTag ? `태그 변경 (현재: ${activity.userTag})` : '태그 추가'}
+        onKeyDown={(e) => e.stopPropagation()}
+      >
+        {activity.userTag ? (
+          <Badge className={getTagColor(activity.userTag)}>{activity.userTag}</Badge>
+        ) : (
+          <span className="text-xs text-muted-foreground hover:text-foreground">+ 태그</span>
+        )}
+      </button>
     </TableCell>
   );
 }

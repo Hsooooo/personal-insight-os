@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lightbulb, Save, Bookmark, Trash2, ExternalLink, AlertTriangle, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { QueryError } from '@/components/common/QueryError';
 
 const ANOMALY_CATEGORY = 'ANOMALY_ALERT';
 const categories = ['', '운동', '수면', '회복', '스트레스', '목표', '패턴', ANOMALY_CATEGORY];
@@ -17,9 +18,9 @@ export default function Insights() {
   const [category, setCategory] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState('');
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['insights', category, feedbackStatus],
-    queryFn: () => api.insights.list(category || undefined, feedbackStatus || undefined),
+    queryFn: ({ signal }) => api.insights.list(category || undefined, feedbackStatus || undefined, { signal }),
   });
 
   const saveMutation = useMutation({
@@ -54,7 +55,7 @@ export default function Insights() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <select
+        <select aria-label="카테고리 필터"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -64,7 +65,7 @@ export default function Insights() {
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <select
+        <select aria-label="피드백 필터"
           value={feedbackStatus}
           onChange={(e) => setFeedbackStatus(e.target.value)}
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -93,6 +94,8 @@ export default function Insights() {
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryError error={error} onRetry={() => void refetch()} title="인사이트를 불러오지 못했습니다" />
       ) : (
         <div className="space-y-4">
           {data?.length ? (
@@ -109,22 +112,26 @@ export default function Insights() {
                       <CardTitle className="text-base">{insight.title}</CardTitle>
                     </div>
                     <div className="flex items-center gap-1">
-                      {insight.isSaved && <Bookmark className="h-4 w-4 text-indigo-500" />}
+                      {insight.isSaved && <Bookmark className="h-4 w-4 text-indigo-500" aria-label="저장됨" />}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
                         onClick={() => saveMutation.mutate(insight.id)}
+                        aria-label="인사이트 저장"
+                        title="인사이트 저장"
                       >
-                        <Save className="h-3.5 w-3.5" />
+                        <Save className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7"
                         onClick={() => deleteMutation.mutate(insight.id)}
+                        aria-label="인사이트 삭제"
+                        title="인사이트 삭제"
                       >
-                        <Trash2 className="h-3.5 w-3.5" />
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -156,6 +163,7 @@ export default function Insights() {
                               {route && (
                                 <Link
                                   to={route}
+                                  aria-label="근거 데이터 보기"
                                   className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                                 >
                                   <ExternalLink className="h-3 w-3" />

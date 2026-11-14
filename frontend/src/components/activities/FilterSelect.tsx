@@ -10,7 +10,7 @@ export function FilterSelect({
   placeholder?: string;
 }) {
   return (
-    <select
+    <select aria-label={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="h-8 rounded-md border border-input bg-background px-2 text-xs focus:outline-none focus:ring-1 focus:ring-ring"

@@ -7,8 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Separator } from '@/components/ui/separator';
 import { Settings as SettingsIcon, Plus, Trash2, KeyRound } from 'lucide-react';
+import { QueryError } from '@/components/common/QueryError';
 
 export default function Settings() {
   const queryClient = useQueryClient();
@@ -20,7 +20,7 @@ export default function Settings() {
     embeddingModel: '',
   });
 
-  const { data: providers, isLoading } = useQuery({
+  const { data: providers, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['llmProviders'],
     queryFn: api.llmProviders.list,
   });
@@ -62,6 +62,8 @@ export default function Settings() {
         <CardContent className="space-y-4">
           {isLoading ? (
             <Skeleton className="h-32" />
+          ) : isError ? (
+            <QueryError compact error={error} onRetry={() => void refetch()} />
           ) : (
             <>
               {providers?.length ? (
@@ -86,8 +88,9 @@ export default function Settings() {
                         variant="ghost"
                         size="icon"
                         onClick={() => deleteMutation.mutate(provider.id)}
+                        aria-label={`${provider.providerName} 제공자 삭제`}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" aria-hidden="true" />
                       </Button>
                     </div>
                   ))}
@@ -106,8 +109,9 @@ export default function Settings() {
                 >
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label>Provider</Label>
+                      <Label htmlFor="llm-provider-name">Provider</Label>
                       <select
+                        id="llm-provider-name"
                         value={newProvider.providerName}
                         onChange={(e) =>
                           setNewProvider({ ...newProvider, providerName: e.target.value })
@@ -118,10 +122,16 @@ export default function Settings() {
                         <option value="Anthropic">Anthropic</option>
                         <option value="Google">Google Gemini</option>
                       </select>
+                      {newProvider.providerName !== 'OpenAI' && (
+                        <p className="text-xs text-muted-foreground">
+                          현재 질문·브리핑·임베딩은 OpenAI 키만 사용합니다. 이 키는 저장되지만 호출에는 쓰이지 않습니다.
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
-                      <Label>Model</Label>
+                      <Label htmlFor="llm-provider-model">Model</Label>
                       <Input
+                        id="llm-provider-model"
                         value={newProvider.defaultChatModel}
                         onChange={(e) =>
                           setNewProvider({ ...newProvider, defaultChatModel: e.target.value })
@@ -130,8 +140,9 @@ export default function Settings() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>API Key</Label>
+                    <Label htmlFor="llm-provider-key">API Key</Label>
                     <Input
+                      id="llm-provider-key"
                       type="password"
                       value={newProvider.apiKey}
                       onChange={(e) =>

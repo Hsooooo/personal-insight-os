@@ -13,10 +13,13 @@ import { FilterSelect } from './FilterSelect';
 import { MobileActivityCard } from './MobileActivityCard';
 import { MobileFilterBar } from './MobileFilterBar';
 import { ACTIVITY_TYPES, SORT_OPTIONS, TAG_OPTIONS, isRunningType } from './utils';
+import { QueryError } from '@/components/common/QueryError';
 
 export function ActivityListSection({
   data,
   isLoading,
+  error,
+  onRetry,
   draft,
   setDraft,
   applyFilter,
@@ -30,6 +33,8 @@ export function ActivityListSection({
 }: {
   data: Page<ActivityType> | undefined;
   isLoading: boolean;
+  error?: unknown;
+  onRetry?: () => void;
   draft: ActivityFilter;
   setDraft: (f: ActivityFilter) => void;
   applyFilter: () => void;
@@ -74,7 +79,7 @@ export function ActivityListSection({
           />
           <div className="relative">
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
+            <Input aria-label="활동 이름 검색"
               placeholder="이름 검색"
               value={draft.activityName || ''}
               onChange={(e) => setDraft({ ...draft, activityName: e.target.value || undefined })}
@@ -92,21 +97,21 @@ export function ActivityListSection({
 
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">기간:</span>
-          <Input
+          <Input aria-label="기간 시작일"
             type="date"
             value={draft.startTimeFrom || ''}
             onChange={(e) => setDraft({ ...draft, startTimeFrom: e.target.value || undefined })}
             className="h-8 w-36 text-xs"
           />
           <span className="text-xs text-muted-foreground">~</span>
-          <Input
+          <Input aria-label="기간 종료일"
             type="date"
             value={draft.startTimeTo || ''}
             onChange={(e) => setDraft({ ...draft, startTimeTo: e.target.value || undefined })}
             className="h-8 w-36 text-xs"
           />
           <span className="text-xs text-muted-foreground ml-2">거리(m):</span>
-          <Input
+          <Input aria-label="최소 거리 (m)"
             type="number"
             placeholder="최소"
             value={draft.minDistance || ''}
@@ -114,7 +119,7 @@ export function ActivityListSection({
             className="h-8 w-24 text-xs"
           />
           <span className="text-xs text-muted-foreground">~</span>
-          <Input
+          <Input aria-label="최대 거리 (m)"
             type="number"
             placeholder="최대"
             value={draft.maxDistance || ''}
@@ -150,6 +155,8 @@ export function ActivityListSection({
               ))}
             </div>
           </>
+        ) : error ? (
+          <QueryError error={error} onRetry={onRetry} title="활동 목록을 불러오지 못했습니다" />
         ) : (
           <>
             {/* Desktop Table */}
@@ -178,6 +185,18 @@ export function ActivityListSection({
                           : ''
                       }
                       onClick={() => handleRowClick(activity)}
+                      {...(isRunningType(activity.activityType) || activity.sourceType === 'MANUAL'
+                        ? {
+                            tabIndex: 0,
+                            'aria-label': `${activity.activityName} 상세 보기`,
+                            onKeyDown: (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+                              if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                                e.preventDefault();
+                                handleRowClick(activity);
+                              }
+                            },
+                          }
+                        : {})}
                     >
                       <TableCell className="font-medium">
                         {formatDateTime(activity.startTime)}

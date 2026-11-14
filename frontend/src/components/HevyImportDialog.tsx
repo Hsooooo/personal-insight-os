@@ -84,7 +84,7 @@ export default function HevyImportDialog({ open, onOpenChange, exerciseNames }: 
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs">Hevy 공유 텍스트를 붙여넣으세요</Label>
-              <textarea
+              <textarea aria-label="Hevy 공유 텍스트"
                 className="w-full h-40 rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -93,7 +93,7 @@ export default function HevyImportDialog({ open, onOpenChange, exerciseNames }: 
             </div>
             <div className="space-y-2">
               <Label className="text-xs">부위</Label>
-              <select
+              <select aria-label="부위"
                 value={bodyPart}
                 onChange={(e) => setBodyPart(e.target.value)}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"

@@ -89,7 +89,7 @@ export function FinanceHeader({
             {copiedWeeklyFinance ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
             {copiedWeeklyFinance ? 'Copied!' : selectedPeriodKind === 'week' ? 'Copy Weekly Summary' : 'Copy Cycle Summary'}
           </Button>
-          <select
+          <select aria-label="급여 주기 선택"
             value={activeCycleId || ''}
             onChange={(e) => onCycleChange(e.target.value ? Number(e.target.value) : undefined)}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -99,7 +99,7 @@ export function FinanceHeader({
               <option key={cycle.id} value={cycle.id}>{cycle.label}</option>
             ))}
           </select>
-          <select
+          <select aria-label="주 선택"
             value={selectedWeekKey}
             onChange={(e) => onWeekChange(e.target.value)}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm"

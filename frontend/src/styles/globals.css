@@ -60,4 +60,10 @@
   h1, h2, h3, h4, h5, h6 {
     @apply font-semibold tracking-tight;
   }
+
+  /* 키보드 포커스 표시 (개별 컴포넌트의 focus-visible 스타일이 우선한다) */
+  :where(a, button, input, select, textarea, summary, [tabindex], [role='button']):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
 }

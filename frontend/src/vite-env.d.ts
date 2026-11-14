@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
-declare module 'remark-gfm' {
-  const remarkGfm: any;
-  export default remarkGfm;
+declare module 'cytoscape-fcose' {
+  import type { Ext } from 'cytoscape';
+  const fcose: Ext;
+  export default fcose;
 }

@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import { Target, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import type { Goal } from '@/types';
+import { QueryError } from '@/components/common/QueryError';
 
 const GOAL_TEMPLATES = [
   { value: 'WEEKLY_RUN_DISTANCE', label: '주간 러닝 거리', unit: 'km', placeholder: '40' },
@@ -72,7 +73,7 @@ export default function Goals() {
     targetDate: '',
   });
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['goals'],
     queryFn: api.goals.list,
   });
@@ -140,8 +141,9 @@ export default function Goals() {
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Title</Label>
+                  <Label htmlFor="goal-title">Title</Label>
                   <Input
+                    id="goal-title"
                     value={newGoal.title}
                     onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
                     placeholder="e.g., 주간 러닝 40km"
@@ -149,12 +151,12 @@ export default function Goals() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Type</Label>
+                  <Label htmlFor="goal-type">Type</Label>
                   <Select
                     value={newGoal.goalType}
                     onValueChange={(value) => setNewGoal({ ...newGoal, goalType: value })}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger id="goal-type">
                       <SelectValue placeholder="목표 유형" />
                     </SelectTrigger>
                     <SelectContent>
@@ -169,8 +171,9 @@ export default function Goals() {
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <div className="space-y-2">
-                  <Label>Target ({selectedTemplate?.unit || 'value'})</Label>
+                  <Label htmlFor="goal-target">Target ({selectedTemplate?.unit || 'value'})</Label>
                   <Input
+                    id="goal-target"
                     type="number"
                     step="0.1"
                     value={newGoal.targetValue}
@@ -180,16 +183,18 @@ export default function Goals() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Start date</Label>
+                  <Label htmlFor="goal-start">Start date</Label>
                   <Input
+                    id="goal-start"
                     type="date"
                     value={newGoal.startDate}
                     onChange={(e) => setNewGoal({ ...newGoal, startDate: e.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Target date</Label>
+                  <Label htmlFor="goal-target-date">Target date</Label>
                   <Input
+                    id="goal-target-date"
                     type="date"
                     value={newGoal.targetDate}
                     onChange={(e) => setNewGoal({ ...newGoal, targetDate: e.target.value })}
@@ -197,8 +202,9 @@ export default function Goals() {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Description</Label>
+                <Label htmlFor="goal-description">Description</Label>
                 <Input
+                  id="goal-description"
                   value={newGoal.description}
                   onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
                   placeholder="Describe your goal"
@@ -223,6 +229,8 @@ export default function Goals() {
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
+      ) : isError ? (
+        <QueryError error={error} onRetry={() => void refetch()} title="목표를 불러오지 못했습니다" />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {data?.length ? (
@@ -253,8 +261,8 @@ function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: (id: number) => vo
           <Target className="h-5 w-5 text-indigo-500" />
           <CardTitle className="text-base">{goal.title}</CardTitle>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(goal.id)}>
-          <Trash2 className="h-3.5 w-3.5" />
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(goal.id)} aria-label={`목표 ${goal.title} 삭제`}>
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">

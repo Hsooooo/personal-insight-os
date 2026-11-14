@@ -92,8 +92,10 @@ export function WeightTrainingForm({
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: WeightTrainingRequest) =>
-      api.activities.updateWeightTraining(editActivity!.id, data),
+    mutationFn: (data: WeightTrainingRequest) => {
+      if (!editActivity) throw new Error('수정할 활동이 없습니다.');
+      return api.activities.updateWeightTraining(editActivity.id, data);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['activities'] });
       onClose();
@@ -173,7 +175,7 @@ export function WeightTrainingForm({
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">운동 이름</Label>
-              <Input
+              <Input aria-label="운동 이름"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="예: 가슴 운동"
@@ -183,7 +185,7 @@ export function WeightTrainingForm({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">시작 시간</Label>
-              <Input
+              <Input aria-label="시작 시간"
                 type="datetime-local"
                 value={startTime}
                 onChange={(e) => setStartTime(e.target.value)}
@@ -193,7 +195,7 @@ export function WeightTrainingForm({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">소요 시간 (분)</Label>
-              <Input
+              <Input aria-label="소요 시간 (분)"
                 type="number"
                 value={durationMin}
                 onChange={(e) => setDurationMin(e.target.value)}
@@ -205,7 +207,7 @@ export function WeightTrainingForm({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">운동 부위</Label>
-              <select
+              <select aria-label="운동 부위"
                 value={bodyPart}
                 onChange={(e) => setBodyPart(e.target.value)}
                 className="h-8 w-full rounded-md border border-input bg-background px-2 text-xs"
@@ -220,7 +222,7 @@ export function WeightTrainingForm({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs">평균 심박 (bpm)</Label>
-              <Input
+              <Input aria-label="평균 심박 (bpm)"
                 type="number"
                 value={avgHr}
                 onChange={(e) => setAvgHr(e.target.value)}
@@ -230,7 +232,7 @@ export function WeightTrainingForm({
             </div>
             <div className="space-y-1">
               <Label className="text-xs">칼로리 (kcal)</Label>
-              <Input
+              <Input aria-label="칼로리 (kcal)"
                 type="number"
                 value={calories}
                 onChange={(e) => setCalories(e.target.value)}
@@ -256,7 +258,7 @@ export function WeightTrainingForm({
                 <div className="flex items-center gap-2">
                   {customNames[exIdx] ? (
                     <>
-                      <Input
+                      <Input aria-label={`운동 ${exIdx + 1} 종목명`}
                         value={ex.name}
                         onChange={(e) => updateExerciseName(exIdx, e.target.value)}
                         placeholder="새 종목명 입력"
@@ -274,7 +276,7 @@ export function WeightTrainingForm({
                     </>
                   ) : (
                     <>
-                      <select
+                      <select aria-label={`운동 ${exIdx + 1} 종목 선택`}
                         value={ex.name}
                         onChange={(e) => {
                           if (e.target.value === '__custom__') {
@@ -310,8 +312,9 @@ export function WeightTrainingForm({
                       variant="ghost"
                       className="h-8 w-8 p-0 text-destructive"
                       onClick={() => removeExercise(exIdx)}
+                      aria-label={`운동 ${exIdx + 1} 삭제`}
                     >
-                      <X className="h-4 w-4" />
+                      <X className="h-4 w-4" aria-hidden="true" />
                     </Button>
                   )}
                 </div>
@@ -320,7 +323,7 @@ export function WeightTrainingForm({
                   {ex.sets.map((set, setIdx) => (
                     <div key={setIdx} className="flex items-center gap-2">
                       <span className="text-xs text-muted-foreground w-8">{setIdx + 1}세트</span>
-                      <Input
+                      <Input aria-label={`${setIdx + 1}세트 반복 횟수`}
                         type="number"
                         value={set.reps}
                         onChange={(e) => updateSet(exIdx, setIdx, 'reps', e.target.value)}
@@ -328,7 +331,7 @@ export function WeightTrainingForm({
                         className="h-7 w-20 text-xs"
                       />
                       <span className="text-xs text-muted-foreground">회</span>
-                      <Input
+                      <Input aria-label={`${setIdx + 1}세트 무게 (kg)`}
                         type="number"
                         step="0.5"
                         value={set.weightKg}
@@ -337,7 +340,7 @@ export function WeightTrainingForm({
                         className="h-7 w-20 text-xs"
                       />
                       <span className="text-xs text-muted-foreground">kg</span>
-                      <Input
+                      <Input aria-label={`${setIdx + 1}세트 시간 (초)`}
                         type="number"
                         value={set.durationSeconds}
                         onChange={(e) => updateSet(exIdx, setIdx, 'durationSeconds', e.target.value)}
@@ -352,8 +355,9 @@ export function WeightTrainingForm({
                           variant="ghost"
                           className="h-7 w-7 p-0 text-destructive"
                           onClick={() => removeSet(exIdx, setIdx)}
+                          aria-label={`세트 ${setIdx + 1} 삭제`}
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-3 w-3" aria-hidden="true" />
                         </Button>
                       )}
                     </div>

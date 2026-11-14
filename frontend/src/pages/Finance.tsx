@@ -8,9 +8,12 @@ import { AccountsTab } from '@/components/finance/AccountsTab';
 import { ImportTab } from '@/components/finance/ImportTab';
 import { RecurringTab } from '@/components/finance/RecurringTab';
 import { useFinanceCycleData } from '@/components/finance/useFinanceCycleData';
+import { QueryError } from '@/components/common/QueryError';
 
 export default function Finance() {
   const {
+    loadError,
+    retryLoad,
     cycles,
     cyclesLoading,
     setSelectedCycleId,
@@ -62,6 +65,8 @@ export default function Finance() {
         onCycleChange={handleCycleChange}
         onWeekChange={setSelectedWeekKey}
       />
+
+      {loadError && <QueryError compact error={loadError} onRetry={retryLoad} title="금융 데이터를 불러오지 못했습니다" />}
 
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList className="flex h-auto flex-wrap justify-start">

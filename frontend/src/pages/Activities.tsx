@@ -27,10 +27,11 @@ export default function Activities() {
 
   const { triggerSync, isPending: todaySyncPending, isPolling: todaySyncPolling } = useTodaySync();
 
-  const { data, isLoading } = useQuery({
+  const activitiesQuery = useQuery({
     queryKey: ['activities', page, filter],
-    queryFn: () => api.activities.list(page, 20, filter),
+    queryFn: ({ signal }) => api.activities.list(page, 20, filter, { signal }),
   });
+  const { data, isLoading } = activitiesQuery;
 
   const { data: exerciseNames } = useQuery({
     queryKey: ['exerciseNames'],
@@ -84,14 +85,20 @@ export default function Activities() {
 
   const { data: runningDetail, isLoading: runningDetailLoading } = useQuery({
     queryKey: ['activity', selectedRunningId],
-    queryFn: () => api.activities.get(selectedRunningId!),
-    enabled: !!selectedRunningId,
+    queryFn: ({ signal }) => {
+      if (selectedRunningId == null) throw new Error('activity id missing');
+      return api.activities.get(selectedRunningId, { signal });
+    },
+    enabled: selectedRunningId != null,
   });
 
   const { data: runningLaps, isLoading: runningLapsLoading } = useQuery({
     queryKey: ['activity-laps', selectedRunningId],
-    queryFn: () => api.activities.getLaps(selectedRunningId!),
-    enabled: !!selectedRunningId,
+    queryFn: ({ signal }) => {
+      if (selectedRunningId == null) throw new Error('activity id missing');
+      return api.activities.getLaps(selectedRunningId, { signal });
+    },
+    enabled: selectedRunningId != null,
   });
 
   return (
@@ -171,6 +178,8 @@ export default function Activities() {
           <ActivityListSection
             data={data}
             isLoading={isLoading}
+            error={activitiesQuery.isError ? activitiesQuery.error : undefined}
+            onRetry={() => void activitiesQuery.refetch()}
             draft={draft}
             setDraft={setDraft}
             applyFilter={applyFilter}

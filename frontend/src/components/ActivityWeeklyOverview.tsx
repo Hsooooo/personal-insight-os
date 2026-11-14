@@ -34,6 +34,7 @@ import {
   weekdayLabel,
 } from '@/lib/utils';
 import type { Activity } from '@/types';
+import { QueryError } from '@/components/common/QueryError';
 
 const WEEK_OPTION_COUNT = 12;
 
@@ -100,10 +101,11 @@ export default function ActivityWeeklyOverview({
   const prevWeekStart = addDaysYmd(weekStart, -7);
 
   // 'activities' 접두 queryKey → 동기화/웨이트 저장/태그 변경 시 기존 invalidate로 함께 갱신
-  const { data: weekActivities, isLoading } = useQuery({
+  const weekQuery = useQuery({
     queryKey: ['activities', 'week', weekStart],
     queryFn: () => fetchWeekActivities(weekStart),
   });
+  const { data: weekActivities, isLoading } = weekQuery;
   const { data: prevWeekActivities } = useQuery({
     queryKey: ['activities', 'week', prevWeekStart],
     queryFn: () => fetchWeekActivities(prevWeekStart),
@@ -172,7 +174,7 @@ export default function ActivityWeeklyOverview({
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <select
+          <select aria-label="주 선택"
             value={weekStart}
             onChange={(e) => setWeekStart(e.target.value)}
             className="h-9 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm sm:flex-none"
@@ -210,6 +212,8 @@ export default function ActivityWeeklyOverview({
             <Skeleton key={i} className="h-28" />
           ))}
         </div>
+      ) : weekQuery.isError ? (
+        <QueryError compact error={weekQuery.error} onRetry={() => void weekQuery.refetch()} title="주간 활동을 불러오지 못했습니다" />
       ) : (
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
           <StatCard
@@ -269,7 +273,7 @@ export default function ActivityWeeklyOverview({
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="label" tick={{ fontSize: 12 }} />
                       <YAxis tick={{ fontSize: 12 }} unit="분" allowDecimals={false} />
-                      <Tooltip formatter={(value: number) => `${value}분`} />
+                      <Tooltip formatter={(value) => `${value ?? '-'}분`} />
                       {presentCategories.map((c) => (
                         <Bar key={c.key} dataKey={c.key} name={c.label} stackId="minutes" fill={c.color} />
                       ))}

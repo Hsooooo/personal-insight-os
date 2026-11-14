@@ -165,7 +165,7 @@ export function AccountsTab({
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" variant="outline" onClick={() => fillAccountFromAsset(asset)}>Use Suggestion</Button>
-                      <select
+                      <select aria-label="기존 계좌에 매핑"
                         defaultValue=""
                         onChange={(e) => e.target.value && mapAssetToExisting(asset, Number(e.target.value))}
                         className="h-9 rounded-md border border-input bg-background px-2 text-xs"
@@ -196,8 +196,8 @@ export function AccountsTab({
                   <p className="font-medium">{account.name}</p>
                   <p className="text-sm text-muted-foreground">{account.institution || '-'} · {account.accountType} · {account.role}</p>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => deleteAccountMutation.mutate(account.id)}>
-                  <Trash2 className="h-4 w-4" />
+                <Button variant="ghost" size="icon" onClick={() => deleteAccountMutation.mutate(account.id)} aria-label={`${account.name} 계좌 삭제`}>
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </Button>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-6">
@@ -240,13 +240,13 @@ function AccountOpeningBalanceEditor({
   return (
     <div className="mt-3 grid gap-2 rounded-md bg-muted/30 p-3">
       <div className="grid gap-2 sm:grid-cols-[1fr_140px_auto]">
-        <Input
+        <Input aria-label="초기 잔액"
           value={openingBalance}
           inputMode="numeric"
           onChange={(e) => setOpeningBalance(e.target.value)}
           placeholder="Seed opening balance"
         />
-        <Input
+        <Input aria-label="초기 잔액 기준일"
           value={openingBalanceDate}
           type="date"
           onChange={(e) => setOpeningBalanceDate(e.target.value)}
@@ -264,7 +264,7 @@ function AccountOpeningBalanceEditor({
           Save
         </Button>
       </div>
-      <Input
+      <Input aria-label="초기 잔액 메모"
         value={openingBalanceMemo}
         onChange={(e) => setOpeningBalanceMemo(e.target.value)}
         placeholder="Opening balance memo"

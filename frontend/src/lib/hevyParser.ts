@@ -24,7 +24,7 @@ export interface ParsedHevyWorkout {
 function normalize(str: string): string {
   return str
     .toLowerCase()
-    .replace(/[\s\(\)\[\]\-\/\.]/g, '')
+    .replace(/[\s()[\]\-/.]/g, '')
     .replace(/(을|를|이|가|은|는)$/g, '');
 }
 

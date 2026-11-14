@@ -78,14 +78,14 @@ export function MobileFilterBar({
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">기간</Label>
                 <div className="flex items-center gap-2">
-                  <Input
+                  <Input aria-label="기간 시작일"
                     type="date"
                     value={draft.startTimeFrom || ''}
                     onChange={(e) => setDraft({ ...draft, startTimeFrom: e.target.value || undefined })}
                     className="h-9 text-xs"
                   />
                   <span className="text-xs text-muted-foreground">~</span>
-                  <Input
+                  <Input aria-label="기간 종료일"
                     type="date"
                     value={draft.startTimeTo || ''}
                     onChange={(e) => setDraft({ ...draft, startTimeTo: e.target.value || undefined })}
@@ -96,7 +96,7 @@ export function MobileFilterBar({
               <div className="space-y-2">
                 <Label className="text-xs text-muted-foreground">거리 (m)</Label>
                 <div className="flex items-center gap-2">
-                  <Input
+                  <Input aria-label="최소 거리 (m)"
                     type="number"
                     placeholder="최소"
                     value={draft.minDistance || ''}
@@ -104,7 +104,7 @@ export function MobileFilterBar({
                     className="h-9 text-xs"
                   />
                   <span className="text-xs text-muted-foreground">~</span>
-                  <Input
+                  <Input aria-label="최대 거리 (m)"
                     type="number"
                     placeholder="최대"
                     value={draft.maxDistance || ''}
@@ -129,7 +129,7 @@ export function MobileFilterBar({
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
+            <Input aria-label="활동 이름 검색"
               placeholder="이름 검색"
               value={draft.activityName || ''}
               onChange={(e) => setDraft({ ...draft, activityName: e.target.value || undefined })}

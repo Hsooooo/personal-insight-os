@@ -135,7 +135,7 @@ export function formatWeeklyReport(
   md += `|------|-----|--------|-------|----------|--------|------|------|-----|----------|-------|------|-------|-----|-------|-----|------|-----|-------|\n`;
 
   for (const date of sortedDates) {
-    const { health, sleep } = dateMap.get(date)!;
+    const { health, sleep } = dateMap.get(date) ?? {};
     const rhr = health?.restingHeartRate ?? '-';
     const stress = health?.stressAvg ?? '-';
     const steps = health?.steps ?? '-';
