@@ -141,7 +141,7 @@ public class GarminDailyPersister {
         byKey.forEach((key, node) -> {
             GarminDailyRaw raw = existing.computeIfAbsent(key, k -> GarminDailyRaw.builder()
                     .user(user).metricDate(k.date()).dataType(k.type()).build());
-            raw.setPayload(json.toMap(node.get("payload")));
+            raw.setPayload(json.toPayloadMap(node.get("payload")));
             toSave.add(raw);
         });
         dailyRawRepo.saveAll(toSave);

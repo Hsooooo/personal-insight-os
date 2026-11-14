@@ -14,6 +14,7 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -64,6 +65,19 @@ public class GarminJson {
         } catch (IllegalArgumentException e) {
             return new HashMap<>();
         }
+    }
+
+    /**
+     * 원문 보관용(jsonb Map 컬럼). 객체는 그대로, 배열(예: get_body_battery, get_training_readiness)은
+     * {@code {"items": [...]}}로 감싸 보존한다. toMap()처럼 배열을 {}로 버리면 원문이 사라진다.
+     */
+    public Map<String, Object> toPayloadMap(JsonNode node) {
+        if (node != null && node.isArray()) {
+            Map<String, Object> wrapped = new HashMap<>();
+            wrapped.put("items", objectMapper.convertValue(node, List.class));
+            return wrapped;
+        }
+        return toMap(node);
     }
 
     public LocalDate date(String text) {
