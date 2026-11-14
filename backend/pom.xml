@@ -23,7 +23,7 @@
         <!-- Spring Boot 4.x 이전 마지막 3.5.x 라인. 4.x 전환은 별도 후속 작업 -->
         <neo4j-java-driver.version>5.28.15</neo4j-java-driver.version>
         <jjwt.version>0.12.7</jjwt.version>
-        <poi.version>5.5.1</poi.version>
+        <poi.version>6.0.0</poi.version>
     </properties>
 
     <dependencies>
