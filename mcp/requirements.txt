@@ -4,6 +4,6 @@ mcp>=2.3.0,<3
 httpx>=0.28.1,<0.29
 starlette>=1.10,<2
 uvicorn>=0.54,<1
-pydantic>=2.12,<3
+pydantic>=2.14.3,<3
 # slim 이미지에는 시스템 tzdata가 없을 수 있으므로 zoneinfo(Asia/Seoul) 용
 tzdata>=2025.2
