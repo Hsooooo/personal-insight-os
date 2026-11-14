@@ -5,43 +5,44 @@
 ## Architecture
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   React 19  │────▶│ Spring Boot  │────▶│ PostgreSQL  │
-│  + Vite     │     │   3.3 (Java) │     │  + pgvector │
-│  + Tailwind │◀────│  + JWT Auth  │◀────│   (Data)    │
-└─────────────┘     └──────────────┘     └─────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │   Neo4j 5    │
-                    │  (Graph)     │
-                    └──────────────┘
-                           │
-                           ▼
-                    ┌──────────────┐
-                    │  OpenAI API  │
-                    │  (Optional)  │
-                    └──────────────┘
+[브라우저 / MCP 클라이언트] ──HTTPS──▶ [Caddy :80/:443]
+                                        ├─ /api*, /.well-known/oauth-authorization-server* ─▶ [Spring Boot 3.5 :8080]
+                                        ├─ /mcp*, /.well-known/oauth-protected-resource*   ─▶ [MCP Server :8001]
+                                        └─ 그 외                                            ─▶ [React SPA (nginx) :8080]
+
+[Spring Boot] ──▶ PostgreSQL + pgvector, Neo4j(선택), OpenAI 호환 API(선택), Open-Meteo
+[MCP Server]  ──(내부망 + 내부 시크릿)──▶ [Spring Boot]
 ```
+
+자세한 구조와 OAuth 흐름은 [docs/architecture.md](docs/architecture.md)를 참고하세요.
 
 ## Quick Start
 
 ### Prerequisites
 - Docker & Docker Compose
-- (Optional) OpenAI API Key for LLM insights
-- (Optional) Neo4j 인스턴스 (외부/클라우드, `NEO4J_*` 환경변수)
+- (선택) OpenAI API Key, Neo4j 인스턴스 (`NEO4J_*`)
 
 ### Environment
 
 ```bash
 cp .env.example .env
-# 필수: 값이 없으면 docker compose / 백엔드가 기동을 거부한다
-#   JWT_SECRET           openssl rand -base64 48
-#   PIOS_ENCRYPTION_KEY  openssl rand -base64 48   (JWT_SECRET과 다른 값)
 ```
 
+`.env`의 **필수** 값 (누락 시 `docker compose`가 기동을 거부합니다):
+
+| 변수 | 설명 |
+|------|------|
+| `JWT_SECRET` | `openssl rand -base64 48` |
+| `PIOS_ENCRYPTION_KEY` | 저장 시크릿 암호화 키 (`JWT_SECRET`과 다른 값) |
+| `PIOS_MCP_INTERNAL_SECRET` | backend ↔ MCP 내부 시크릿 (32자 이상) |
+| `POSTGRES_PASSWORD` | DB 비밀번호 |
+| `PIOS_PUBLIC_BASE_URL` | 외부 접근 URL, OAuth issuer (예: `https://pios.example.com`, 개발: `https://localhost`) |
+| `PIOS_CORS_ALLOWED_ORIGINS` | CORS 허용 Origin (운영: `PIOS_PUBLIC_BASE_URL`과 동일) |
+
+- `PIOS_DOMAIN`은 Caddy 도메인 (기본 `localhost`).
 - 회원가입은 기본 비활성화입니다. 첫 계정을 만들 때만 `PIOS_REGISTRATION_ENABLED=true`로 기동하세요.
-- 암호화 키를 교체할 때는 이전 값을 `PIOS_ENCRYPTION_KEY_LEGACY`에 넣고 기동하면 저장된 비밀값이 새 키로 재암호화됩니다.
+- 암호화 키 교체: 이전 값을 `PIOS_ENCRYPTION_KEY_LEGACY`에 넣고 기동하면 재암호화됩니다 ([운영 가이드](docs/operations.md)).
+- 전체 환경변수 표는 [AGENTS.md](AGENTS.md#10-환경-변수) 참고.
 
 ### Run (Docker Compose)
 
@@ -49,16 +50,23 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-- 외부 진입점은 Caddy(80/443) 하나입니다: `/api` → backend, `/mcp` → MCP 서버, 그 외 → frontend.
+- 외부 진입점은 Caddy(80/443) 하나입니다. frontend 컨테이너(nginx-unprivileged)는 8080에서 정적 파일만 서빙하며 `/api`를 프록시하지 않습니다.
 - Postgres(5432)와 MCP(8001)는 `127.0.0.1`에만 바인딩됩니다.
+- 웹 앱: `https://<PIOS_DOMAIN>` (개발 기본 `https://localhost`, Caddy 내부 CA)
+
+### MCP 연결
+
+MCP 클라이언트(Claude, Cursor, Codex 등)에는 `https://<PIOS_DOMAIN>/mcp` URL만 등록하면 OAuth 2.1 로그인/승인 화면(`/oauth/consent`)으로 연결됩니다. 헤드리스 환경은 웹의 "MCP 연동" 화면에서 `pios_` API 키를 발급해 `Authorization: Bearer`로 사용합니다. 자세한 내용은 [docs/mcp-integration.md](docs/mcp-integration.md).
 
 ### Local Development
 
 ```bash
-docker compose up -d postgres          # DB만 컨테이너로
-cd backend && JWT_SECRET=... PIOS_ENCRYPTION_KEY=... mvn spring-boot:run   # :8080
-cd frontend && npm install && npm run dev                                  # :5173
+docker compose up -d postgres                                              # DB만 컨테이너로
+cd backend && SPRING_PROFILES_ACTIVE=local mvn spring-boot:run             # :8080 (local 프로필: 개발용 기본 시크릿)
+cd frontend && npm install && npm run dev                                  # :5173 (/api → :8080 프록시)
 ```
+
+자세한 내용은 [docs/getting-started.md](docs/getting-started.md).
 
 ## MVP Features
 
@@ -77,20 +85,22 @@ cd frontend && npm install && npm run dev                                  # :51
 - [x] 근거 기반 RAG 응답
 - [x] 인사이트 저장
 - [x] 인사이트 피드백
+- [x] 목표 진행률, 주간 브리핑, 이상 신호 알림
+- [x] 가계(Finance) 관리
+- [x] MCP 연동 (OAuth 2.1 + API 키), 연결된 앱 관리
 
 ## Tech Stack
 
 ### Backend
-- Spring Boot 3.3 + Java 21
-- Spring Security + JWT
-- Spring Data JPA
+- Spring Boot 3.5 + Java 21
+- Spring Security + JWT + OAuth 2.1 Authorization Server
+- Spring Data JPA, Flyway (V1~V26)
 - Neo4j Java Driver
-- Flyway (DB Migration)
-- OpenAI Java SDK
+- OpenAI 호환 REST (`LlmClient`)
 
 ### Frontend
-- React 19 + TypeScript
-- Vite
+- React 19 + TypeScript, React Router 7
+- Vite 8, ESLint, Vitest
 - Tailwind CSS
 - shadcn/ui (custom)
 - Recharts (charts)
@@ -100,6 +110,7 @@ cd frontend && npm install && npm run dev                                  # :51
 - Pretendard (font)
 
 ### Infrastructure
+- MCP 서버: Python + mcp SDK 2.x (OAuth Resource Server)
 - PostgreSQL 15 + pgvector 0.5.1
 - Neo4j (외부/클라우드 인스턴스)
 - Docker Compose + Caddy
@@ -108,39 +119,15 @@ cd frontend && npm install && npm run dev                                  # :51
 
 ```
 .
-├── docker-compose.yml
-├── backend/
-│   ├── Dockerfile
-│   ├── pom.xml
-│   └── src/main/java/com/pios/
-│       ├── PiosApplication.java
-│       ├── config/
-│       ├── controller/
-│       ├── domain/
-│       ├── dto/
-│       ├── repository/
-│       ├── security/
-│       ├── service/
-│       └── graph/
-│   └── src/main/resources/
-│       ├── application.yml
-│       └── db/migration/
-├── frontend/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── vite.config.ts
-│   ├── nginx.conf
-│   └── src/
-│       ├── main.tsx
-│       ├── App.tsx
-│       ├── components/
-│       ├── pages/
-│       ├── stores/
-│       ├── lib/
-│       └── types/
-├── mcp/                 # MCP 서버 (Python, streamable-http)
+├── docker-compose.yml, Caddyfile, .env.example
+├── backend/             # Spring Boot (config, controller, domain, dto, repository, security, oauth, service/*), scripts/garmin_sync.py
+├── frontend/            # React + Vite (pages, components/<page>/, lib, stores, types)
+├── mcp/                 # MCP 서버 (server.py, pios_mcp/, tests/)
+├── scripts/ops/         # Postgres 백업/복구
 └── docs/                # 설계/운영 문서 (docs/archive: 초기 기획 초안)
 ```
+
+상세 트리는 [docs/project-structure.md](docs/project-structure.md).
 
 ## Screens
 
@@ -152,17 +139,24 @@ cd frontend && npm install && npm run dev                                  # :51
 6. **Ask My Data** — 자연어 질의 + 근거 기반 답변
 7. **Insights** — 인사이트 목록, 저장, 피드백
 8. **Goals** — 목표 설정 및 관리
-9. **Settings** — LLM Provider 설정
+9. **Finance** — 가계 거래/계좌/고정 지출
+10. **MCP 연동** — OAuth 연결 가이드, 연결된 앱, API 키
+11. **Settings** — LLM Provider 설정
+12. **OAuth Consent** (`/oauth/consent`) — 외부 앱 연결 승인
 
 ## Development
 
 ### Tests & CI
 ```bash
-cd backend && mvn test          # 백엔드 단위 테스트
-cd frontend && npm run build    # 타입 체크 + 빌드
+cd backend && mvn -B test                       # JUnit (JDK 21 없으면 AGENTS.md §8의 Docker 명령)
+cd frontend && npm run lint && npm test && npm run build
+cd mcp && pip install -r requirements-dev.txt && pytest tests
 ```
 
-GitHub Actions(`.github/workflows/ci.yml`)가 push/PR마다 위 두 가지와 Python 스크립트 컴파일을 검사합니다.
+GitHub Actions(`.github/workflows/ci.yml`)가 위 테스트, 스크립트 컴파일, 이미지 빌드, compose/Caddyfile 검증을 수행합니다.
+
+### 운영
+백업/복구, 시크릿 교체, 업그레이드는 [docs/operations.md](docs/operations.md), 변경 이력은 [CHANGELOG.md](CHANGELOG.md).
 
 ### API Documentation
 
@@ -175,7 +169,7 @@ All APIs return `ApiResponse<T>`:
 }
 ```
 
-Authentication: `Authorization: Bearer <token>`
+Authentication: `Authorization: Bearer <token>` (웹 JWT, OAuth access token, 또는 `pios_` API 키). 오류 규약은 [AGENTS.md](AGENTS.md#오류-규약) 참고.
 
 ## License
 

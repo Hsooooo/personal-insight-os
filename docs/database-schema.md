@@ -196,6 +196,33 @@ erDiagram
 | 15 | `refresh_tokens` | Refresh Token 저장 (SHA-256 hash, rotation/ revoke 지원) | 1~3 / 사용자 |
 | 16 | `garmin_daily_raw` | Garmin 일일 부가 엔드포인트 원문 (HRV/BodyBattery/Stress/HeartRate/Steps/Respiration/SpO2/TrainingReadiness/TrainingStatus), (user_id, metric_date, data_type) 유니크 upsert | 9 × 365 / 사용자/년 |
 
+| 17 | `oauth_clients` | 동적 등록(RFC 7591) 클라이언트. Client ID Metadata Document 클라이언트는 저장하지 않음 (V25) | 소수 |
+| 18 | `oauth_authorization_requests` | 동의 대기 중인 `/authorize` 요청 (TTL 10분, `expires_at` 인덱스) (V25) | 일시적 |
+| 19 | `oauth_grants` | 사용자의 클라이언트 승인(`user_id` FK, `revoked_at`, `last_used_at`) (V25) | 1~10 / 사용자 |
+| 20 | `oauth_authorization_codes` | 인가 코드 (SHA-256 hex, 단일 사용 `used_at`, TTL 5분) (V25) | 일시적 |
+| 21 | `oauth_refresh_tokens` | refresh token (SHA-256 hex, 사용 시 회전, `used_at`로 재사용 탐지, `grant_id` FK) (V25) | 1~N / grant |
+
+> 마이그레이션은 V1~V26이 적용됩니다. 상세 DDL은 `backend/src/main/resources/db/migration/`.
+
+### OAuth 스키마 (V25)
+
+```text
+users 1 ─ N oauth_grants 1 ─ N oauth_refresh_tokens
+                     └──── N oauth_authorization_codes
+oauth_clients (client_id UNIQUE; redirect_uris JSON 배열, grant_types 공백 구분)
+oauth_authorization_requests (id VARCHAR(64) PK; code_challenge, scope, resource, state, expires_at)
+```
+- 코드/refresh token은 원문을 저장하지 않고 `code_hash`/`token_hash`(UNIQUE)만 저장합니다. grant 삭제 시 하위 코드/토큰은 `ON DELETE CASCADE`.
+- 만료 행은 `OAuthCleanupService`가 정리합니다 (`expires_at` 인덱스 사용).
+- access token은 JWT(stateless)라 별도 테이블이 없으며, MCP 서버가 introspect로 검증합니다.
+
+### V26: 동기화 안정성 / 성능 / 데이터 정리
+
+- **동기화**: 마이그레이션 시점의 `sync_logs.status='RUNNING'`을 모두 `FAILED`로 정리한 뒤 부분 유니크 인덱스 `uq_sync_logs_running (user_id, provider_type) WHERE status='RUNNING'`을 생성 — 사용자/Provider당 RUNNING은 1건. `idx_sync_logs_user_provider_started (user_id, provider_type, started_at DESC)` 추가. `sync_logs.status` 값: `PENDING`/`RUNNING`/`COMPLETED`/`PARTIAL`/`FAILED`
+- **sync_config**: 미사용 `auto_sync_cron` 키 제거, 기본값은 `sync_range_days: 7` (스케줄은 전역 `sync.schedule.cron`)
+- **조회 인덱스**: `idx_insights_user_category_created`, `idx_insights_user_feedback`, `idx_insights_user_created`, `idx_insight_evidences_insight`, `idx_activities_user_start`, `idx_goals_user`, `idx_questions_user_created`, `idx_graph_node_mappings_user`
+- **데이터 정리(0 → NULL)**: 과거 수집기가 값이 없을 때 0으로 저장해 평균/기준선을 오염시켰으므로 `resting_heart_rate=0`, `hrv_avg=0`, `stress_avg<=0`, `sleep_score=0`, `total_sleep_seconds=0`, 활동 `average_heart_rate=0`/`max_heart_rate=0`을 NULL로 변경 (되돌릴 수 없음)
+
 ### Garmin 구조화 확장 컬럼 (V24)
 
 - `garmin_sleep_sessions`: `nap_seconds`(낮잠), `avg_sleep_stress`, `sleep_need_minutes`(Garmin 수면 필요량), `hrv_status`

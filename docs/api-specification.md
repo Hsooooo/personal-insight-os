@@ -10,7 +10,31 @@
 }
 ```
 
-**인증**: `Authorization: Bearer <jwt_token>`
+**인증**: `Authorization: Bearer <jwt_token | OAuth access token | pios_ API 키>`
+
+> OAuth 프로토콜 엔드포인트(`/api/oauth/{register,token,revoke,introspect}`, `/.well-known/oauth-authorization-server`)는 RFC 형식의 raw JSON을 반환하며 `ApiResponse`로 감싸지 않습니다. `ROLE_MCP` 주체(OAuth 토큰/API 키)는 허용된 일부 API만 호출할 수 있습니다 ([mcp-integration.md](mcp-integration.md)).
+
+## 공통 오류 규약
+
+| 상태 | 설명 |
+|------|------|
+| 400 | 입력 검증 실패 (아래 형식) |
+| 401 | 미인증/토큰 만료, 잘못된 이메일·비밀번호 (`Invalid email or password`) |
+| 403 | 권한 없음 (`ROLE_MCP`가 allowlist/스코프 밖 API 호출) |
+| 404 | 존재하지 않거나 **본인 소유가 아닌** 리소스 (소유권 정보를 노출하지 않기 위해 403/400이 아닌 404) |
+| 409 | 데이터 무결성 충돌 |
+| 429 | 로그인 시도 제한 (`Retry-After` 헤더, 이메일+IP 5회/IP 30회 실패, 15분 윈도우), 동기화 30초 rate limit |
+| 500 | `Internal server error` (상세는 서버 로그에만) |
+
+**검증 오류 응답 (400)**
+```json
+{
+  "success": false,
+  "message": "Validation failed: email: must be a well-formed email address; password: must not be blank",
+  "data": { "email": "must be a well-formed email address", "password": "must not be blank" }
+}
+```
+`@RequestParam` 검증/타입 오류도 같은 형태(`data: {param: message}`)이며, 읽을 수 없는 JSON 본문은 `message: "Malformed or unreadable request body"`(`data` 없음)입니다.
 
 ---
 
@@ -21,6 +45,14 @@ flowchart LR
     subgraph 인증["🔐 인증 (Public)"]
         A1["POST /api/auth/register"]
         A2["POST /api/auth/login"]
+        A3["POST /api/auth/refresh, logout / GET me"]
+    end
+
+    subgraph OAuth["🔑 OAuth 2.1 (MCP)"]
+        O1["GET /.well-known/oauth-authorization-server"]
+        O2["POST /api/oauth/register, token, revoke / GET authorize"]
+        O3["GET·POST /api/oauth/requests/{id}[/decision]"]
+        O4["GET·DELETE /api/oauth/grants"]
     end
 
     subgraph 대시보드["📊 대시보드"]
@@ -110,7 +142,7 @@ flowchart LR
 | GET | `/api/auth/me` | 내 정보 조회 | ✅ |
 | GET | `/api/auth/api-keys` | API 키 목록 조회 | ✅ |
 | POST | `/api/auth/api-keys` | API 키 발급 | ✅ |
-| DELETE | `/api/auth/api-keys/{id}` | API 키 삭제 | ✅ |
+| DELETE | `/api/auth/api-keys/{id}` | API 키 삭제 (본인 소유가 아니면 404) | ✅ |
 
 **로그인 요청**
 ```json
@@ -135,6 +167,8 @@ POST /api/auth/login
   }
 }
 ```
+> 잘못된 이메일/비밀번호는 **401**, 제한 초과는 **429** + `Retry-After`(초). 회원가입은 `PIOS_REGISTRATION_ENABLED=false`면 거부됩니다.
+>
 > **Set-Cookie**: `refresh_token=<jwt_refresh_token>; HttpOnly; Secure; SameSite=Strict; Max-Age=604800`
 >
 > Refresh Token은 응답 body가 아닌 **HttpOnly Cookie**로 전달된다.
@@ -194,6 +228,86 @@ POST /api/auth/api-keys
   }
 }
 ```
+목록 응답(`GET`)에는 `key` 원문이 없고 `lastUsedAt`이 포함됩니다.
+
+---
+
+### 🔑 OAuth API (MCP 연결)
+
+#### 메타데이터 / 프로토콜 엔드포인트 (공개, raw JSON)
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| GET | `/.well-known/oauth-authorization-server` | RFC 8414 메타데이터 (`Cache-Control: public, max-age=3600`) |
+| POST | `/api/oauth/register` | RFC 7591 동적 클라이언트 등록 (IP당 시간당 20회, 초과 시 429 `slow_down`) |
+| GET | `/api/oauth/authorize` | 인가 요청. 성공 시 302 → `{frontend}/oauth/consent?request_id=...` |
+| POST | `/api/oauth/token` | `application/x-www-form-urlencoded`. `authorization_code`, `refresh_token` grant |
+| POST | `/api/oauth/revoke` | 토큰 폐기 (항상 200) |
+| POST | `/api/oauth/introspect` | **내부 전용**: `X-PIOS-Internal-Secret` 헤더 필수(없으면 401 `invalid_client`), Caddy가 외부에서 404로 차단 |
+
+**메타데이터**
+```json
+{
+  "issuer": "https://pios.example.com",
+  "authorization_endpoint": "https://pios.example.com/api/oauth/authorize",
+  "token_endpoint": "https://pios.example.com/api/oauth/token",
+  "registration_endpoint": "https://pios.example.com/api/oauth/register",
+  "revocation_endpoint": "https://pios.example.com/api/oauth/revoke",
+  "response_types_supported": ["code"],
+  "grant_types_supported": ["authorization_code", "refresh_token"],
+  "code_challenge_methods_supported": ["S256"],
+  "token_endpoint_auth_methods_supported": ["none"],
+  "scopes_supported": ["mcp:read", "mcp:write"],
+  "client_id_metadata_document_supported": true,
+  "authorization_response_iss_parameter_supported": true
+}
+```
+
+**클라이언트 등록** `POST /api/oauth/register` (JSON: `client_name`, `redirect_uris`, `grant_types`, `response_types`, `token_endpoint_auth_method`(none만), `scope`) → **201**
+```json
+{
+  "client_id": "...",
+  "client_id_issued_at": 1760000000,
+  "client_name": "My MCP Client",
+  "redirect_uris": ["http://127.0.0.1:33418/callback"],
+  "grant_types": ["authorization_code", "refresh_token"],
+  "response_types": ["code"],
+  "token_endpoint_auth_method": "none",
+  "scope": "mcp:read mcp:write"
+}
+```
+
+**인가 요청 파라미터**: `response_type=code`, `client_id`(등록 ID 또는 Client ID Metadata Document URL), `redirect_uri`, `code_challenge`(S256 필수), `code_challenge_method=S256`, `state`, `scope`(기본 `mcp:read mcp:write`), `resource`(= `PIOS_MCP_RESOURCE_URL`). client_id/redirect_uri 검증 실패는 리다이렉트 없이 400 HTML 오류 페이지, 그 외 오류는 `redirect_uri?error=...&state=...`로 반환(`invalid_request`, `invalid_scope`, `invalid_target`).
+
+**토큰** `POST /api/oauth/token` → 200 (`Cache-Control: no-store`)
+```
+grant_type=authorization_code&code=...&redirect_uri=...&client_id=...&code_verifier=...&resource=...
+grant_type=refresh_token&refresh_token=...&client_id=...[&scope=...]
+```
+```json
+{ "access_token": "<jwt>", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "...", "scope": "mcp:read mcp:write" }
+```
+access token TTL 1시간, refresh token TTL 30일(사용 시마다 회전, 재사용 탐지), 인가 코드 5분, 승인 대기 요청 10분. 오류는 `{ "error": "invalid_grant", "error_description": "..." }` (400/401, `grant_type` 누락은 `invalid_request`, 미지원은 `unsupported_grant_type`).
+
+**Introspect 응답** (내부): `{"active": true, "sub": "<userId>", "scope": "...", "client_id": "...", "exp": 1760003600, "aud": "<resource>", "iss": "<issuer>", "token_type": "oauth"}` 또는 `{"active": false}`. `pios_` API 키도 `token_type: "api_key"`로 active 처리됩니다.
+
+#### 웹 UI용 API (일반 사용자 JWT, `ApiResponse`)
+
+`ROLE_MCP` 주체는 호출할 수 없습니다 (403).
+
+| 메서드 | 엔드포인트 | 설명 |
+|--------|-----------|------|
+| GET | `/api/oauth/requests/{requestId}` | 승인 대기 요청 정보. 만료/없음 → 404 |
+| POST | `/api/oauth/requests/{requestId}/decision` | 승인/거부. body `{"approve": true}` → `{"redirectUrl": "<redirect_uri>?code=...&state=...&iss=..."}` |
+| GET | `/api/oauth/grants` | 내 연결된 앱 목록 |
+| DELETE | `/api/oauth/grants/{grantId}` | 연결 해제 (grant와 refresh token 폐기, 본인 소유가 아니면 404) |
+
+`GET /api/oauth/requests/{id}` 응답 `data`:
+```json
+{ "requestId": "...", "clientName": "My MCP Client", "clientId": "...", "redirectUri": "http://127.0.0.1:33418/callback",
+  "redirectHost": "127.0.0.1", "scopes": ["mcp:read", "mcp:write"], "expiresAt": "2026-11-14T03:10:00Z" }
+```
+`GET /api/oauth/grants` 응답 `data[]`: `{ "id": 1, "clientId": "...", "clientName": "...", "scopes": ["mcp:read"], "createdAt": "...", "lastUsedAt": "..." }`
 
 ---
 
@@ -262,7 +376,8 @@ POST /api/auth/api-keys
 | GET | `/api/data-sources` | 연결된 데이터 소스 목록 |
 | POST | `/api/data-sources/garmin/connect` | Garmin 계정 연결 |
 | POST | `/api/data-sources/garmin/sync` | Garmin 데이터 동기화 — 활동, 건강지표, 수면(낮잠 포함), **체중** + 일일 extras 9종 원문(`garmin_daily_raw`) 포함 (body: syncType, dateFrom, dateTo) |
-| GET | `/api/data-sources/garmin/sync-logs` | 동기화 이력 조회 |
+| GET | `/api/data-sources/garmin/sync-logs` | 동기화 이력 조회 (`status`: `RUNNING`/`COMPLETED`/`PARTIAL`/`FAILED`) |
+| GET | `/api/data-sources/garmin/sync-logs/{logId}` | 동기화 이력 단건 (본인 소유가 아니면 404) |
 | POST | `/api/data-sources/garmin/mock` | Mock 데이터 생성 (`PIOS_MOCK_DATA_ENABLED=true`일 때만) |
 | DELETE | `/api/data-sources/garmin` | Garmin 연결 해제 |
 
@@ -430,7 +545,7 @@ PATCH /api/activities/123/tag
 
 | 메서드 | 엔드포인트 | 설명 |
 |--------|-----------|------|
-| GET | `/api/insights?category=&feedbackStatus=` | 인사이트 목록 (필터 가능) |
+| GET | `/api/insights?category=&feedbackStatus=&page=&size=` | 인사이트 목록 (필터 가능). `page` 기본 0, `size` 기본 **100**, 최대 **200** (범위 밖 값은 400) |
 | GET | `/api/insights/saved` | 저장된 인사이트 |
 | GET | `/api/insights/{id}` | 인사이트 상세 |
 | POST | `/api/insights/{id}/save` | 인사이트 저장 |
@@ -439,7 +554,7 @@ PATCH /api/activities/123/tag
 | POST | `/api/insights/anomaly-alerts/detect` | 이상 신호 감지 수동 실행 (최근 3일 vs 28일 기준선) |
 
 **이상 신호 알림 동작**
-- 매일 12:30 KST 스케줄(`alert.schedule.cron`, Garmin sync 12:00 이후) 또는 위 수동 엔드포인트로 실행
+- 스케줄 Garmin 동기화(12:00 KST)가 끝난 직후 해당 사용자에 대해 실행되고, 12:30 KST cron(`alert.schedule.cron`)은 그날 감지하지 않았고 동기화 중이 아닌 사용자에 대한 fallback입니다. 위 수동 엔드포인트로도 실행 가능
 - 최근 3일 지표를 직전 28일 기준선과 비교해 `ThinPatternDetector` 규칙으로 감지 (수면 점수 급락, RHR 상승, 운동량 급증, 연속 수면 부족, 바디 배터리 하락)
 - 감지 시 Insight(`category=ANOMALY_ALERT`) + `PATTERN` evidence로 저장되며 LLM 코칭 문구 포함 (미설정/실패 시 템플릿 fallback)
 - 동일 신호는 3일간 중복 생성하지 않고, 1회 실행당 최대 2건까지 생성

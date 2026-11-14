@@ -58,10 +58,10 @@ flowchart TB
 | 항목 | 내용 |
 |------|------|
 | **구현 위치** | `AuthController`, `AuthService`, `JwtUtil`, `SecurityConfig` |
-| **기술** | Spring Security + JJWT 0.12.5 |
-| **인증 방식** | Stateless JWT (Bearer Token) |
-| **지원 기능** | 회원가입, 로그인, 내 정보 조회 |
-| **Frontend 연동** | Zustand authStore + persist (localStorage) |
+| **기술** | Spring Security + JJWT 0.12.x |
+| **인증 방식** | Stateless access JWT(24h, Bearer) + httpOnly refresh 쿠키(7일, DB 저장·회전) |
+| **지원 기능** | 로그인, refresh, 로그아웃, 내 정보 조회, 회원가입(`PIOS_REGISTRATION_ENABLED=true`일 때만), 로그인 시도 제한(429) |
+| **Frontend 연동** | Zustand authStore (access token은 메모리 보관, 새로고침 시 refresh 쿠키로 복구, localStorage 미사용) |
 
 ```java
 // JwtUtil.java
@@ -84,7 +84,7 @@ public String generateToken(Long userId, String email) {
 | **구현 위치** | `DataSourceController`, `DataSourceService` |
 | **화면** | `/data-sources` |
 | **기능** | Garmin 계정 연결 (email/password 저장) |
-| **동기화 설정** | `sync_config` JSONB (full_sync_from, last_sync_date, sync_range_days, auto_sync_enabled, auto_sync_cron) |
+| **동기화 설정** | `sync_config` JSONB (full_sync_from, last_sync_date, sync_range_days, auto_sync_enabled) — `auto_sync_cron`은 V26에서 제거 |
 
 ```java
 // DataSourceService.java
@@ -106,11 +106,11 @@ public ProviderConnectionDto connectGarmin(Long userId, String email, String pas
 | **동기화 방식** | ProcessBuilder → Python `garminconnect` 라이브러리 → Garmin Connect API |
 | **동기화 유형** | FULL (최초/전체), INCREMENTAL (수동/자동 증분), MANUAL |
 | **Rate Limit** | 동일 사용자 기준 최소 30초 간격 |
-| **청크 처리** | 30일 단위 청크 순차 처리 |
-| **백그라운드** | FULL 동기화는 `@Async("syncTaskExecutor")`로 비동기 실행 |
+| **청크 처리** | 7일 단위 청크 순차 처리 (`sync.chunk-days`) |
+| **백그라운드** | 모든 동기화가 `GarminSyncExecutor`(`@Async("syncTaskExecutor")`)에서 비동기 실행, 사용자당 RUNNING 1건 |
 | **자동 동기화** | Spring Scheduler, 매일 정오 12:00 KST (`auto_sync_enabled` 체크, 전날 수면 반영 여유) |
 | **중복 처리** | PostgreSQL `ON CONFLICT ... DO UPDATE` (UPSERT) |
-| **동기화 이력** | `sync_logs` 테이블에 상태/기간/레코드 수/에러 저장 |
+| **동기화 이력** | `sync_logs` 테이블에 상태(`COMPLETED`/`PARTIAL`/`FAILED`)/기간/레코드 수/에러 저장. 재시작·stale RUNNING은 FAILED 정리 |
 | **수면 단계** | deep / light / rem / awake — Stacked Bar Chart로 비중 시각화 |
 | **Mock 데이터** | `MockDataService.generateMockData()` — 개발/테스트용 별도 유지 |
 
@@ -119,7 +119,7 @@ public ProviderConnectionDto connectGarmin(Long userId, String email, String pas
 public void sync(Long userId, SyncType type, LocalDate from, LocalDate to) {
     checkRateLimit(userId);                    // 30초 제한
     SyncLog log = createSyncLog(...);          // PENDING → RUNNING
-    List<DateRange> chunks = splitIntoChunks(from, to, 30);
+    List<DateRange> chunks = splitIntoChunks(from, to, 7);
     for (DateRange chunk : chunks) {
         SyncResult result = pythonClient.fetch(email, password, chunk.from, chunk.to, ALL);
         saveActivities(userId, result.data().get("activities"));
@@ -137,7 +137,7 @@ public void sync(Long userId, SyncType type, LocalDate from, LocalDate to) {
 
 | 항목 | 내용 |
 |------|------|
-| **구현 위치** | `V1__init.sql`, 12개 Entity, 11개 Repository |
+| **구현 위치** | Flyway `V1`~`V26`, `domain/` Entity, `repository/` |
 | **테이블** | users, provider_connections, garmin_activities, garmin_activity_laps, garmin_daily_health_metrics, garmin_sleep_sessions, goals, llm_providers, questions, insights, insight_evidences, graph_node_mappings, sync_logs |
 | **특징** | `jsonb` Raw 저장 + 정규화 컬럼 + Flyway 마이그레이션 |
 
@@ -408,10 +408,33 @@ public AskResponse ask(Long userId, AskRequest request) {
 | 항목 | 내용 |
 |------|------|
 | **구현 위치** | `AnomalyAlertService`, `AnomalyAlertScheduleService`, `InsightController`, `Insights.tsx`, `Dashboard.tsx` |
-| **스케줄** | 매일 12:30 KST (`alert.schedule.cron`, Garmin sync 12:00 이후) |
+| **스케줄** | 스케줄 동기화(12:00 KST) 완료 직후 사용자별 즉시 실행 + 12:30 KST cron fallback (`alert.schedule.cron`) |
 | **구성** | 최근 3일 vs 직전 28일 기준선 → `ThinPatternDetector` 패턴 감지 → Insight(`ANOMALY_ALERT`) + LLM 코칭 문구 |
 | **중복 억제** | 동일 신호 3일간 1회, 실행당 최대 2건 |
 | **API** | `POST /api/insights/anomaly-alerts/detect` (수동 실행) |
+
+---
+
+## ✅ MCP 연동 (OAuth 2.1) 및 연결된 앱 관리
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `com.pios.oauth.*`, `McpAccessPolicy`, `mcp/pios_mcp/`, `McpSettings.tsx`, `OAuthConsent.tsx` |
+| **연결 방식** | MCP 클라이언트에 `https://<host>/mcp`만 등록 → OAuth 2.1(PKCE S256, DCR 또는 Client ID Metadata Document) → `/oauth/consent` 승인 |
+| **헤드리스** | 웹의 "MCP 연동"에서 `pios_` API 키 발급 후 `Authorization: Bearer` |
+| **권한** | 스코프 `mcp:read`/`mcp:write`, `ROLE_MCP` 주체는 allowlist API만 호출 |
+| **연결된 앱 관리** | MCP 설정 화면에서 grant 목록 확인/해제 (`GET/DELETE /api/oauth/grants`) |
+| **MCP 도구** | 프로필/활동/건강/수면/목표/인사이트/그래프 조회, 코치 질의, 목표 기록·인사이트 저장·피드백·동기화·브리핑 생성 (목록은 `docs/mcp-integration.md`) |
+
+---
+
+## ✅ 가계(Finance) 관리
+
+| 항목 | 내용 |
+|------|------|
+| **구현 위치** | `FinanceController`, `FinanceService`, `FinanceExcelParser`, `Finance.tsx`, `components/finance/` |
+| **기능** | 엑셀 import(preview/confirm, 중복 판정), 사이클별 거래/계좌/고정 지출 관리, 시간 보정 |
+| **상세** | [architecture.md](architecture.md#finance-import-흐름), [api-specification.md](api-specification.md) |
 
 ---
 

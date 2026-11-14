@@ -8,7 +8,42 @@
 
 ## [Unreleased]
 
+### BREAKING
+- **MCP 인증 방식 변경** — 무인증/`PIOS_MCP_API_KEY` 방식이 제거되었습니다. 기존 MCP 클라이언트는 OAuth 2.1로 다시 연결(`https://<host>/mcp`)하거나 `Authorization: Bearer pios_...` API 키를 사용해야 합니다
+- **필수 환경변수 추가** — `PIOS_PUBLIC_BASE_URL`, `PIOS_CORS_ALLOWED_ORIGINS`, `PIOS_MCP_INTERNAL_SECRET`, `POSTGRES_PASSWORD`(기존 `JWT_SECRET`, `PIOS_ENCRYPTION_KEY` 포함). 누락 시 `docker compose`가 실패합니다. `PIOS_MCP_API_KEY`는 삭제
+- **backend 컨테이너 비root(uid 10001) 실행** — 기존 `garmin_tokens` 볼륨 소유권을 한 번 변경해야 합니다 (`docs/operations.md`)
+- **frontend 컨테이너 포트 80 → 8080**, nginx는 더 이상 `/api`를 프록시하지 않음 (라우팅은 Caddy 전담)
+- `GET /api/insights`는 기본 최대 100건(`page`/`size`, size 최대 200)만 반환
+- 존재하지 않거나 본인 소유가 아닌 리소스는 400이 아니라 **404** 반환
+- Garmin 동기화 청크 30일 → **7일** (`sync.chunk-days`), 동기화 상태에 `PARTIAL` 추가
+- 로컬 개발은 `SPRING_PROFILES_ACTIVE=local` 필요 (`application.yml`의 DB/Neo4j 비밀번호 기본값 제거)
+- **`NEO4J_URI`/`NEO4J_PASSWORD` 필수** (compose `:?`, 빈 값으로는 기동 불가 — 이전에도 빈 URI는 드라이버 생성 실패)
+- 사용자 LLM Provider는 **OpenAI만** 호출에 사용 (Anthropic/Google 키는 저장만 되고 OpenAI로 전송하지 않음)
+- 과거 `garmin_sync.py`가 HRV 등 값이 없을 때 0으로 저장하던 버그 수정, 기존 0 값은 V26에서 NULL로 정리 (평균/기준선 계산 결과가 달라질 수 있음)
+
+### Added (OAuth / MCP)
+- **OAuth 2.1 Authorization Server** (`com.pios.oauth`): `/.well-known/oauth-authorization-server`, DCR(`/api/oauth/register`), `authorize`(PKCE S256), `token`, `revoke`, 내부 `introspect`, Client ID Metadata Document 지원. 테이블 V25
+- 프론트 `/oauth/consent` 승인 화면, MCP 설정의 "연결된 앱 (OAuth)" 관리(`GET/DELETE /api/oauth/grants`)
+- MCP 서버를 mcp SDK 2.x(`MCPServer`) 기반 OAuth Resource Server로 재작성 (`mcp/pios_mcp/`, pytest 추가), PRM(RFC 9728) 제공
+- `ROLE_MCP` 주체용 API allowlist(`McpAccessPolicy`)와 스코프(`mcp:read`/`mcp:write`), backend↔MCP 내부 시크릿
+- Caddy: `/.well-known/*` 라우팅, `/api/oauth/introspect` 외부 차단, 보안 헤더(HSTS/CSP)
+- 로그인 시도 제한(429 + `Retry-After`), CORS 허용 Origin 환경변수화
+- OAuth 강화: `/authorize` IP당 60회/분·CIMD 조회 10회/분 제한(트랜잭션 밖에서 조회), 첫 동의 전 클라이언트의 오류는 리다이렉트 대신 오류 페이지(오픈 리다이렉트 방지), refresh 회전 30초 유예, token/revoke/introspect의 쿼리스트링·중복 파라미터 거부, 6to4/Teredo/IPv4-호환 IPv6 차단, 미사용 DCR 클라이언트 30일 후 정리, 레거시 API 키 BCrypt 경로 IP당 제한
+- `LlmClient`(`service/llm`): 사용자 LLM Provider 키 우선, 전역 키 fallback, 용도별 생성 파라미터
+- 날씨 archive API(5일 이상 지난 활동), 운영 스크립트(`scripts/ops` 백업/복구), `docs/operations.md`
+- frontend: ESLint + Vitest, 라우트 lazy loading, 그래프 표 보기 등 접근성 개선, 페이지별 `components/` 분리
+- Dependabot, CI 확장(frontend lint/test, mcp pytest, compose/Caddyfile 검증, 이미지 빌드, 의존성 리뷰)
+
+### Changed (platform)
+- Spring Boot 3.5.x, Vite 8, React Router 7, Zustand 5, Recharts 3
+- Ask 파이프라인: 단일 트랜잭션 제거, 그래프 투영/임베딩은 응답 후 비동기
+- 이상 신호 감지는 사용자별 스케줄 동기화 직후 실행, 12:30 KST cron은 fallback
+- 동기화: 사용자/Provider당 RUNNING 1건(부분 유니크 인덱스), 기동 시 및 stale RUNNING FAILED 정리
+- 입력 검증 오류는 400 + 필드별 `data` 맵으로 응답
+- V26: 조회 인덱스 추가, 미사용 `sync_config.auto_sync_cron` 제거
+
 ### Security
+- 비허용 엔드포인트의 MCP 요청이 `/error` 포워드로 401이 되던 문제 수정 → 403
 - **시크릿 fail-fast** — `JWT_SECRET`/`PIOS_ENCRYPTION_KEY` 기본값 제거(compose `:?`, 32바이트 이상 검증), 암호화 키를 JWT 시크릿과 분리. `PIOS_ENCRYPTION_KEY_LEGACY`로 이전 키 복호화 + 기동 시 재암호화
 - Postgres(5432)/MCP(8001) 포트를 `127.0.0.1`에만 바인딩, MCP 외부 접근은 Caddy `/mcp` 경유
 - Garmin 자격증명을 프로세스 인자 대신 환경변수로 전달 (`ps` 노출 제거)
@@ -20,7 +55,7 @@
 - backend Dockerfile의 `garminconnect>=0.3.0`이 셸 리다이렉트로 해석되던 문제 → `garminconnect==0.3.2` 고정
 - Garmin 동기화를 청크 단위 트랜잭션으로 분리 (Garmin 호출 중 DB 커넥션 점유 제거, 실패 상태 롤백 방지), 사용자별 Garmin 세션 토큰 캐시(`garmin_tokens` 볼륨)로 청크마다 재로그인 제거
 - `POST /api/admin/backfill` 비동기 실행(202) + 사용자별 5분 쿨다운
-- MCP 서버 `mcp<2` 고정 (mcp 2.x에서 `mcp.server.fastmcp` 제거로 기동 실패)
+- MCP 서버 `mcp<2` 임시 고정 (이후 mcp 2.x `MCPServer` 기반으로 재작성되어 `mcp>=2.3,<3`)
 - frontend Docker 빌드를 `package-lock.json` 기반 `npm ci`로 변경, postgres 이미지를 운영 digest(PG 15.4 + pgvector 0.5.1)로 고정
 - `AskServiceTest` 누락 mock 추가 (기존 3건 실패)
 

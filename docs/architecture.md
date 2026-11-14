@@ -15,7 +15,7 @@ flowchart TB
         RQ[TanStack Query<br/>Server State]
     end
 
-    subgraph 백엔드["⚙️ 백엔드 (Spring Boot 3.3)"]
+    subgraph 백엔드["⚙️ 백엔드 (Spring Boot 3.5)"]
         direction TB
         subgraph 보안["🔐 Security Layer"]
             JWT[JWT Filter]
@@ -33,6 +33,8 @@ flowchart TB
             InsightC[InsightController]
             GoalC[GoalController]
             LLMC[LlmProviderController]
+            OAuthC[OAuthController / OAuthConsentController]
+            FinC[FinanceController 외]
         end
 
         subgraph 비즈니스["💼 Business Layer"]
@@ -43,6 +45,9 @@ flowchart TB
             GarminSync[GarminSyncService]
             GarminPython[GarminPythonClient]
             SyncSchedule[SyncScheduleService]
+            GarminExec[GarminSyncExecutor<br/>@Async]
+            LlmClient[LlmClient<br/>사용자 키 → 전역 키]
+            OAuthS[OAuth Services]
             MockS[MockDataService]
         end
 
@@ -50,19 +55,19 @@ flowchart TB
             Entity1[User Entity]
             Entity2[GarminActivity Entity]
             Entity3[Insight Entity]
-            Entity4[... 9개 더]
+            Entity4[... 다수]
         end
     end
 
     subgraph 데이터["💾 데이터 계층"]
         direction TB
-        PG[(PostgreSQL 16<br/>12개 테이블<br/>pgvector 확장)]
+        PG[(PostgreSQL + pgvector<br/>Flyway V1~V26)]
         NEO[(Neo4j<br/>외부/클로드 인스턴스)]
     end
 
     subgraph 외부["🌐 외부 서비스"]
         OAI[OpenAI API]
-        Garmin[Garmin Connect<br/>Mock 데이터]
+        Garmin[Garmin Connect]
     end
 
     UI1 -->|POST /api/auth/login| AuthC
@@ -143,6 +148,56 @@ sequenceDiagram
 
 ---
 
+## MCP OAuth 2.1 흐름
+
+PIOS 백엔드가 Authorization Server(AS), MCP 서버가 Resource Server(RS)입니다. 외부 접근은 모두 Caddy를 통과합니다.
+
+```mermaid
+sequenceDiagram
+    participant C as MCP 클라이언트
+    participant CD as Caddy
+    participant M as MCP Server (RS)
+    participant B as Backend (AS)
+    participant FE as Frontend (/oauth/consent)
+    actor U as 사용자
+
+    C->>CD: POST /mcp (토큰 없음)
+    CD->>M: /mcp
+    M-->>C: 401 + WWW-Authenticate (resource_metadata=PRM URL)
+    C->>CD: GET /.well-known/oauth-protected-resource/mcp
+    CD->>M: PRM (RFC 9728)
+    M-->>C: resource, authorization_servers, scopes_supported
+    C->>CD: GET /.well-known/oauth-authorization-server
+    CD->>B: AS 메타데이터 (RFC 8414)
+    C->>B: POST /api/oauth/register (DCR) 또는 Client ID Metadata Document
+    C->>U: 브라우저로 /api/oauth/authorize (PKCE S256, resource)
+    B-->>U: 302 → /oauth/consent?request_id=...
+    U->>FE: 로그인(필요 시) + 승인
+    FE->>B: POST /api/oauth/requests/{id}/decision
+    B-->>FE: redirectUrl (code, state, iss)
+    FE-->>C: redirect_uri로 이동
+    C->>B: POST /api/oauth/token (code + code_verifier + resource)
+    B-->>C: access_token(JWT 1h) + refresh_token
+    C->>CD: POST /mcp (Bearer)
+    CD->>M: /mcp
+    M->>B: POST /api/oauth/introspect (내부망, X-PIOS-Internal-Secret, ≤60s 캐시)
+    M->>B: GET/POST /api/... (Bearer + 내부 시크릿)
+    B-->>M: 데이터 (ROLE_MCP → McpAccessPolicy allowlist/스코프 검사)
+    M-->>C: tool 결과
+```
+
+| 항목 | 설명 |
+|------|------|
+| Caddy 라우팅 | `/api*`, `/.well-known/oauth-authorization-server*` → backend, `/mcp*`, `/.well-known/oauth-protected-resource*` → mcp, 그 외 → frontend. **`/api/oauth/introspect*`는 404로 차단** |
+| 내부 시크릿 | `PIOS_MCP_INTERNAL_SECRET`(backend/mcp 공유). 없으면 introspect 401, OAuth 토큰으로 인증된 요청도 거부 |
+| 주체 제한 | OAuth 토큰/`pios_` API 키 주체는 `ROLE_MCP`. `McpAccessPolicy` allowlist(`mcp:read`/`mcp:write`) 밖 API는 403, 연결된 앱 관리 API(`/api/oauth/*`)도 호출 불가 |
+| 토큰 | access JWT 1시간, refresh 30일(회전·재사용 탐지, SHA-256 해시 저장), 코드 5분 |
+| 관리 | 사용자는 MCP 설정 화면의 "연결된 앱"에서 grant를 해제 (refresh token 폐기, 이후 introspect `active:false`) |
+
+상세 설명은 [mcp-integration.md](mcp-integration.md), 엔드포인트 명세는 [api-specification.md](api-specification.md#-oauth-api-mcp-연결).
+
+---
+
 ## 데이터 흐름 (주간 브리핑)
 
 ```mermaid
@@ -155,7 +210,7 @@ sequenceDiagram
     participant PG as PostgreSQL
     participant OAI as OpenAI API
 
-    Sch->>BE: cron (일 04:00) / 수동 generate
+    Sch->>BE: cron (일 13:00 KST) / 수동 generate
     BE->>Stats: 지난주 AskPeriod 통계
     BE->>Goal: ACTIVE goals 진행률
     BE->>Pat: changeRate 규칙 패턴
@@ -174,7 +229,7 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant SCH as Scheduler (12:30 KST)
+    participant SCH as 동기화 완료 이벤트 / 12:30 cron
     participant BE as AnomalyAlertService
     participant PG as PostgreSQL
     participant OAI as OpenAI
@@ -188,6 +243,7 @@ sequenceDiagram
     end
 ```
 
+- 스케줄 Garmin 동기화가 끝나면(`GarminSyncFinishedEvent`, 실패 제외) 해당 사용자의 감지가 즉시 실행됩니다. 12:30 KST cron은 그날 아직 감지하지 않았고 동기화 중이 아닌 사용자만 처리하는 fallback입니다. 3일 중복 억제 덕분에 중복 실행돼도 알림이 반복되지 않습니다.
 - 감지 규칙은 주간 브리핑과 동일한 `ThinPatternDetector`를 재사용합니다.
 - 수동 트리거: `POST /api/insights/anomaly-alerts/detect` (Insights 화면 "Detect Anomalies" 버튼).
 - 생성된 알림은 Dashboard Recent Insights와 Insights 목록에 destructive 배지로 표시됩니다.
@@ -214,10 +270,10 @@ sequenceDiagram
     BE->>BE: 데이터 커버리지/기준선/관련성 기반 신뢰도 산정
     BE->>BE: 의도별 핵심 근거 선별 및 라우트 생성
 
-    alt OpenAI API Key 설정됨
-        BE->>OAI: GPT-4o-mini 호출<br/>(통계 + 근거 요약만 전달)
+    alt 사용자 LLM Provider 키 또는 전역 OPENAI_API_KEY 설정됨 (LlmClient)
+        BE->>OAI: Chat 호출 (기본 gpt-4o-mini)<br/>(통계 + 근거 요약만 전달)
         OAI-->>BE: 근거 설명 답변
-    else API Key 없음/장애
+    else 키 없음/장애
         BE-->>BE: 규칙 기반 Fallback 답변 생성
     end
 
@@ -233,6 +289,8 @@ sequenceDiagram
 - 모든 날짜 계산은 `Asia/Seoul` 기준이며, 분석 기간은 최대 90일로 제한됩니다.
 - `questions`/`insights.embedding`(pgvector)으로 유사 과거 인사이트를 검색해 프롬프트에 포함합니다.
 - IMPORTANT/WRONG 피드백은 `FeedbackLearningService`가 Ask·주간 브리핑·이상 신호 알림 시스템 프롬프트에 주입합니다.
+- 요청 전체가 하나의 트랜잭션이 아닙니다. 응답 저장 후 그래프 투영과 인사이트 임베딩은 비동기로 실행되며, 실패해도 응답에 영향을 주지 않습니다.
+- LLM 호출은 `LlmClient` 경유: 사용자 LLM Provider 키/모델이 우선, 없으면 전역 `OPENAI_*` 설정, 둘 다 없으면 템플릿 fallback.
 - Neo4j 그래프 데이터는 현재 retrieval에 사용하지 않습니다(시각화·관계 탐색용).
 
 ---
@@ -252,14 +310,12 @@ sequenceDiagram
     U->>FE: "Garmin 동기화" 클릭 + 범위 선택
     FE->>BE: POST /api/data-sources/garmin/sync<br/>(syncType, dateFrom, dateTo)
 
-    BE->>PG: sync_log 생성 (status: RUNNING)
     BE->>BE: Rate limit 체크 (30초)
+    BE->>PG: sync_log 생성 (status: RUNNING, 사용자/Provider당 1건만 허용)
+    BE-->>FE: SyncLog 즉시 응답 (프론트는 폴링)
+    BE->>BE: GarminSyncExecutor @Async 실행
 
-    alt FULL 동기화
-        BE->>BE: Async 백그라운드 실행
-    end
-
-    loop 30일 청크 단위
+    loop 7일 청크 단위
         BE->>PY: ProcessBuilder 실행<br/>(email, password, chunk_from, chunk_to)
         PY->>GC: garminconnect API 호출<br/>(activities + splits + body_composition + 일일 extras 9종)
         GC-->>PY: Raw JSON
@@ -268,16 +324,21 @@ sequenceDiagram
         BE->>PG: 랩 데이터 저장<br/>(garmin_activity_laps, delete-insert)
     end
 
-    BE->>PG: sync_log 완료 (status: COMPLETED)
+    BE->>PG: sync_log 완료 (COMPLETED / 일부 청크 실패 시 PARTIAL / 전체 실패 FAILED)
     BE->>BE: GraphProjector 실행
     BE->>NEO: Person 노드 생성/업데이트
     BE->>NEO: Activity/Sleep/HealthMetric/Race 노드 생성
     BE->>NEO: Goal/Question/Insight 노드 투영<br/>(HAS_GOAL, ASKED, HAS_INSIGHT, ANSWERED_BY, DERIVED_FROM)
     BE->>PG: graph_node_mappings 저장
 
-    BE-->>FE: 동기화 완료 응답
+    FE->>BE: GET /api/data-sources/garmin/sync-logs (폴링)
     FE-->>U: 최신 데이터 반영 + Sync History 표시
 ```
+
+- 청크는 7일(`sync.chunk-days`)이며 청크 타임아웃은 `120s + 30s × 일수`(최대 1800s)입니다.
+- 서버 재시작 시 남은 RUNNING은 `SyncLogStartupSweeper`가 FAILED로 정리하고, (청크 수 × 청크 타임아웃 + 15분)을 넘긴 RUNNING도 stale로 FAILED 처리합니다.
+- 활동 날씨는 Open-Meteo forecast API, 5일 이상 지난 활동은 archive API(ERA5)를 사용합니다.
+- 매일 12:00 KST 스케줄 증분 동기화 후 이상 신호 감지가 이어집니다.
 
 ---
 
@@ -315,31 +376,23 @@ Transactions 탭의 시간 보정은 원본 import 멱등성과 분리된다. �
 
 ```mermaid
 flowchart LR
-    subgraph Docker["🐳 Docker Compose"]
-        direction TB
-
-        subgraph 네트워크["pios-network (bridge)"]
-            FE["🖥️ frontend<br/>nginx:alpine<br/>port 3000"]
-            BE["⚙️ backend<br/>eclipse-temurin:21-jre<br/>port 8080"]
-            PG["🐘 postgres<br/>ankane/pgvector<br/>port 5432"]
-            NEO["🕸️ Neo4j<br/>외부 인스턴스<br/>neo4j+s://"]
-        end
+    사용자["👤 브라우저 / MCP 클라이언트"] -->|HTTPS 443| CD["🔀 caddy"]
+    subgraph 네트워크["pios-network (bridge)"]
+        CD -->|/| FE["🖥️ frontend<br/>nginx-unprivileged :8080"]
+        CD -->|/api*, AS 메타데이터| BE["⚙️ backend :8080"]
+        CD -->|/mcp*, PRM| MCP["🤖 mcp :8001"]
+        MCP -->|내부 시크릿| BE
+        BE -->|JDBC| PG["🐘 postgres<br/>pgvector"]
     end
-
-    사용자["👤 사용자 브라우저"] -->|HTTP| FE
-    FE -->|/api proxy| BE
-    BE -->|JDBC| PG
-    BE -->|Bolt| NEO
-
-    style FE fill:#6366f1,color:#fff
-    style BE fill:#10b981,color:#fff
-    style PG fill:#f59e0b,color:#fff
-    style NEO fill:#06b6d4,color:#fff
+    BE -->|Bolt| NEO["🕸️ Neo4j<br/>외부 인스턴스"]
 ```
 
 | 서비스 | 이미지 | 포트 | 역할 |
 |--------|--------|------|------|
-| frontend | nginx:alpine | 3000 | React 빌드 결과물 정적 서빙 |
-| backend | eclipse-temurin:21-jre | 8080 | Spring Boot 애플리케이션 |
-| postgres | ankane/pgvector | 5432 | 원천 데이터 + 벡터 저장 |
-| caddy | caddy:2-alpine | 80/443 | 리버스 프록시 + 자동 HTTPS |
+| caddy | caddy:2.10.2-alpine | 80/443 | 유일한 외부 진입점. 자동 HTTPS, 보안 헤더, 경로 라우팅 |
+| frontend | nginxinc/nginx-unprivileged | 8080 (내부) | React 빌드 정적 서빙 (`/api` 프록시 없음) |
+| backend | eclipse-temurin:21-jre-alpine + python3 | 8080 (내부) | Spring Boot, 비root(uid 10001), `garmin_tokens` 볼륨 |
+| mcp | python:3.12-slim | 8001 (127.0.0.1) | MCP 서버(OAuth RS), 비root |
+| postgres | ankane/pgvector (digest 고정) | 5432 (127.0.0.1) | 원천 데이터 + 벡터 저장 |
+
+서비스는 `depends_on: service_healthy` 순서로 기동합니다. 포트/백업/업그레이드 등 운영 상세는 [operations.md](operations.md)를 참고하세요.

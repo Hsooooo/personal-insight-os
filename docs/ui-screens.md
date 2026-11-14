@@ -58,6 +58,18 @@ flowchart LR
         GO1 -->|DELETE /{id}| I1
     end
 
+    subgraph MCP["🤖 MCP 연동"]
+        M1[MCP Settings Page]
+        M1 -->|GET/DELETE /api/oauth/grants| OA[OAuth API]
+        M1 -->|GET/POST/DELETE /api/auth/api-keys| A1
+    end
+
+    subgraph 동의["🔑 OAuth Consent"]
+        OC1[/oauth/consent]
+        OC1 -->|GET /api/oauth/requests/id| OA
+        OC1 -->|POST /api/oauth/requests/id/decision| OA
+    end
+
     subgraph 설정["⚙️ Settings"]
         S1[Settings Page]
         S1 -->|GET /api/settings/llm-providers| J1
@@ -215,6 +227,8 @@ flowchart LR
 | **필터링** | 노드 타입 ON/OFF 체크박스, 관계 타입 ON/OFF 체크박스 |
 | **상호작용** | 노드 클릭 → 연결된 관계 하이라이트 (나머지 dimmed), 호버 → 툴팁, 빈 공간 클릭 → 선택 해제 |
 | **API 호출** | `GET /api/graph` |
+| **접근성(텍스트 대안)** | 캔버스 아래에 노드/관계 수 요약(`aria-live`)과 **"표로 보기" 토글**(`GraphDataTable`, 최대 200행)을 제공해 캔버스 없이도 데이터를 읽을 수 있음 |
+| **빈/오류 상태** | 선택 기간에 데이터가 없으면 동기화/기간 확장 안내(EmptyState), 조회 실패는 `QueryError`(재시도 버튼) |
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -327,7 +341,7 @@ flowchart LR
 | **목적** | LLM Provider 설정 및 앱 정보 |
 | **구성** | Provider 목록 + 등록 폼 + About 카드 |
 | **API 호출** | `GET/POST/PATCH/DELETE /api/settings/llm-providers` |
-| **지원 Provider** | OpenAI, Anthropic, Google Gemini |
+| **지원 Provider** | OpenAI, Anthropic, Google Gemini 저장 가능. 단, 질문·브리핑·임베딩 호출은 현재 OpenAI 키만 사용 (다른 Provider 키는 OpenAI로 전송하지 않음) |
 
 ---
 
@@ -344,3 +358,42 @@ flowchart LR
 | **Import** | `.xlsx` 업로드 → preview → 신규/중복/확인필요 상태 확인 → 확정 저장 |
 | **Recurring** | KT 통신비 같은 고정비 템플릿과 cycle 적용 버전 관리 |
 | **API 호출** | `/api/finance/*` |
+
+---
+
+### 12. MCP 연동 (`/mcp-settings`)
+
+| 항목 | 내용 |
+|------|------|
+| **목적** | 외부 AI 에이전트(Claude, Cursor, Codex 등)와 PIOS 연동 |
+| **구성 (위에서 아래 순서)** | 1) **OAuth 연결 가이드**(`OAuthConnectGuide`: MCP URL 복사, 클라이언트별 설정 스니펫) → 2) **연결된 앱 (OAuth)**(`OAuthGrantsSection`: 앱 이름/권한 스코프 배지/최근 사용, "연결 해제" + 확인 다이얼로그) → 3) 새 키 배너(발급 직후 1회만 원문 표시) → 4) **API 키**(`ApiKeySection`: 발급/목록/삭제) → 5) API 키 연결 가이드(`ApiKeyConnectGuide`) |
+| **API 호출** | `GET/DELETE /api/oauth/grants`, `GET/POST/DELETE /api/auth/api-keys` |
+| **빈 상태** | 연결된 앱/API 키가 없을 때 안내 문구 |
+| **오류/로딩** | 목록 로딩 중 skeleton(`aria-busy`), 실패 시 오류 메시지 + 재시도, 성공/실패는 토스트(sonner) |
+| **접근성** | 해제 버튼 `aria-label="<앱> 연결 해제"` |
+| **보안** | API 키 원문은 메모리에만 보관(발급 직후만 노출, localStorage 미사용) |
+
+---
+
+### 13. OAuth Consent (`/oauth/consent?request_id=...`)
+
+| 항목 | 내용 |
+|------|------|
+| **목적** | 외부 MCP 클라이언트의 계정 접근 요청을 사용자가 승인/거부 |
+| **레이아웃** | 사이드바 없는 단독 화면 (인증 라우트 밖) |
+| **흐름** | 로그인 상태 확인(httpOnly refresh 쿠키로 복구 시도) → 미로그인이면 로그인 폼 → `GET /api/oauth/requests/{id}` → 승인/거부 → `POST .../decision` → 응답의 `redirectUrl`(요청의 `redirect_uri`와 일치 검증)로 이동 |
+| **표시 정보** | 앱 이름, Client ID, 돌아갈 주소(host), 로그인 계정, 요청 권한(`mcp:read`/`mcp:write` 설명) |
+| **경고** | 신뢰되지 않은 리디렉션 호스트면 `role="alert"` 경고, 데스크톱 앱 커스텀 스킴이면 안내 문구 |
+| **버튼** | 거부 / 승인 / "다른 계정으로 로그인" |
+| **오류/빈 상태** | `request_id` 없음, 요청 만료·소멸(400/404/409/410), 만료 시각 경과 → "요청이 만료되었거나 유효하지 않습니다" 안내(앱으로 돌아가 재시도). 기타 조회 실패는 재시도 가능한 오류 카드, 처리 실패는 카드 내 `role="alert"` 메시지 |
+| **접근성** | 로딩 `aria-busy`/`role="status"`, 리디렉션 중 상태 문구 |
+
+---
+
+## 공통 상태 / 접근성
+
+- **로딩**: 페이지 단위 `PageSkeleton`/카드별 skeleton (lazy 라우트는 `Suspense` fallback)
+- **오류**: `QueryError`(메시지 + 재시도), 렌더 오류는 `ErrorBoundary`
+- **빈 상태**: `EmptyState` (다음 행동 안내)
+- **차트/그래프 텍스트 대안**: `ChartDataTable`, `GraphDataTable`
+- **내비게이션**: 사이드바 `nav aria-label="주 메뉴"`. 메뉴: Dashboard, Data Sources, Activities, Health, Finance, Graph, Ask My Data, Insights, Goals, MCP 연동, Settings
