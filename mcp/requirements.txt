@@ -6,4 +6,4 @@ starlette>=1.10,<2
 uvicorn>=0.54,<1
 pydantic>=2.12,<3
 # slim 이미지에는 시스템 tzdata가 없을 수 있으므로 zoneinfo(Asia/Seoul) 용
-tzdata>=2025.2
+tzdata>=2026.6
