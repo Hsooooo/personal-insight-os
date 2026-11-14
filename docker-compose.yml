@@ -1,3 +1,9 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
   postgres:
     # PostgreSQL 15.4 + pgvector 0.5.1 (운영 중인 이미지 digest로 고정. 메이저 업그레이드는 dump/restore 필요)
@@ -5,7 +11,7 @@ services:
     container_name: pios-postgres
     environment:
       POSTGRES_USER: pios
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pios123}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
       POSTGRES_DB: pios
     # 호스트 로컬에서만 접근 (외부 노출 금지)
     ports:
@@ -19,6 +25,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging: *default-logging
+    restart: unless-stopped
 
   backend:
     build:
@@ -29,16 +37,24 @@ services:
       TZ: Asia/Seoul
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/pios
       SPRING_DATASOURCE_USERNAME: pios
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-pios123}
-      SPRING_NEO4J_URI: ${NEO4J_URI:-}
-      SPRING_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USERNAME:-}
-      SPRING_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:-}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      SPRING_NEO4J_URI: ${NEO4J_URI:?NEO4J_URI is required}
+      SPRING_NEO4J_AUTHENTICATION_USERNAME: ${NEO4J_USERNAME:-neo4j}
+      SPRING_NEO4J_AUTHENTICATION_PASSWORD: ${NEO4J_PASSWORD:?NEO4J_PASSWORD is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
       PIOS_ENCRYPTION_KEY: ${PIOS_ENCRYPTION_KEY:?PIOS_ENCRYPTION_KEY must be set in .env}
       PIOS_ENCRYPTION_KEY_LEGACY: ${PIOS_ENCRYPTION_KEY_LEGACY:-}
       PIOS_REGISTRATION_ENABLED: ${PIOS_REGISTRATION_ENABLED:-false}
       PIOS_MOCK_DATA_ENABLED: ${PIOS_MOCK_DATA_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      PIOS_PUBLIC_BASE_URL: ${PIOS_PUBLIC_BASE_URL:?PIOS_PUBLIC_BASE_URL must be set in .env}
+      # resource URL / 프론트 URL은 PIOS_PUBLIC_BASE_URL에서 파생 (Caddy가 같은 도메인에서 /mcp, 프론트를 서빙)
+      PIOS_MCP_RESOURCE_URL: ${PIOS_PUBLIC_BASE_URL}/mcp
+      PIOS_MCP_INTERNAL_SECRET: ${PIOS_MCP_INTERNAL_SECRET:?PIOS_MCP_INTERNAL_SECRET must be set in .env}
+      PIOS_FRONTEND_BASE_URL: ${PIOS_PUBLIC_BASE_URL}
+      PIOS_CORS_ALLOWED_ORIGINS: ${PIOS_CORS_ALLOWED_ORIGINS:?PIOS_CORS_ALLOWED_ORIGINS must be set in .env}
     volumes:
       - garmin_tokens:/app/data/garmin-tokens
     depends_on:
@@ -46,6 +62,14 @@ services:
         condition: service_healthy
     networks:
       - pios-network
+    # Dockerfile HEALTHCHECK(/actuator/health)를 사용 — 내부망 전용, Caddy는 /actuator를 노출하지 않음
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging: *default-logging
     restart: unless-stopped
 
   mcp:
@@ -55,14 +79,24 @@ services:
     container_name: pios-mcp
     environment:
       PIOS_API_URL: http://backend:8080/api
-      PIOS_API_KEY: ${PIOS_MCP_API_KEY:-}
-    # 외부 접근은 Caddy(/mcp)를 통해서만
+      PIOS_PUBLIC_BASE_URL: ${PIOS_PUBLIC_BASE_URL:?PIOS_PUBLIC_BASE_URL must be set in .env}
+      PIOS_MCP_RESOURCE_URL: ${PIOS_PUBLIC_BASE_URL}/mcp
+      PIOS_MCP_INTERNAL_SECRET: ${PIOS_MCP_INTERNAL_SECRET:?PIOS_MCP_INTERNAL_SECRET must be set in .env}
+    # 외부 접근은 Caddy(/mcp)를 통해서만. 호스트에는 로컬 전용으로 바인딩
     ports:
       - "127.0.0.1:8001:8001"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - pios-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/healthz', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *default-logging
     restart: unless-stopped
 
   frontend:
@@ -70,27 +104,43 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: pios-frontend
-    depends_on:
-      - backend
     networks:
       - pios-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    logging: *default-logging
     restart: unless-stopped
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2.10.2-alpine
     container_name: pios-caddy
+    environment:
+      PIOS_DOMAIN: ${PIOS_DOMAIN:-localhost}
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - frontend
-      - backend
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      mcp:
+        condition: service_healthy
     networks:
       - pios-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:2019/config/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:

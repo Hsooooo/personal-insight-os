@@ -1,0 +1,35 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule: { interval: weekly }
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: maven
+    directory: /backend
+    schedule: { interval: weekly }
+    groups:
+      maven-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: pip
+    directory: /mcp
+    schedule: { interval: weekly }
+    groups:
+      pip-minor-patch:
+        update-types: [minor, patch]
+  - package-ecosystem: docker
+    directories: [/backend, /frontend, /mcp]
+    schedule: { interval: weekly }
+    groups:
+      docker-all:
+        patterns: ["*"]
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    groups:
+      actions-all:
+        patterns: ["*"]
