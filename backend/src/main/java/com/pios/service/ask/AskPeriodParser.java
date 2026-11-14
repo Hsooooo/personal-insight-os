@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 
 public class AskPeriodParser {
 
-    public static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    public static final ZoneId SEOUL = com.pios.common.AppTimeZones.KST;
     public static final int DEFAULT_ANALYSIS_DAYS = 7;
     public static final int DEFAULT_BASELINE_DAYS = 28;
     public static final int MAX_ANALYSIS_DAYS = 90;

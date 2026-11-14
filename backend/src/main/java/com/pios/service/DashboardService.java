@@ -6,6 +6,7 @@ import com.pios.dto.*;
 import com.pios.repository.*;
 import com.pios.service.briefing.WeeklyBriefingService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,17 +33,17 @@ public class DashboardService {
 
         var latestHealth = healthRepo.findLatestByUserId(userId).map(this::toHealthDto).orElse(null);
         var latestSleep = sleepRepo.findLatestByUserId(userId).map(this::toSleepDto).orElse(null);
-        var latestActivity = activityRepo.findRecentByUserId(userId, weekAgoDateTime).stream()
+        var recentActivities = activityRepo.findRecentByUserId(userId, weekAgoDateTime);
+        var latestActivity = recentActivities.stream()
                 .findFirst().map(this::toActivityDto).orElse(null);
         var totalActivities = activityRepo.countByUserId(userId);
 
         var last7Health = healthRepo.findByUserIdAndMetricDateBetweenOrderByMetricDateDesc(userId, weekAgo, today)
                 .stream().map(this::toHealthDto).toList();
-        var last7Activities = activityRepo.findRecentByUserId(userId, weekAgoDateTime)
-                .stream().map(this::toActivityDto).toList();
-        var recentInsights = insightRepo.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .filter(i -> !WeeklyBriefingService.CATEGORY.equals(i.getCategory()))
-                .limit(3).map(this::toInsightDto).toList();
+        var last7Activities = recentActivities.stream().map(this::toActivityDto).toList();
+        var recentInsights = insightRepo.findRecentExcludingCategory(
+                        userId, WeeklyBriefingService.CATEGORY, PageRequest.of(0, 3)).stream()
+                .map(this::toInsightDto).toList();
 
         var latestBriefing = weeklyBriefingService.getLatest(userId);
         var activeGoals = goalService.getGoals(userId).stream()

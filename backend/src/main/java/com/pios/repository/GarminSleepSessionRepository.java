@@ -16,6 +16,7 @@ public interface GarminSleepSessionRepository extends JpaRepository<GarminSleepS
             Long userId, LocalDate start, LocalDate end);
 
     Optional<GarminSleepSession> findByUserIdAndSleepDate(Long userId, LocalDate sleepDate);
+    List<GarminSleepSession> findByUserIdAndSleepDateIn(Long userId, java.util.Collection<LocalDate> sleepDates);
 
     @Query("SELECT s FROM GarminSleepSession s WHERE s.user.id = :userId ORDER BY s.sleepDate DESC LIMIT 1")
     Optional<GarminSleepSession> findLatestByUserId(@Param("userId") Long userId);

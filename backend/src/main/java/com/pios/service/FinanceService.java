@@ -1,5 +1,7 @@
 package com.pios.service;
 
+import com.pios.common.AppTimeZones;
+import com.pios.common.NotFoundException;
 import com.pios.domain.*;
 import com.pios.dto.finance.*;
 import com.pios.repository.*;
@@ -25,7 +27,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class FinanceService {
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SEOUL = AppTimeZones.KST;
     private static final DateTimeFormatter CYCLE_LABEL = DateTimeFormatter.ofPattern("yyyy-MM");
 
     private final FinanceExcelParser excelParser;
@@ -60,7 +62,7 @@ public class FinanceService {
             throw new IllegalArgumentException("Time must use HH:mm format");
         }
         FinanceTransaction transaction = transactionRepo.findByIdAndUserId(transactionId, userId)
-                .orElseThrow(() -> new IllegalArgumentException("Finance transaction not found"));
+                .orElseThrow(() -> new NotFoundException("Finance transaction not found"));
         transaction.setTransactionAt(transaction.getTransactionDate().atTime(time).atZone(SEOUL).toInstant());
         transaction.setTimeAdjusted(true);
         transaction.setTimeAdjustedAt(Instant.now());
@@ -171,9 +173,8 @@ public class FinanceService {
             cycleTransactions = transactionRepo.findByUserIdOrderByTransactionAtAscIdAsc(userId);
             priorTransactions = List.of();
         } else {
-            FinanceCycle cycle = cycleRepo.findById(cycleId)
-                    .filter(c -> c.getUser().getId().equals(userId))
-                    .orElseThrow(() -> new IllegalArgumentException("Finance cycle not found"));
+            FinanceCycle cycle = cycleRepo.findByIdAndUserId(cycleId, userId)
+                    .orElseThrow(() -> new NotFoundException("Finance cycle not found"));
             cycleTransactions = transactionRepo.findByUserIdAndCycleIdOrderByTransactionAtAscIdAsc(userId, cycleId);
             priorTransactions = transactionRepo.findByUserIdAndTransactionAtBeforeOrderByTransactionAtAscIdAsc(
                     userId, cycle.getStartsAt());
@@ -275,9 +276,8 @@ public class FinanceService {
                 .orElse(1);
         FinanceCycle cycle = null;
         if (dto.getEffectiveCycleId() != null) {
-            cycle = cycleRepo.findById(dto.getEffectiveCycleId())
-                    .filter(c -> c.getUser().getId().equals(userId))
-                    .orElseThrow(() -> new IllegalArgumentException("Finance cycle not found"));
+            cycle = cycleRepo.findByIdAndUserId(dto.getEffectiveCycleId(), userId)
+                    .orElseThrow(() -> new NotFoundException("Finance cycle not found"));
         }
         BigDecimal expected = dto.getExpectedAmount();
         if (expected == null && dto.getItems() != null) {
@@ -406,8 +406,7 @@ public class FinanceService {
 
     private FinanceCycle ensureCycle(Long userId, FinanceImportRowDto row) {
         if (row.getCycleId() != null) {
-            return cycleRepo.findById(row.getCycleId())
-                    .filter(c -> c.getUser().getId().equals(userId))
+            return cycleRepo.findByIdAndUserId(row.getCycleId(), userId)
                     .orElse(null);
         }
         Instant startsAt = row.getCycleStartsAt() == null ? row.getTransactionDate().atStartOfDay(SEOUL).toInstant() : row.getCycleStartsAt();
@@ -438,15 +437,13 @@ public class FinanceService {
     }
 
     private RecurringBillTemplate findTemplate(Long userId, Long templateId) {
-        return templateRepo.findById(templateId)
-                .filter(t -> t.getUser().getId().equals(userId))
-                .orElseThrow(() -> new IllegalArgumentException("Recurring bill not found"));
+        return templateRepo.findByIdAndUserId(templateId, userId)
+                .orElseThrow(() -> new NotFoundException("Recurring bill not found"));
     }
 
     private FinanceAccount findAccount(Long userId, Long accountId) {
-        return accountRepo.findById(accountId)
-                .filter(a -> a.getUser().getId().equals(userId))
-                .orElseThrow(() -> new IllegalArgumentException("Finance account not found"));
+        return accountRepo.findByIdAndUserId(accountId, userId)
+                .orElseThrow(() -> new NotFoundException("Finance account not found"));
     }
 
     private Optional<FinanceAccount> findAccountForAsset(Long userId, String asset) {

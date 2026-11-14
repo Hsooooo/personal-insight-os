@@ -1,5 +1,8 @@
 package com.pios.repository;
 
+import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Modifying;
 import com.pios.domain.Activity;
 import com.pios.domain.GarminActivityLap;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,4 +17,8 @@ public interface GarminActivityLapRepository extends JpaRepository<GarminActivit
     List<GarminActivityLap> findByActivityIdOrderByLapIndexAsc(Long activityId);
 
     void deleteByActivityId(Long activityId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = false)
+    @Query("DELETE FROM GarminActivityLap l WHERE l.activity.id IN :activityIds")
+    int deleteByActivityIdIn(@Param("activityIds") java.util.Collection<Long> activityIds);
 }

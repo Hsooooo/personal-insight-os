@@ -10,5 +10,7 @@ import java.util.Optional;
 @Repository
 public interface ProviderConnectionRepository extends JpaRepository<ProviderConnection, Long> {
     List<ProviderConnection> findByUserId(Long userId);
+
+    List<ProviderConnection> findByProviderTypeAndConnectionStatus(String providerType, String connectionStatus);
     Optional<ProviderConnection> findByUserIdAndProviderType(Long userId, String providerType);
 }

@@ -1,25 +1,44 @@
 package com.pios.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pios.common.AppTimeZones;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Open-Meteo 시간별 날씨 조회. 활동 시각(현지 시각)이 archive-min-age-days보다 오래되면
+ * ERA5 아카이브 API, 최근이면 forecast API를 사용한다 (아카이브는 수일 지연되어 최근 데이터가 없음).
+ * HTTP 타임아웃은 공용 RestTemplate 설정(http.client.*)을 따른다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WeatherService {
 
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+
+    @Value("${weather.forecast-url:https://api.open-meteo.com/v1/forecast}")
+    private String forecastUrl = "https://api.open-meteo.com/v1/forecast";
+
+    @Value("${weather.archive-url:https://archive-api.open-meteo.com/v1/archive}")
+    private String archiveUrl = "https://archive-api.open-meteo.com/v1/archive";
+
+    @Value("${weather.archive-min-age-days:5}")
+    private int archiveMinAgeDays = 5;
+
+    String endpointFor(LocalDate date, LocalDate today) {
+        return date.isBefore(today.minusDays(archiveMinAgeDays)) ? archiveUrl : forecastUrl;
+    }
 
     public WeatherData fetchWeather(double latitude, double longitude, LocalDateTime startTime) {
         try {
@@ -27,7 +46,7 @@ public class WeatherService {
             String date = hour.toLocalDate().toString();
             int hourOfDay = hour.getHour();
 
-            String url = UriComponentsBuilder.fromHttpUrl("https://api.open-meteo.com/v1/forecast")
+            String url = UriComponentsBuilder.fromUriString(endpointFor(hour.toLocalDate(), AppTimeZones.todayKst()))
                     .queryParam("latitude", latitude)
                     .queryParam("longitude", longitude)
                     .queryParam("start_date", date)
@@ -48,6 +67,9 @@ public class WeatherService {
             }
 
             JsonNode times = hourly.get("time");
+            if (times == null || !times.isArray()) {
+                return null;
+            }
             int index = -1;
             for (int i = 0; i < times.size(); i++) {
                 String t = times.get(i).asText();

@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface LlmProviderRepository extends JpaRepository<LlmProvider, Long> {
     List<LlmProvider> findByUserId(Long userId);
+    Optional<LlmProvider> findByIdAndUserId(Long id, Long userId);
     Optional<LlmProvider> findByUserIdAndProviderName(Long userId, String providerName);
 }

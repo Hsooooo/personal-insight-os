@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface FinanceCycleRepository extends JpaRepository<FinanceCycle, Long> {
     List<FinanceCycle> findByUserIdOrderByStartsAtDesc(Long userId);
+    Optional<FinanceCycle> findByIdAndUserId(Long id, Long userId);
     Optional<FinanceCycle> findByUserIdAndStartsAt(Long userId, Instant startsAt);
     Optional<FinanceCycle> findFirstByUserIdAndStartsAtLessThanEqualOrderByStartsAtDesc(Long userId, Instant startsAt);
 }

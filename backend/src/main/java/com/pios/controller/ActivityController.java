@@ -1,5 +1,7 @@
 package com.pios.controller;
 
+import com.pios.dto.ActivityTagRequest;
+import jakarta.validation.Valid;
 import com.pios.dto.ActivityDto;
 import com.pios.dto.ActivityFilterRequest;
 import com.pios.dto.ApiResponse;
@@ -32,7 +34,7 @@ public class ActivityController {
     public ApiResponse<Page<ActivityDto>> list(
             @AuthenticationPrincipal Long userId,
             @PageableDefault(size = 20, sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable,
-            ActivityFilterRequest filter) {
+            @Valid ActivityFilterRequest filter) {
         return ApiResponse.ok(activityService.getActivities(userId, filter, pageable));
     }
 
@@ -53,7 +55,7 @@ public class ActivityController {
     @PostMapping("/weight")
     public ApiResponse<ActivityDto> createWeightTraining(
             @AuthenticationPrincipal Long userId,
-            @RequestBody WeightTrainingRequest request) {
+            @Valid @RequestBody WeightTrainingRequest request) {
         return ApiResponse.ok(activityService.createWeightTraining(userId, request));
     }
 
@@ -61,7 +63,7 @@ public class ActivityController {
     public ApiResponse<ActivityDto> updateWeightTraining(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long activityId,
-            @RequestBody WeightTrainingRequest request) {
+            @Valid @RequestBody WeightTrainingRequest request) {
         return ApiResponse.ok(activityService.updateWeightTraining(userId, activityId, request));
     }
 
@@ -77,7 +79,7 @@ public class ActivityController {
     public ApiResponse<ActivityDto> updateTag(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long activityId,
-            @RequestBody java.util.Map<String, String> body) {
-        return ApiResponse.ok(activityService.updateUserTag(userId, activityId, body.get("userTag")));
+            @Valid @RequestBody ActivityTagRequest body) {
+        return ApiResponse.ok(activityService.updateUserTag(userId, activityId, body.getUserTag()));
     }
 }

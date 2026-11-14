@@ -1,5 +1,6 @@
 package com.pios.controller;
 
+import jakarta.validation.Valid;
 import com.pios.dto.ApiResponse;
 import com.pios.dto.finance.*;
 import com.pios.service.FinanceService;
@@ -32,14 +33,14 @@ public class FinanceController {
     public ApiResponse<FinanceTransactionDto> updateTransactionTime(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long transactionId,
-            @RequestBody FinanceTransactionTimeUpdateRequest request) {
+            @Valid @RequestBody FinanceTransactionTimeUpdateRequest request) {
         return ApiResponse.ok(financeService.updateTransactionTime(userId, transactionId, request));
     }
 
     @PostMapping("/transactions/delete")
     public ApiResponse<FinanceTransactionDeleteResponse> deleteTransactions(
             @AuthenticationPrincipal Long userId,
-            @RequestBody FinanceTransactionDeleteRequest request) {
+            @Valid @RequestBody FinanceTransactionDeleteRequest request) {
         return ApiResponse.ok(financeService.deleteTransactions(userId, request));
     }
 
@@ -53,7 +54,7 @@ public class FinanceController {
     @PostMapping("/import/confirm")
     public ApiResponse<FinanceImportConfirmResponse> confirm(
             @AuthenticationPrincipal Long userId,
-            @RequestBody FinanceImportConfirmRequest request) {
+            @Valid @RequestBody FinanceImportConfirmRequest request) {
         return ApiResponse.ok(financeService.confirmImport(userId, request));
     }
 
@@ -67,7 +68,7 @@ public class FinanceController {
     @PostMapping("/accounts")
     public ApiResponse<FinanceAccountDto> createAccount(
             @AuthenticationPrincipal Long userId,
-            @RequestBody FinanceAccountDto dto) {
+            @Valid @RequestBody FinanceAccountDto dto) {
         return ApiResponse.ok(financeService.createAccount(userId, dto));
     }
 
@@ -75,7 +76,7 @@ public class FinanceController {
     public ApiResponse<FinanceAccountDto> updateAccount(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long accountId,
-            @RequestBody FinanceAccountDto dto) {
+            @Valid @RequestBody FinanceAccountDto dto) {
         return ApiResponse.ok(financeService.updateAccount(userId, accountId, dto));
     }
 
@@ -100,7 +101,7 @@ public class FinanceController {
     @PostMapping("/recurring-bills")
     public ApiResponse<RecurringBillDto> createRecurringBill(
             @AuthenticationPrincipal Long userId,
-            @RequestBody RecurringBillDto dto) {
+            @Valid @RequestBody RecurringBillDto dto) {
         return ApiResponse.ok(financeService.createRecurringBill(userId, dto));
     }
 
@@ -108,7 +109,7 @@ public class FinanceController {
     public ApiResponse<RecurringBillVersionDto> createRecurringBillVersion(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long templateId,
-            @RequestBody RecurringBillVersionDto dto) {
+            @Valid @RequestBody RecurringBillVersionDto dto) {
         return ApiResponse.ok(financeService.createRecurringBillVersion(userId, templateId, dto));
     }
 

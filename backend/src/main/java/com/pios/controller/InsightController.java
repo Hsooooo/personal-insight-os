@@ -1,5 +1,8 @@
 package com.pios.controller;
 
+import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import com.pios.dto.ApiResponse;
 import com.pios.dto.FeedbackRequest;
 import com.pios.dto.InsightDto;
@@ -28,9 +31,11 @@ public class InsightController {
     @GetMapping
     public ApiResponse<List<InsightDto>> list(
             @AuthenticationPrincipal Long userId,
-            @RequestParam(required = false) String category,
-            @RequestParam(required = false) String feedbackStatus) {
-        return ApiResponse.ok(insightService.getInsights(userId, category, feedbackStatus));
+            @RequestParam(required = false) @Size(max = 50) String category,
+            @RequestParam(required = false) @Size(max = 30) String feedbackStatus,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "" + InsightService.DEFAULT_PAGE_SIZE) @Min(1) @Max(InsightService.MAX_PAGE_SIZE) int size) {
+        return ApiResponse.ok(insightService.getInsights(userId, category, feedbackStatus, page, size));
     }
 
     @GetMapping("/saved")

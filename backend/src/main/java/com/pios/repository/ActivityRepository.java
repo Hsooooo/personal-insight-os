@@ -23,6 +23,9 @@ public interface ActivityRepository extends JpaRepository<Activity, Long>, JpaSp
     List<Activity> findRecentByUserId(@Param("userId") Long userId, @Param("since") LocalDateTime since);
 
     Optional<Activity> findByUserIdAndExternalActivityId(Long userId, String externalActivityId);
+    Optional<Activity> findByIdAndUserId(Long id, Long userId);
+
+    List<Activity> findByUserIdAndExternalActivityIdIn(Long userId, java.util.Collection<String> externalActivityIds);
 
     @Query("SELECT COUNT(a) FROM Activity a WHERE a.user.id = :userId")
     Long countByUserId(@Param("userId") Long userId);

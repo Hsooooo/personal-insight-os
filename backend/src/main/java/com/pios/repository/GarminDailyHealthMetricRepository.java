@@ -16,6 +16,7 @@ public interface GarminDailyHealthMetricRepository extends JpaRepository<GarminD
             Long userId, LocalDate start, LocalDate end);
 
     Optional<GarminDailyHealthMetric> findByUserIdAndMetricDate(Long userId, LocalDate metricDate);
+    List<GarminDailyHealthMetric> findByUserIdAndMetricDateIn(Long userId, java.util.Collection<LocalDate> metricDates);
 
     @Query("SELECT m FROM GarminDailyHealthMetric m WHERE m.user.id = :userId ORDER BY m.metricDate DESC LIMIT 1")
     Optional<GarminDailyHealthMetric> findLatestByUserId(@Param("userId") Long userId);

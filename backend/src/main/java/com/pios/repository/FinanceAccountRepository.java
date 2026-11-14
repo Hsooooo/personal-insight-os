@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface FinanceAccountRepository extends JpaRepository<FinanceAccount, Long> {
     List<FinanceAccount> findByUserIdOrderByNameAsc(Long userId);
+    Optional<FinanceAccount> findByIdAndUserId(Long id, Long userId);
     Optional<FinanceAccount> findByUserIdAndName(Long userId, String name);
 }

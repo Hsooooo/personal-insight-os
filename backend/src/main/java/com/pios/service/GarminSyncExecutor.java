@@ -1,344 +1,243 @@
 package com.pios.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.pios.common.AppTimeZones;
-import com.pios.domain.*;
+import com.pios.domain.ProviderConnection;
+import com.pios.domain.SyncLog;
 import com.pios.domain.enums.SyncStatus;
-import com.pios.repository.*;
+import com.pios.repository.ProviderConnectionRepository;
+import com.pios.repository.SyncLogRepository;
 import com.pios.security.SecretCryptoService;
+import com.pios.service.garmin.ActivityWeatherEnricher;
+import com.pios.service.garmin.GarminActivityPersister;
+import com.pios.service.garmin.GarminDailyPersister;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
-import java.time.*;
-import java.time.format.DateTimeFormatter;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.util.*;
+import java.util.stream.Collectors;
 
+/**
+ * Garmin 동기화 오케스트레이션: 청크 분할 → 스크립트 호출(트랜잭션 밖) → 청크 저장(트랜잭션) →
+ * 날씨 보강(트랜잭션 밖) → 상태 기록 → 그래프 투영 → {@link GarminSyncFinishedEvent} 발행.
+ * <p>
+ * 상태 규칙:
+ * <ul>
+ *   <li>COMPLETED: 모든 청크/엔드포인트 성공</li>
+ *   <li>PARTIAL: 일부 엔드포인트/청크 실패 (나머지는 저장됨)</li>
+ *   <li>FAILED: 인증 실패·rate limit 등 치명 오류(남은 청크 중단), 또는 모든 청크 실패</li>
+ * </ul>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class GarminSyncExecutor {
 
+    private static final int MAX_ERROR_MESSAGE_LENGTH = 4000;
+    private static final int MAX_CONSECUTIVE_CHUNK_FAILURES = 2;
+
     private final ProviderConnectionRepository providerRepo;
     private final SyncLogRepository syncLogRepo;
-    private final ActivityRepository activityRepo;
-    private final GarminDailyHealthMetricRepository healthRepo;
-    private final GarminSleepSessionRepository sleepRepo;
-    private final GarminActivityLapRepository lapRepo;
-    private final GarminDailyRawRepository dailyRawRepo;
     private final GarminPythonClient pythonClient;
+    private final GarminActivityPersister activityPersister;
+    private final GarminDailyPersister dailyPersister;
+    private final ActivityWeatherEnricher weatherEnricher;
     private final GraphProjectorService graphProjector;
-    private final WeatherService weatherService;
     private final SecretCryptoService secretCrypto;
     private final TransactionTemplate transactionTemplate;
+    private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${sync.chunk-days:30}")
-    private int chunkDays;
+    @Value("${sync.chunk-days:7}")
+    private int chunkDays = 7;
+
+    @Value("${sync.stale-margin-minutes:15}")
+    private long staleMarginMinutes = 15;
 
     /**
-     * 전체 동기화를 하나의 트랜잭션으로 묶지 않는다. Garmin 호출(청크당 최대 수십 초) 동안 DB 커넥션을 잡지 않도록
-     * 청크 저장만 트랜잭션으로 감싸고, SyncLog 상태 기록은 각각 독립적으로 커밋되게 한다.
+     * 이 기간 동기화가 정상이라면 끝나야 하는 최대 시간 (청크 타임아웃 합 + margin). 이를 넘긴 RUNNING은 stale.
      */
-    @Async("syncTaskExecutor")
-    public void runSyncAsync(Long userId, Long syncLogId, LocalDate fromDate, LocalDate toDate) {
-        if (syncLogId == null) {
-            log.error("syncLogId is null, cannot start sync for user {}", userId);
-            return;
+    public Duration maxExpectedDuration(LocalDate fromDate, LocalDate toDate) {
+        Duration total = Duration.ofMinutes(staleMarginMinutes);
+        if (fromDate == null || toDate == null) {
+            return total.plus(pythonClient.timeoutFor(LocalDate.now(), LocalDate.now().plusDays(chunkDays - 1L)));
         }
-        SyncLog syncLog = syncLogRepo.findById(syncLogId)
-                .orElseThrow(() -> new IllegalStateException("Sync log not found: " + syncLogId));
-        ProviderConnection conn = providerRepo.findByUserIdAndProviderType(userId, "GARMIN")
-                .orElseThrow(() -> new IllegalStateException("Garmin not connected"));
+        for (DateRange chunk : splitIntoChunks(fromDate, toDate, chunkDays)) {
+            total = total.plus(pythonClient.timeoutFor(chunk.from(), chunk.to()));
+        }
+        return total;
+    }
 
+    @Async("syncTaskExecutor")
+    public void runSyncAsync(Long userId, Long syncLogId, LocalDate fromDate, LocalDate toDate, boolean scheduled) {
+        String finalStatus = SyncStatus.FAILED.name();
         try {
-            executeSync(userId, conn, syncLog, fromDate, toDate);
-        } catch (Exception e) {
-            log.error("Sync failed for user {}", userId, e);
-            markFailed(syncLog, e.getMessage());
+            if (syncLogId == null) {
+                log.error("syncLogId is null, cannot start sync for user {}", userId);
+                return;
+            }
+            SyncLog syncLog = syncLogRepo.findById(syncLogId).orElse(null);
+            if (syncLog == null) {
+                log.error("Sync log {} not found for user {}", syncLogId, userId);
+                return;
+            }
+            try {
+                ProviderConnection conn = providerRepo.findByUserIdAndProviderType(userId, "GARMIN")
+                        .orElseThrow(() -> new IllegalStateException("Garmin not connected"));
+                finalStatus = executeSync(userId, conn, syncLog, fromDate, toDate);
+            } catch (Exception e) {
+                log.error("Sync failed for user {}", userId, e);
+                markFinished(syncLog, SyncStatus.FAILED, new Counts(), e.getMessage());
+            }
+        } finally {
+            publishFinished(userId, syncLogId, finalStatus, scheduled);
         }
     }
 
-    private void executeSync(Long userId, ProviderConnection conn, SyncLog syncLog,
-                             LocalDate fromDate, LocalDate toDate) {
+    String executeSync(Long userId, ProviderConnection conn, SyncLog syncLog,
+                       LocalDate fromDate, LocalDate toDate) {
         String email = extractEmail(conn);
         String password = extractPassword(conn);
 
-        int totalActivities = 0;
-        int totalHealth = 0;
-        int totalSleep = 0;
-        int totalWeights = 0;
+        Counts counts = new Counts();
+        List<String> issues = new ArrayList<>();
+        String fatalMessage = null;
+        int failedChunks = 0;
+        int consecutiveFailures = 0;
 
         List<DateRange> chunks = splitIntoChunks(fromDate, toDate, chunkDays);
         for (DateRange chunk : chunks) {
-            log.info("Syncing chunk: {} to {} for user {}", chunk.from, chunk.to, userId);
+            log.info("Syncing chunk: {} to {} for user {}", chunk.from(), chunk.to(), userId);
 
+            GarminPythonClient.SyncResult result;
             try {
-                GarminPythonClient.SyncResult result = pythonClient.fetch(
-                        userId, email, password, chunk.from, chunk.to, GarminPythonClient.DataType.ALL);
-                JsonNode data = result.data();
+                result = pythonClient.fetch(userId, email, password, chunk.from(), chunk.to(),
+                        GarminPythonClient.DataType.ALL);
+            } catch (GarminFetchException e) {
+                failedChunks++;
+                if (e.getKind().isFatal()) {
+                    fatalMessage = "[" + e.getKind() + "] " + e.getMessage();
+                    break;
+                }
+                issues.add(chunk + ": " + e.getMessage());
+                if (++consecutiveFailures >= MAX_CONSECUTIVE_CHUNK_FAILURES) {
+                    issues.add("aborted after " + consecutiveFailures + " consecutive chunk failures");
+                    break;
+                }
+                continue;
+            }
+            consecutiveFailures = 0;
 
-                // 체중은 실패해도 나머지 저장에 영향이 없도록 별도 트랜잭션
-                try {
-                    Integer weights = transactionTemplate.execute(status -> saveWeights(userId, data.get("weights")));
-                    totalWeights += weights != null ? weights : 0;
-                } catch (Exception e) {
-                    log.warn("Weight sync failed for chunk {} to {}: {}", chunk.from, chunk.to, e.getMessage());
-                }
-                int[] counts = transactionTemplate.execute(status -> {
-                    int activities = saveActivities(userId, data.get("activities"));
-                    int health = saveHealthMetrics(userId, data.get("health"));
-                    int sleep = saveSleepSessions(userId, data.get("sleep"));
-                    saveDailyExtras(userId, data.get("extras"));
-                    return new int[]{activities, health, sleep};
-                });
-                if (counts != null) {
-                    totalActivities += counts[0];
-                    totalHealth += counts[1];
-                    totalSleep += counts[2];
-                }
+            boolean persisted = persistChunk(userId, chunk, result.data(), counts, issues);
+            if (!persisted) {
+                failedChunks++;
+            }
+            if (!result.errors().isEmpty()) {
+                issues.add(chunk + ": " + summarizeEndpointErrors(result.errors()));
+            }
+            if (result.fatalError() != null) {
+                GarminPythonClient.FatalError f = result.fatalError();
+                fatalMessage = "[" + f.kind() + "] " + f.message();
+                break;
+            }
+        }
+
+        SyncStatus status;
+        String message;
+        if (fatalMessage != null) {
+            status = SyncStatus.FAILED;
+            message = join(fatalMessage, issues);
+        } else if (failedChunks >= chunks.size() && counts.total() == 0) {
+            status = SyncStatus.FAILED;
+            message = join("All chunks failed", issues);
+        } else if (!issues.isEmpty()) {
+            status = SyncStatus.PARTIAL;
+            message = join(null, issues);
+        } else {
+            status = SyncStatus.COMPLETED;
+            message = null;
+        }
+        markFinished(syncLog, status, counts, message);
+
+        if (status != SyncStatus.FAILED) {
+            updateConnectionAfterSync(conn, toDate);
+        }
+        if (counts.total() > 0) {
+            try {
+                graphProjector.projectUserData(userId);
             } catch (Exception e) {
-                log.error("Chunk sync failed: {} to {}", chunk.from, chunk.to, e);
-                markPartial(syncLog, totalActivities, totalHealth, totalSleep, totalWeights, e.getMessage());
-                return;
+                log.error("Graph projection failed for user {}", userId, e);
             }
         }
-
-        markCompleted(syncLog, totalActivities, totalHealth, totalSleep, totalWeights);
-        updateConnectionAfterSync(conn, toDate);
-
-        try {
-            graphProjector.projectUserData(userId);
-        } catch (Exception e) {
-            log.error("Graph projection failed for user {}", userId, e);
-        }
+        log.info("Sync {} for user {}: activities={}, health={}, sleep={}, weights={}, weather={}",
+                status, userId, counts.activities, counts.health, counts.sleep, counts.weights, counts.weather);
+        return status.name();
     }
 
-    private int saveActivities(Long userId, JsonNode activitiesNode) {
-        if (activitiesNode == null || !activitiesNode.isArray()) return 0;
-        int count = 0;
-        User user = User.builder().id(userId).build();
-
-        for (JsonNode node : activitiesNode) {
-            String garminId = node.get("garmin_activity_id").asText();
-            if (garminId == null || garminId.isEmpty()) continue;
-
-            Optional<Activity> existing = activityRepo.findByUserIdAndExternalActivityId(userId, garminId);
-            Activity activity = existing.orElseGet(() -> Activity.builder()
-                    .user(user)
-                    .externalActivityId(garminId)
-                    .sourceType("GARMIN")
-                    .build());
-
-            activity.setActivityType(getText(node, "activity_type"));
-            activity.setActivityName(getText(node, "activity_name"));
-            activity.setStartTime(parseLocalDateTime(getText(node, "start_time")));
-            activity.setDurationSeconds(getInt(node, "duration_seconds"));
-            activity.setDistanceMeters(getDecimal(node, "distance_meters"));
-            activity.setAveragePaceSeconds(getDecimal(node, "average_pace_seconds"));
-            activity.setAverageHeartRate(getInt(node, "average_heart_rate"));
-            activity.setMaxHeartRate(getInt(node, "max_heart_rate"));
-            activity.setCalories(getInt(node, "calories"));
-            activity.setElevationGainMeters(getDecimal(node, "elevation_gain_meters"));
-            activity.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
-
-            Activity savedActivity = activityRepo.save(activity);
-            count++;
-
-            saveActivityLaps(savedActivity, node.get("laps"));
-            fetchAndSaveWeather(savedActivity, node.get("raw_payload"));
-        }
-        return count;
-    }
-
-    private void fetchAndSaveWeather(Activity activity, JsonNode rawPayload) {
-        if (activity.getStartTime() == null) return;
-        String type = activity.getActivityType();
-        if (type == null) return;
-        String t = type.toLowerCase();
-        boolean isRunning = t.equals("running") || t.contains("run") || t.contains("treadmill") || t.contains("track");
-        if (!isRunning) return;
-
-        JsonNode startLat = rawPayload != null ? rawPayload.get("startLatitude") : null;
-        JsonNode startLon = rawPayload != null ? rawPayload.get("startLongitude") : null;
-        if (startLat == null || startLat.isNull() || startLon == null || startLon.isNull()) {
-            return;
-        }
-
+    /** 청크 저장. 날씨 보강은 저장 커밋 이후 트랜잭션 밖에서 수행. */
+    private boolean persistChunk(Long userId, DateRange chunk, JsonNode data, Counts counts, List<String> issues) {
+        List<GarminActivityPersister.WeatherCandidate> weatherCandidates = List.of();
+        boolean ok = true;
         try {
-            double lat = startLat.asDouble();
-            double lon = startLon.asDouble();
-            if (lat == 0.0 && lon == 0.0) return;
-
-            WeatherService.WeatherData weather = weatherService.fetchWeather(lat, lon, activity.getStartTime());
-            if (weather != null) {
-                activity.setWeatherTemperature(weather.getTemperature());
-                activity.setWeatherHumidity(weather.getHumidity());
-                activity.setWeatherWindSpeed(weather.getWindSpeed());
-                activity.setWeatherCondition(weather.getCondition());
-                activity.setWeatherRaw(weather.getRaw());
-                activityRepo.save(activity);
+            ChunkCounts c = transactionTemplate.execute(status -> {
+                GarminActivityPersister.Result activities = activityPersister.save(userId, data.get("activities"));
+                int health = dailyPersister.saveHealthMetrics(userId, data.get("health"));
+                int sleep = dailyPersister.saveSleepSessions(userId, data.get("sleep"));
+                dailyPersister.saveDailyExtras(userId, data.get("extras"));
+                return new ChunkCounts(activities, health, sleep);
+            });
+            if (c != null) {
+                counts.activities += c.activities().saved();
+                counts.health += c.health();
+                counts.sleep += c.sleep();
+                weatherCandidates = c.activities().weatherCandidates();
             }
         } catch (Exception e) {
-            log.warn("Failed to fetch weather for activity {}: {}", activity.getId(), e.getMessage());
+            ok = false;
+            log.error("Saving chunk {} failed for user {}", chunk, userId, e);
+            issues.add(chunk + ": save failed: " + e.getMessage());
         }
+
+        // 체중은 실패해도 나머지 저장에 영향이 없도록 별도 트랜잭션
+        try {
+            Integer weights = transactionTemplate.execute(status -> dailyPersister.saveWeights(userId, data.get("weights")));
+            counts.weights += weights != null ? weights : 0;
+        } catch (Exception e) {
+            log.warn("Weight sync failed for chunk {}: {}", chunk, e.getMessage());
+            issues.add(chunk + ": weights save failed");
+        }
+
+        counts.weather += weatherEnricher.enrich(weatherCandidates);
+        return ok;
     }
 
-    private void saveActivityLaps(Activity activity, JsonNode lapsNode) {
-        if (lapsNode == null || !lapsNode.isArray()) return;
+    private record ChunkCounts(GarminActivityPersister.Result activities, int health, int sleep) {}
 
-        lapRepo.deleteByActivityId(activity.getId());
-        lapRepo.flush();
-
-        List<GarminActivityLap> laps = new ArrayList<>();
-        for (JsonNode lapNode : lapsNode) {
-            GarminActivityLap lap = GarminActivityLap.builder()
-                    .activity(activity)
-                    .lapIndex(getInt(lapNode, "lap_index"))
-                    .startTime(parseInstant(getText(lapNode, "start_time")))
-                    .durationSeconds(getInt(lapNode, "duration_seconds"))
-                    .distanceMeters(getDecimal(lapNode, "distance_meters"))
-                    .averagePaceSeconds(getDecimal(lapNode, "average_pace_seconds"))
-                    .averageHeartRate(getInt(lapNode, "average_heart_rate"))
-                    .maxHeartRate(getInt(lapNode, "max_heart_rate"))
-                    .rawPayload(jsonNodeToMap(lapNode.get("raw_payload")))
-                    .build();
-            laps.add(lap);
-        }
-        if (!laps.isEmpty()) {
-            lapRepo.saveAll(laps);
-            lapRepo.flush();
-        }
+    static String summarizeEndpointErrors(List<GarminPythonClient.EndpointError> errors) {
+        Map<String, Long> grouped = errors.stream()
+                .collect(Collectors.groupingBy(e -> e.endpoint() + " (" + e.kind() + ")",
+                        LinkedHashMap::new, Collectors.counting()));
+        String summary = grouped.entrySet().stream()
+                .map(e -> e.getKey() + " x" + e.getValue())
+                .collect(Collectors.joining(", "));
+        return errors.size() + " endpoint error(s): " + summary + "; first: " + errors.get(0).message();
     }
 
-    private int saveWeights(Long userId, JsonNode weightsNode) {
-        if (weightsNode == null || !weightsNode.isArray()) return 0;
-        int count = 0;
-        User user = User.builder().id(userId).build();
-
-        for (JsonNode node : weightsNode) {
-            LocalDate date = parseDate(getText(node, "metric_date"));
-            if (date == null) continue;
-
-            Optional<GarminDailyHealthMetric> existing = healthRepo.findByUserIdAndMetricDate(userId, date);
-            GarminDailyHealthMetric metric = existing.orElseGet(() -> GarminDailyHealthMetric.builder()
-                    .user(user)
-                    .metricDate(date)
-                    .build());
-
-            metric.setWeightKg(getDecimal(node, "weight_kg"));
-            metric.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
-
-            healthRepo.save(metric);
-            count++;
+    private static String join(String head, List<String> issues) {
+        StringBuilder sb = new StringBuilder();
+        if (head != null) sb.append(head);
+        for (String issue : issues) {
+            if (!sb.isEmpty()) sb.append(" | ");
+            sb.append(issue);
         }
-        return count;
-    }
-
-    private int saveHealthMetrics(Long userId, JsonNode healthNode) {
-        if (healthNode == null || !healthNode.isArray()) return 0;
-        int count = 0;
-        User user = User.builder().id(userId).build();
-
-        for (JsonNode node : healthNode) {
-            LocalDate date = parseDate(getText(node, "metric_date"));
-            if (date == null) continue;
-
-            Optional<GarminDailyHealthMetric> existing = healthRepo.findByUserIdAndMetricDate(userId, date);
-            GarminDailyHealthMetric metric = existing.orElseGet(() -> GarminDailyHealthMetric.builder()
-                    .user(user)
-                    .metricDate(date)
-                    .build());
-
-            metric.setRestingHeartRate(getInt(node, "resting_heart_rate"));
-            metric.setHrvAvg(getDecimal(node, "hrv_avg"));
-            metric.setStressAvg(getDecimal(node, "stress_avg"));
-            metric.setBodyBatteryMin(getInt(node, "body_battery_min"));
-            metric.setBodyBatteryMax(getInt(node, "body_battery_max"));
-            metric.setSteps(getInt(node, "steps"));
-            metric.setCaloriesTotal(getInt(node, "calories_total"));
-            metric.setAverageSpo2(getDecimal(node, "average_spo2"));
-            metric.setLowestSpo2(getInt(node, "lowest_spo2"));
-            metric.setAvgWakingRespiration(getDecimal(node, "avg_waking_respiration"));
-            metric.setFloorsAscended(getDecimal(node, "floors_ascended"));
-            metric.setFloorsDescended(getDecimal(node, "floors_descended"));
-            metric.setModerateIntensityMinutes(getInt(node, "moderate_intensity_minutes"));
-            metric.setVigorousIntensityMinutes(getInt(node, "vigorous_intensity_minutes"));
-            metric.setActiveKilocalories(getDecimal(node, "active_kilocalories"));
-            metric.setBmrKilocalories(getDecimal(node, "bmr_kilocalories"));
-            metric.setBodyBatteryAtWake(getInt(node, "body_battery_at_wake"));
-            metric.setBodyBatteryCharged(getInt(node, "body_battery_charged"));
-            metric.setBodyBatteryDrained(getInt(node, "body_battery_drained"));
-            metric.setTotalDistanceMeters(getInt(node, "total_distance_meters"));
-            metric.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
-
-            healthRepo.save(metric);
-            count++;
-        }
-        return count;
-    }
-
-    private int saveSleepSessions(Long userId, JsonNode sleepNode) {
-        if (sleepNode == null || !sleepNode.isArray()) return 0;
-        int count = 0;
-        User user = User.builder().id(userId).build();
-
-        for (JsonNode node : sleepNode) {
-            LocalDate date = parseDate(getText(node, "sleep_date"));
-            if (date == null) continue;
-
-            Optional<GarminSleepSession> existing = sleepRepo.findByUserIdAndSleepDate(userId, date);
-            GarminSleepSession sleep = existing.orElseGet(() -> GarminSleepSession.builder()
-                    .user(user)
-                    .sleepDate(date)
-                    .build());
-
-            sleep.setStartTime(parseInstant(getText(node, "start_time")));
-            sleep.setEndTime(parseInstant(getText(node, "end_time")));
-            sleep.setTotalSleepSeconds(getInt(node, "total_sleep_seconds"));
-            sleep.setDeepSleepSeconds(getInt(node, "deep_sleep_seconds"));
-            sleep.setLightSleepSeconds(getInt(node, "light_sleep_seconds"));
-            sleep.setRemSleepSeconds(getInt(node, "rem_sleep_seconds"));
-            sleep.setAwakeSeconds(getInt(node, "awake_seconds"));
-            sleep.setSleepScore(getInt(node, "sleep_score"));
-            sleep.setNapSeconds(getInt(node, "nap_seconds"));
-            sleep.setAvgSleepStress(getDecimal(node, "avg_sleep_stress"));
-            sleep.setSleepNeedMinutes(getInt(node, "sleep_need_minutes"));
-            sleep.setHrvStatus(getText(node, "hrv_status"));
-            sleep.setRawPayload(jsonNodeToMap(node.get("raw_payload")));
-
-            sleepRepo.save(sleep);
-            count++;
-        }
-        return count;
-    }
-
-    private int saveDailyExtras(Long userId, JsonNode extrasNode) {
-        if (extrasNode == null || !extrasNode.isArray()) return 0;
-        int count = 0;
-        User user = User.builder().id(userId).build();
-
-        for (JsonNode node : extrasNode) {
-            LocalDate date = parseDate(getText(node, "metric_date"));
-            String dataType = getText(node, "data_type");
-            if (date == null || dataType == null || dataType.isEmpty()) continue;
-
-            GarminDailyRaw raw = dailyRawRepo
-                    .findByUserIdAndMetricDateAndDataType(userId, date, dataType)
-                    .orElseGet(() -> GarminDailyRaw.builder()
-                            .user(user)
-                            .metricDate(date)
-                            .dataType(dataType)
-                            .build());
-
-            raw.setPayload(jsonNodeToMap(node.get("payload")));
-            dailyRawRepo.save(raw);
-            count++;
-        }
-        return count;
+        String s = sb.toString();
+        return s.length() > MAX_ERROR_MESSAGE_LENGTH ? s.substring(0, MAX_ERROR_MESSAGE_LENGTH - 1) + "…" : s;
     }
 
     private String extractEmail(ProviderConnection conn) {
@@ -357,48 +256,44 @@ public class GarminSyncExecutor {
         throw new IllegalStateException("Garmin password not found");
     }
 
-    private void markCompleted(SyncLog syncLog, int activities, int health, int sleep, int weights) {
-        syncLog.setStatus(SyncStatus.COMPLETED.name());
-        syncLog.setActivitiesCount(activities);
-        syncLog.setHealthMetricsCount(health);
-        syncLog.setSleepCount(sleep);
-        syncLog.setWeightsCount(weights);
-        syncLog.setCompletedAt(Instant.now());
-        syncLogRepo.save(syncLog);
-    }
-
-    private void markFailed(SyncLog syncLog, String error) {
-        syncLog.setStatus(SyncStatus.FAILED.name());
-        syncLog.setErrorMessage(error);
-        syncLog.setCompletedAt(Instant.now());
-        syncLogRepo.save(syncLog);
-    }
-
-    private void markPartial(SyncLog syncLog, int activities, int health, int sleep, int weights, String error) {
-        syncLog.setStatus(SyncStatus.PARTIAL.name());
-        syncLog.setActivitiesCount(activities);
-        syncLog.setHealthMetricsCount(health);
-        syncLog.setSleepCount(sleep);
-        syncLog.setWeightsCount(weights);
-        syncLog.setErrorMessage(error);
+    private void markFinished(SyncLog syncLog, SyncStatus status, Counts counts, String error) {
+        syncLog.setStatus(status.name());
+        syncLog.setActivitiesCount(counts.activities);
+        syncLog.setHealthMetricsCount(counts.health);
+        syncLog.setSleepCount(counts.sleep);
+        syncLog.setWeightsCount(counts.weights);
+        syncLog.setErrorMessage(error != null && error.length() > MAX_ERROR_MESSAGE_LENGTH
+                ? error.substring(0, MAX_ERROR_MESSAGE_LENGTH) : error);
         syncLog.setCompletedAt(Instant.now());
         syncLogRepo.save(syncLog);
     }
 
     private void updateConnectionAfterSync(ProviderConnection conn, LocalDate lastSyncDate) {
-        conn.setLastSyncedAt(Instant.now());
-        Map<String, Object> config = conn.getSyncConfig();
-        if (config == null) config = new HashMap<>();
-        config.put("last_sync_date", lastSyncDate.toString());
-        conn.setSyncConfig(config);
-        providerRepo.save(conn);
+        try {
+            conn.setLastSyncedAt(Instant.now());
+            Map<String, Object> config = conn.getSyncConfig() != null ? new HashMap<>(conn.getSyncConfig()) : new HashMap<>();
+            config.put("last_sync_date", lastSyncDate.toString());
+            conn.setSyncConfig(config);
+            providerRepo.save(conn);
+        } catch (Exception e) {
+            log.warn("Failed to update connection after sync: {}", e.getMessage());
+        }
     }
 
-    private List<DateRange> splitIntoChunks(LocalDate from, LocalDate to, int days) {
+    private void publishFinished(Long userId, Long syncLogId, String status, boolean scheduled) {
+        try {
+            eventPublisher.publishEvent(new GarminSyncFinishedEvent(userId, syncLogId, status, scheduled));
+        } catch (Exception e) {
+            log.warn("Sync finished listener failed for user {}: {}", userId, e.getMessage());
+        }
+    }
+
+    static List<DateRange> splitIntoChunks(LocalDate from, LocalDate to, int days) {
+        int size = Math.max(1, days);
         List<DateRange> chunks = new ArrayList<>();
         LocalDate current = from;
-        while (current.isBefore(to) || current.isEqual(to)) {
-            LocalDate end = current.plusDays(days - 1);
+        while (!current.isAfter(to)) {
+            LocalDate end = current.plusDays(size - 1L);
             if (end.isAfter(to)) end = to;
             chunks.add(new DateRange(current, end));
             current = end.plusDays(1);
@@ -406,78 +301,22 @@ public class GarminSyncExecutor {
         return chunks;
     }
 
-    private record DateRange(LocalDate from, LocalDate to) {}
-
-    private String getText(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        return value != null && !value.isNull() ? value.asText() : null;
-    }
-
-    private Integer getInt(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        if (value == null || value.isNull()) return null;
-        return value.isNumber() ? value.asInt() : null;
-    }
-
-    private BigDecimal getDecimal(JsonNode node, String field) {
-        JsonNode value = node.get(field);
-        if (value == null || value.isNull()) return null;
-        return value.isNumber() ? BigDecimal.valueOf(value.asDouble()) : null;
-    }
-
-    private LocalDateTime parseLocalDateTime(String text) {
-        if (text == null || text.isEmpty()) return null;
-        try {
-            String normalized = text.replace(" ", "T");
-            if (normalized.endsWith(".0")) {
-                normalized = normalized.substring(0, normalized.length() - 2);
-            }
-            return LocalDateTime.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
-        } catch (Exception e) {
-            return null;
+    record DateRange(LocalDate from, LocalDate to) {
+        @Override
+        public String toString() {
+            return from + "~" + to;
         }
     }
 
-    private Instant parseInstant(String text) {
-        if (text == null || text.isEmpty()) return null;
-        try {
-            if (text.endsWith(".0")) {
-                text = text.substring(0, text.length() - 2);
-            }
-            return LocalDateTime.parse(text, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                    .atZone(AppTimeZones.KST)
-                    .toInstant();
-        } catch (Exception e) {
-            try {
-                return LocalDateTime.parse(text.replace(" ", "T"), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                        .atZone(AppTimeZones.KST)
-                        .toInstant();
-            } catch (Exception e2) {
-                try {
-                    return Instant.parse(text);
-                } catch (Exception e3) {
-                    return null;
-                }
-            }
-        }
-    }
+    static final class Counts {
+        int activities;
+        int health;
+        int sleep;
+        int weights;
+        int weather;
 
-    private LocalDate parseDate(String text) {
-        if (text == null || text.isEmpty()) return null;
-        try {
-            return LocalDate.parse(text);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> jsonNodeToMap(JsonNode node) {
-        if (node == null || node.isNull()) return new HashMap<>();
-        try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().convertValue(node, Map.class);
-        } catch (Exception e) {
-            return new HashMap<>();
+        int total() {
+            return activities + health + sleep + weights;
         }
     }
 }

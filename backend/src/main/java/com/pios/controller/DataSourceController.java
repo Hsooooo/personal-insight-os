@@ -1,5 +1,7 @@
 package com.pios.controller;
 
+import com.pios.dto.GarminConnectRequest;
+import jakarta.validation.Valid;
 import com.pios.dto.ApiResponse;
 import com.pios.dto.ProviderConnectionDto;
 import com.pios.dto.SyncLogDto;
@@ -27,14 +29,14 @@ public class DataSourceController {
     @PostMapping("/garmin/connect")
     public ApiResponse<ProviderConnectionDto> connectGarmin(
             @AuthenticationPrincipal Long userId,
-            @RequestBody Map<String, String> body) {
-        return ApiResponse.ok(dataSourceService.connectGarmin(userId, body.get("email"), body.get("password")));
+            @Valid @RequestBody GarminConnectRequest body) {
+        return ApiResponse.ok(dataSourceService.connectGarmin(userId, body.getEmail().trim(), body.getPassword()));
     }
 
     @PostMapping("/garmin/sync")
     public ApiResponse<SyncLogDto> syncGarmin(
             @AuthenticationPrincipal Long userId,
-            @RequestBody(required = false) SyncRequestDto request) {
+            @Valid @RequestBody(required = false) SyncRequestDto request) {
         if (request == null) {
             request = new SyncRequestDto();
             request.setSyncType("INCREMENTAL");

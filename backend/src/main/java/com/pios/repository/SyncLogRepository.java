@@ -25,4 +25,7 @@ public interface SyncLogRepository extends JpaRepository<SyncLog, Long> {
             @Param("providerType") String providerType);
 
     Optional<SyncLog> findByIdAndUserId(Long id, Long userId);
+
+    @Query("SELECT DISTINCT s.user.id FROM SyncLog s WHERE s.status = 'RUNNING'")
+    List<Long> findUserIdsWithRunningSync();
 }

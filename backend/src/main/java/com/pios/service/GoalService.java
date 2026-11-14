@@ -1,5 +1,6 @@
 package com.pios.service;
 
+import com.pios.common.NotFoundException;
 import com.pios.domain.Goal;
 import com.pios.domain.User;
 import com.pios.dto.GoalDto;
@@ -51,21 +52,13 @@ public class GoalService {
 
     @Transactional(readOnly = true)
     public GoalDto getGoal(Long userId, Long goalId) {
-        var goal = goalRepo.findById(goalId)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found"));
-        if (!goal.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        var goal = findOwned(userId, goalId);
         return toDto(goal);
     }
 
     @Transactional
     public GoalDto updateGoal(Long userId, Long goalId, GoalDto dto) {
-        var goal = goalRepo.findById(goalId)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found"));
-        if (!goal.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        var goal = findOwned(userId, goalId);
         if (dto.getTitle() != null) goal.setTitle(dto.getTitle());
         if (dto.getDescription() != null) goal.setDescription(dto.getDescription());
         if (dto.getGoalType() != null) goal.setGoalType(dto.getGoalType());
@@ -81,13 +74,14 @@ public class GoalService {
 
     @Transactional
     public void deleteGoal(Long userId, Long goalId) {
-        var goal = goalRepo.findById(goalId)
-                .orElseThrow(() -> new IllegalArgumentException("Goal not found"));
-        if (!goal.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        var goal = findOwned(userId, goalId);
         goalRepo.delete(goal);
         graphProjector.deleteGoal(userId, goalId);
+    }
+
+    private Goal findOwned(Long userId, Long goalId) {
+        return goalRepo.findByIdAndUserId(goalId, userId)
+                .orElseThrow(() -> new NotFoundException("Goal not found"));
     }
 
     private GoalDto toDto(Goal g) {

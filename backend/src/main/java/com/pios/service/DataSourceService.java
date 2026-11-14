@@ -57,7 +57,6 @@ public class DataSourceService {
         syncConfig.put("last_sync_date", null);
         syncConfig.put("sync_range_days", 7);
         syncConfig.put("auto_sync_enabled", true);
-        syncConfig.put("auto_sync_cron", "0 12 * * *");
         conn.setSyncConfig(syncConfig);
         conn = providerRepo.save(conn);
         return toDto(conn);
@@ -72,13 +71,16 @@ public class DataSourceService {
                 });
     }
 
-    @Transactional
+    /**
+     * 트랜잭션 없이 호출: SyncLog 생성/상태 변경은 GarminSyncService가 각각 독립적으로 커밋한다
+     * (바깥 트랜잭션이 있으면 큐 거부 시 FAILED 기록이 롤백된다).
+     */
     public SyncLogDto syncGarmin(Long userId, String syncType, LocalDate dateFrom, LocalDate dateTo) {
         SyncType type;
         try {
             type = SyncType.valueOf(syncType != null ? syncType.toUpperCase() : "INCREMENTAL");
         } catch (IllegalArgumentException e) {
-            type = SyncType.INCREMENTAL;
+            throw new IllegalArgumentException("syncType must be one of FULL, INCREMENTAL, MANUAL");
         }
 
         SyncLog syncLog = garminSyncService.sync(userId, type, dateFrom, dateTo);

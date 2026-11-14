@@ -1,5 +1,6 @@
 package com.pios.service.alert;
 
+import com.pios.common.AppTimeZones;
 import com.pios.domain.Insight;
 import com.pios.domain.InsightEvidence;
 import com.pios.domain.User;
@@ -13,31 +14,31 @@ import com.pios.service.FeedbackLearningService;
 import com.pios.service.GraphProjectorService;
 import com.pios.service.ask.EvidenceStatistics;
 import com.pios.service.ask.EvidenceStatisticsCalculator;
+import com.pios.service.llm.LlmClient;
+import com.pios.service.llm.LlmPrompts;
+import com.pios.service.llm.LlmPurpose;
 import com.pios.service.pattern.DetectedPattern;
 import com.pios.service.pattern.ThinPatternDetector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 
 /**
  * 매일 최근 3일 지표를 28일 기준선과 비교해 이상 신호를 감지하고
  * Insight(category=ANOMALY_ALERT)로 저장하는 능동 알림 서비스.
  * 감지 규칙은 {@link ThinPatternDetector}를 재사용한다.
+ * <p>
+ * LLM 호출은 트랜잭션 밖에서, 알림 1건(Insight+Evidence) 저장은 각각 독립 트랜잭션으로 처리한다.
+ * 전체 사용자 실행 시 한 사용자의 실패는 다른 사용자에게 영향을 주지 않는다.
  */
 @Slf4j
 @Service
@@ -45,7 +46,6 @@ import java.util.Map;
 public class AnomalyAlertService {
 
     public static final String CATEGORY = "ANOMALY_ALERT";
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final int CURRENT_DAYS = 3;
     private static final int BASELINE_DAYS = 28;
     private static final int DEDUP_DAYS = 3;
@@ -56,19 +56,13 @@ public class AnomalyAlertService {
     private final InsightRepository insightRepo;
     private final InsightEvidenceRepository evidenceRepo;
     private final UserRepository userRepo;
-    private final RestTemplate restTemplate;
     private final GraphProjectorService graphProjector;
     private final FeedbackLearningService feedbackLearningService;
+    private final LlmClient llmClient;
+    private final TransactionTemplate transactionTemplate;
 
-    @Value("${openai.api-key:}")
-    private String openaiApiKey;
-
-    @Value("${openai.model:gpt-4o-mini}")
-    private String openaiModel;
-
-    @Transactional
     public List<InsightDto> detectAndAlert(Long userId) {
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = AppTimeZones.todayKst();
         AskPeriod period = AskPeriod.builder()
                 .start(today.minusDays(CURRENT_DAYS - 1))
                 .end(today)
@@ -104,52 +98,75 @@ public class AnomalyAlertService {
         return created;
     }
 
-    @Transactional
+    /**
+     * 전체 사용자 감지. 사용자별로 격리되어 한 사용자의 실패가 나머지를 막지 않는다.
+     */
     public int detectForAllUsers() {
+        return detectForUsers(userRepo.findAll().stream().map(User::getId).toList());
+    }
+
+    public int detectForUsers(List<Long> userIds) {
         int alerts = 0;
-        for (User user : userRepo.findAll()) {
+        int failures = 0;
+        for (Long userId : userIds) {
             try {
-                alerts += detectAndAlert(user.getId()).size();
+                alerts += detectAndAlert(userId).size();
             } catch (Exception e) {
-                log.error("Anomaly detection failed for user {}", user.getId(), e);
+                failures++;
+                log.error("Anomaly detection failed for user {}", userId, e);
             }
+        }
+        if (failures > 0) {
+            log.warn("Anomaly detection finished with {} failed user(s) out of {}", failures, userIds.size());
         }
         return alerts;
     }
 
     private InsightDto createAlert(Long userId, DetectedPattern pattern, String title,
                                    AskPeriod period, String feedbackGuidance) {
-        String summary = callLlmOrFallback(pattern, period, feedbackGuidance);
+        // 1. LLM (트랜잭션 밖)
+        Optional<LlmClient.ChatResult> llm = llmClient.chat(userId, LlmPurpose.ANOMALY_ALERT,
+                LlmPrompts.withFeedbackGuidance(LlmPrompts.ANOMALY_ALERT_SYSTEM, feedbackGuidance),
+                buildContext(pattern, period));
+        String summary = llm.map(LlmClient.ChatResult::content).orElseGet(() -> buildFallback(pattern));
 
-        Insight insight = insightRepo.save(Insight.builder()
-                .user(User.builder().id(userId).build())
-                .question(null)
-                .category(CATEGORY)
-                .title(title)
-                .summary(summary)
-                .confidence(confidenceOf(pattern))
-                .modelProvider(openaiApiKey != null && !openaiApiKey.isBlank() ? "OpenAI" : "Fallback")
-                .modelName(openaiModel)
-                .isSaved(true)
-                .build());
+        // 2. 저장 (알림 단위 트랜잭션)
+        record Saved(Insight insight, InsightEvidence evidence) {}
+        Saved saved = transactionTemplate.execute(status -> {
+            Insight insight = insightRepo.save(Insight.builder()
+                    .user(User.builder().id(userId).build())
+                    .question(null)
+                    .category(CATEGORY)
+                    .title(title)
+                    .summary(summary)
+                    .confidence(confidenceOf(pattern))
+                    .modelProvider(llm.map(LlmClient.ChatResult::provider).orElse("Fallback"))
+                    .modelName(llm.map(LlmClient.ChatResult::model).orElse(llmClient.defaultModel()))
+                    .isSaved(true)
+                    .build());
 
-        InsightEvidence evidence = evidenceRepo.save(InsightEvidence.builder()
-                .insight(insight)
-                .evidenceType("PATTERN")
-                .sourceTable(null)
-                .sourceId(null)
-                .evidenceSummary("[" + pattern.getSeverity() + "] " + pattern.getHumanHint())
-                .weight(new BigDecimal("0.7"))
-                .evidenceData(EvidenceData.builder()
-                        .metric(pattern.getCode())
-                        .currentValue(pattern.getCurrentValue())
-                        .baselineValue(pattern.getBaselineValue())
-                        .changeRate(pattern.getChangeRate())
-                        .unit(pattern.getUnit())
-                        .date(period.getStart() + " ~ " + period.getEnd())
-                        .build())
-                .build());
+            InsightEvidence evidence = evidenceRepo.save(InsightEvidence.builder()
+                    .insight(insight)
+                    .evidenceType("PATTERN")
+                    .sourceTable(null)
+                    .sourceId(null)
+                    .evidenceSummary("[" + pattern.getSeverity() + "] " + pattern.getHumanHint())
+                    .weight(new BigDecimal("0.7"))
+                    .evidenceData(EvidenceData.builder()
+                            .metric(pattern.getCode())
+                            .currentValue(pattern.getCurrentValue())
+                            .baselineValue(pattern.getBaselineValue())
+                            .changeRate(pattern.getChangeRate())
+                            .unit(pattern.getUnit())
+                            .date(period.getStart() + " ~ " + period.getEnd())
+                            .build())
+                    .build());
+            return new Saved(insight, evidence);
+        });
+        Insight insight = saved.insight();
+        InsightEvidence evidence = saved.evidence();
 
+        // 3. 그래프 투영 (실패해도 무시)
         graphProjector.projectInsight(userId, insight);
         log.info("Anomaly alert created for user {}: {}", userId, title);
 
@@ -173,73 +190,22 @@ public class AnomalyAlertService {
                 .build();
     }
 
-    private String callLlmOrFallback(DetectedPattern pattern, AskPeriod period, String feedbackGuidance) {
-        if (openaiApiKey == null || openaiApiKey.isBlank()) {
-            return buildFallback(pattern);
-        }
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(openaiApiKey);
-
-            String systemPrompt = """
-                    당신은 Personal Insight OS의 생체스포츠 코치입니다.
-                    사용자의 건강 데이터에서 감지된 이상 신호를 보고 먼저 말을 거는 능동 알림을 한국어로 작성하세요.
-
-                    규칙:
-                    1. 제공된 지표 수치만 근거로 사용하고, 없는 수치나 추측을 만들지 마세요.
-                    2. 구성: (1) 무슨 일이 일어나고 있는지 (2) 왜 주의해야 하는지 (3) 오늘 할 수 있는 행동 1~2개
-                    3. 150~250자로 간결하게, 코치가 먼저 말을 거는 자연스러운 어조로 쓰세요.
-                    4. WRONG 피드백이 달린 과거 해석은 반복하지 말고, IMPORTANT는 우선 반영하세요.
-                    """;
-            if (feedbackGuidance != null && !feedbackGuidance.isBlank()) {
-                systemPrompt = systemPrompt + "\n[사용자 피드백 학습]\n" + feedbackGuidance;
-            }
-
-            String context = String.format("""
-                            기간: %s ~ %s (기준선: 직전 28일 평균)
-                            감지된 신호: %s
-                            심각도: %s
-                            지표: %s
-                            최근 값: %s%s / 기준선: %s%s / 변화율: %s%%
-                            """,
-                    period.getStart(), period.getEnd(),
-                    pattern.getHumanHint(),
-                    pattern.getSeverity(),
-                    pattern.getCode(),
-                    pattern.getCurrentValue(), pattern.getUnit() != null ? pattern.getUnit() : "",
-                    pattern.getBaselineValue(), pattern.getUnit() != null ? pattern.getUnit() : "",
-                    pattern.getChangeRate());
-
-            Map<String, Object> body = Map.of(
-                    "model", openaiModel,
-                    "messages", List.of(
-                            Map.of("role", "system", "content", systemPrompt),
-                            Map.of("role", "user", "content", context)
-                    ),
-                    "max_tokens", 400,
-                    "temperature", 0.4
-            );
-
-            @SuppressWarnings("unchecked")
-            var response = restTemplate.postForObject(
-                    "https://api.openai.com/v1/chat/completions",
-                    new HttpEntity<>(body, headers),
-                    Map.class
-            );
-            if (response != null) {
-                @SuppressWarnings("unchecked")
-                var choices = (List<Map<String, Object>>) response.get("choices");
-                if (choices != null && !choices.isEmpty()) {
-                    @SuppressWarnings("unchecked")
-                    var message = (Map<String, String>) choices.get(0).get("message");
-                    return message.get("content").trim();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Anomaly alert LLM failed, using fallback", e);
-        }
-        return buildFallback(pattern);
+    private String buildContext(DetectedPattern pattern, AskPeriod period) {
+        String unit = pattern.getUnit() != null ? pattern.getUnit() : "";
+        return String.format("""
+                        기간: %s ~ %s (기준선: 직전 28일 평균)
+                        감지된 신호: %s
+                        심각도: %s
+                        지표: %s
+                        최근 값: %s%s / 기준선: %s%s / 변화율: %s%%
+                        """,
+                period.getStart(), period.getEnd(),
+                pattern.getHumanHint(),
+                pattern.getSeverity(),
+                pattern.getCode(),
+                pattern.getCurrentValue(), unit,
+                pattern.getBaselineValue(), unit,
+                pattern.getChangeRate());
     }
 
     private String buildFallback(DetectedPattern pattern) {

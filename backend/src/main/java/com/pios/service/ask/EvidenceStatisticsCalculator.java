@@ -55,14 +55,14 @@ public class EvidenceStatisticsCalculator {
 
         return EvidenceStatistics.builder()
                 .healthMetrics(List.of(
-                        buildHealthAvg(currentHealth, baselineHealth, "restingHeartRate", "평균 안정시 심박", "bpm", GarminDailyHealthMetric::getRestingHeartRate),
-                        buildHealthAvg(currentHealth, baselineHealth, "hrvAvg", "평균 HRV", "ms", GarminDailyHealthMetric::getHrvAvg),
+                        buildHealthAvg(currentHealth, baselineHealth, "restingHeartRate", "평균 안정시 심박", "bpm", h -> positiveOrNull(h.getRestingHeartRate())),
+                        buildHealthAvg(currentHealth, baselineHealth, "hrvAvg", "평균 HRV", "ms", h -> positiveOrNull(h.getHrvAvg())),
                         buildHealthAvg(currentHealth, baselineHealth, "stressAvg", "평균 스트레스", "점", GarminDailyHealthMetric::getStressAvg),
                         buildBodyBattery(currentHealth, baselineHealth)
                 ))
                 .sleepMetrics(List.of(
-                        buildSleepAvg(currentSleep, baselineSleep, "totalSleepSeconds", "평균 수면 시간", "시간", s -> doubleValue(s.getTotalSleepSeconds()), 3600.0),
-                        buildSleepAvg(currentSleep, baselineSleep, "sleepScore", "평균 수면 점수", "점", GarminSleepSession::getSleepScore, 1.0),
+                        buildSleepAvg(currentSleep, baselineSleep, "totalSleepSeconds", "평균 수면 시간", "시간", s -> positiveOrNull(s.getTotalSleepSeconds()), 3600.0),
+                        buildSleepAvg(currentSleep, baselineSleep, "sleepScore", "평균 수면 점수", "점", s -> positiveOrNull(s.getSleepScore()), 1.0),
                         buildSleepAvg(currentSleep, baselineSleep, "deepSleepSeconds", "평균 딥슬립", "시간", s -> doubleValue(s.getDeepSleepSeconds()), 3600.0),
                         buildSleepAvg(currentSleep, baselineSleep, "remSleepSeconds", "평균 REM 수면", "시간", s -> doubleValue(s.getRemSleepSeconds()), 3600.0),
                         buildSleepAvg(currentSleep, baselineSleep, "napSeconds", "평균 낮잠 시간", "분", s -> doubleValue(s.getNapSeconds()), 60.0)
@@ -271,6 +271,16 @@ public class EvidenceStatisticsCalculator {
         return activities.stream()
                 .filter(a -> !toLocalDate(a.getStartTime()).isBefore(start) && !toLocalDate(a.getStartTime()).isAfter(end))
                 .toList();
+    }
+
+    /**
+     * 0이 생리학적으로 불가능한 지표(안정시 심박, HRV, 수면 점수, 총 수면 시간)는 0 이하를 "값 없음"으로 본다.
+     * 과거 동기화가 누락값을 0으로 저장했던 데이터가 평균/기준선을 끌어내리지 않도록 한다.
+     */
+    static Double positiveOrNull(Number value) {
+        if (value == null) return null;
+        double d = value.doubleValue();
+        return d > 0 && !Double.isNaN(d) ? d : null;
     }
 
     private static Double doubleValue(Number value) {

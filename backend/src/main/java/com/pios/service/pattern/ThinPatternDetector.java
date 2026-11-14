@@ -69,23 +69,20 @@ public class ThinPatternDetector {
     private Optional<DetectedPattern> detectLowSleepStreak(Long userId, LocalDate periodEnd) {
         LocalDate end = periodEnd != null ? periodEnd : AppTimeZones.todayKst();
         LocalDate start = end.minusDays(2);
-        List<GarminSleepSession> sleeps =
-                sleepRepo.findByUserIdAndSleepDateBetweenOrderBySleepDateDesc(userId, start, end);
-        if (sleeps.size() < 3) {
+        // 누락/0(비정상) 수면은 제외하고, 유효한 3일이 모두 있어야 판단한다
+        List<Integer> valid = sleepRepo.findByUserIdAndSleepDateBetweenOrderBySleepDateDesc(userId, start, end).stream()
+                .map(GarminSleepSession::getTotalSleepSeconds)
+                .filter(sec -> sec != null && sec > 0)
+                .limit(3)
+                .toList();
+        if (valid.size() < 3) {
             return Optional.empty();
         }
-        boolean allLow = sleeps.stream()
-                .filter(s -> s.getTotalSleepSeconds() != null)
-                .limit(3)
-                .allMatch(s -> s.getTotalSleepSeconds() < 6 * 3600);
+        boolean allLow = valid.stream().allMatch(sec -> sec < 6 * 3600);
         if (!allLow) {
             return Optional.empty();
         }
-        double avgHours = sleeps.stream()
-                .limit(3)
-                .mapToInt(GarminSleepSession::getTotalSleepSeconds)
-                .average()
-                .orElse(0) / 3600.0;
+        double avgHours = valid.stream().mapToInt(Integer::intValue).average().orElse(0) / 3600.0;
         return Optional.of(DetectedPattern.builder()
                 .code("LOW_SLEEP_STREAK")
                 .severity("MED")

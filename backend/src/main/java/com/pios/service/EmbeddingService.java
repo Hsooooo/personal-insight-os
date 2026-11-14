@@ -1,8 +1,10 @@
 package com.pios.service;
 
-import lombok.RequiredArgsConstructor;
+import com.pios.service.llm.LlmCredentials;
+import com.pios.service.llm.LlmCredentialsResolver;
+import com.pios.service.llm.LlmProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -12,44 +14,55 @@ import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EmbeddingService {
 
     private final RestTemplate restTemplate;
     private final JdbcTemplate jdbcTemplate;
-    private final LlmProviderService llmProviderService;
+    private final LlmCredentialsResolver credentialsResolver;
+    private final LlmProperties llmProperties;
 
-    @Value("${openai.api-key:}")
-    private String globalOpenaiApiKey;
+    public EmbeddingService(@Qualifier("llmRestTemplate") RestTemplate restTemplate,
+                            JdbcTemplate jdbcTemplate,
+                            LlmCredentialsResolver credentialsResolver,
+                            LlmProperties llmProperties) {
+        this.restTemplate = restTemplate;
+        this.jdbcTemplate = jdbcTemplate;
+        this.credentialsResolver = credentialsResolver;
+        this.llmProperties = llmProperties;
+    }
 
     public record SimilarInsight(Long insightId, String title, String summary, String feedbackStatus, double distance) {}
 
+    /**
+     * 텍스트 임베딩. 자격증명이 없거나 실패하면 null (호출 측은 임베딩 없이 진행).
+     */
     public float[] embed(Long userId, String text) {
         if (text == null || text.isBlank()) {
             return null;
         }
-        String apiKey = resolveApiKey(userId);
-        if (apiKey == null || apiKey.isBlank()) {
+        Optional<LlmCredentials> credentials = credentialsResolver.resolve(userId);
+        if (credentials.isEmpty()) {
             return null;
         }
-        String model = llmProviderService.resolveEmbeddingModel(userId);
+        LlmCredentials creds = credentials.get();
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(apiKey);
+            headers.setBearerAuth(creds.apiKey());
 
             Map<String, Object> body = Map.of(
-                    "model", model,
+                    "model", creds.embeddingModel(),
                     "input", text
             );
 
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.postForObject(
-                    "https://api.openai.com/v1/embeddings",
+                    llmProperties.normalizedBaseUrl() + "/embeddings",
                     new HttpEntity<>(body, headers),
                     Map.class
             );
@@ -72,7 +85,8 @@ public class EmbeddingService {
             }
             return vector;
         } catch (Exception e) {
-            log.warn("Embedding request failed: {}", e.getMessage());
+            log.warn("Embedding request failed (user={}, model={}, source={}): {}",
+                    userId, creds.embeddingModel(), creds.source(), e.getMessage());
             return null;
         }
     }
@@ -140,14 +154,6 @@ public class EmbeddingService {
         }
         sb.append(']');
         return sb.toString();
-    }
-
-    private String resolveApiKey(Long userId) {
-        String userKey = llmProviderService.resolveDecryptedApiKey(userId);
-        if (userKey != null && !userKey.isBlank()) {
-            return userKey;
-        }
-        return globalOpenaiApiKey;
     }
 
     public String formatSimilarInsightsForPrompt(List<SimilarInsight> similar) {

@@ -5,7 +5,8 @@ spring:
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/pios}
     username: ${SPRING_DATASOURCE_USERNAME:pios}
-    password: ${SPRING_DATASOURCE_PASSWORD:pios123}
+    # 기본값 없음: 로컬 개발은 SPRING_PROFILES_ACTIVE=local (application-local.yml) 또는 환경변수로 지정
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -15,7 +16,6 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.PostgreSQLDialect
 
   flyway:
     enabled: true
@@ -35,6 +35,8 @@ app:
 jwt:
   secret: ${JWT_SECRET}
   expiration: 86400000
+  # 웹 로그인 refresh 토큰 TTL (쿠키 Max-Age, DB 만료, JWT exp 모두 이 값을 사용)
+  refresh-expiration-seconds: 604800
 
 pios:
   # AES key material for LLM/Garmin secrets at rest (JWT_SECRET과 별도로 관리)
@@ -43,35 +45,114 @@ pios:
   encryption-key-legacy: ${PIOS_ENCRYPTION_KEY_LEGACY:}
   registration-enabled: ${PIOS_REGISTRATION_ENABLED:false}
   mock-data-enabled: ${PIOS_MOCK_DATA_ENABLED:false}
+  # MCP 서버 ↔ 백엔드 내부 공유 비밀 (필수, 32자 이상). OAuth 토큰 사용 및 /api/oauth/introspect 호출에 필요
+  mcp-internal-secret: ${PIOS_MCP_INTERNAL_SECRET}
+  login-throttle:
+    max-failures: 5
+    max-failures-per-ip: 30
+    window-seconds: 900
+
+# OAuth 2.1 Authorization Server (MCP 클라이언트용)
+oauth:
+  issuer: ${PIOS_PUBLIC_BASE_URL:http://localhost:8080}
+  resource: ${PIOS_MCP_RESOURCE_URL:${PIOS_PUBLIC_BASE_URL:http://localhost:8080}/mcp}
+  frontend-base-url: ${PIOS_FRONTEND_BASE_URL:${PIOS_PUBLIC_BASE_URL:http://localhost:8080}}
+  access-token-ttl-seconds: 3600
+  refresh-token-ttl-seconds: 2592000
+  code-ttl-seconds: 300
+  request-ttl-seconds: 600
+  registration-rate-limit-per-hour: 20
+
+cors:
+  # 콤마 구분. oauth.issuer / oauth.frontend-base-url origin은 자동 추가됨
+  allowed-origins: ${PIOS_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
 
 neo4j:
-  uri: ${SPRING_NEO4J_URI:bolt://localhost:7687}
+  # 기본값 없음: 로컬 개발은 application-local.yml 참고
+  uri: ${SPRING_NEO4J_URI}
   username: ${SPRING_NEO4J_AUTHENTICATION_USERNAME:neo4j}
-  password: ${SPRING_NEO4J_AUTHENTICATION_PASSWORD:pios1234}
+  password: ${SPRING_NEO4J_AUTHENTICATION_PASSWORD}
+  connection-timeout: ${NEO4J_CONNECTION_TIMEOUT:10s}
+  # 기동 시 MERGE 키에 대한 제약조건/인덱스 생성 (IF NOT EXISTS, 실패해도 기동은 계속)
+  init-schema: ${NEO4J_INIT_SCHEMA:true}
 
+# 외부 HTTP 호출(날씨 등) 공통 타임아웃
+http:
+  client:
+    connect-timeout: ${HTTP_CLIENT_CONNECT_TIMEOUT:5s}
+    read-timeout: ${HTTP_CLIENT_READ_TIMEOUT:20s}
+
+# OpenAI 호환 Chat/Embedding API. 사용자별 LLM Provider(api key/model)가 우선, 없으면 아래 전역 설정 사용
 openai:
   api-key: ${OPENAI_API_KEY:}
-  model: gpt-4o-mini
+  base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+  model: ${OPENAI_MODEL:gpt-4o-mini}
+  embedding-model: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  connect-timeout: ${OPENAI_CONNECT_TIMEOUT:5s}
+  read-timeout: ${OPENAI_READ_TIMEOUT:60s}
+  # 용도별 생성 파라미터 (생략 시 코드 기본값)
+  purposes:
+    ask:
+      max-tokens: 500
+      temperature: 0.3
+    workout-summary:
+      max-tokens: 1500
+      temperature: 0.3
+    anomaly-alert:
+      max-tokens: 400
+      temperature: 0.4
+    weekly-briefing:
+      max-tokens: 700
+      temperature: 0.3
+
+weather:
+  forecast-url: https://api.open-meteo.com/v1/forecast
+  # ERA5 아카이브는 약 5일 지연. 이보다 오래된 활동은 archive API 사용
+  archive-url: https://archive-api.open-meteo.com/v1/archive
+  archive-min-age-days: 5
 
 garmin:
   python:
+    executable: ${GARMIN_PYTHON:python3}
     script-path: scripts/garmin_sync.py
-    timeout-seconds: 120
+    # 청크당 타임아웃 = base + per-day * 청크 일수 (최대 max)
+    timeout-base-seconds: 120
+    timeout-per-day-seconds: 30
+    timeout-max-seconds: 1800
   # 사용자별 Garmin 세션 토큰 캐시 (청크마다 재로그인 방지)
   token-dir: ${GARMIN_TOKEN_DIR:data/garmin-tokens}
 
 sync:
   rate-limit-seconds: 30
-  chunk-days: 30
+  # 일 단위 엔드포인트가 많아(하루 ~11회 호출) 청크를 작게 유지해야 타임아웃 안에 끝난다
+  chunk-days: 7
   default-full-sync-months: 12
+  # RUNNING 상태가 (청크 수 x 청크 타임아웃 + margin)을 넘기면 stale로 보고 FAILED 처리
+  stale-margin-minutes: 15
+  executor:
+    pool-size: 2
+    queue-capacity: 50
   schedule:
     # 전날 수면이 Garmin에 반영될 시간을 두고 KST 정오에 동기화
     cron: "0 0 12 * * *"
+
+alert:
+  schedule:
+    # 이상 신호 감지는 사용자별 스케줄 동기화 완료 직후 실행된다.
+    # 이 cron은 동기화 대상이 아니었던(또는 동기화가 없던) 사용자에 대한 fallback
+    cron: "0 30 12 * * *"
 
 briefing:
   schedule:
     # 일요일 동기화(12:00) 이후 주간 브리핑
     cron: "0 0 13 * * SUN"
+
+# Docker healthcheck(GET /actuator/health)는 Postgres 상태만 반영한다.
+# Neo4j는 부가 기능(그래프)이므로 미설정/장애 시에도 health가 DOWN이 되지 않게 기여자를 끈다.
+management:
+  health:
+    neo4j:
+      enabled: false
 
 logging:
   level:

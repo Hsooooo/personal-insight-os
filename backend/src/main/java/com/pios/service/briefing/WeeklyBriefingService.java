@@ -1,5 +1,6 @@
 package com.pios.service.briefing;
 
+import com.pios.common.AppTimeZones;
 import com.pios.domain.Goal;
 import com.pios.domain.Insight;
 import com.pios.domain.InsightEvidence;
@@ -18,27 +19,24 @@ import com.pios.service.ask.EvidenceStatisticsCalculator;
 import com.pios.service.ask.MetricStatistic;
 import com.pios.service.goal.GoalBlockerAnalyzer;
 import com.pios.service.goal.GoalProgressCalculator;
+import com.pios.service.llm.LlmClient;
+import com.pios.service.llm.LlmPrompts;
+import com.pios.service.llm.LlmPurpose;
 import com.pios.service.pattern.DetectedPattern;
 import com.pios.service.pattern.ThinPatternDetector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.temporal.IsoFields;
 import java.time.temporal.TemporalAdjusters;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -48,7 +46,6 @@ import java.util.stream.Stream;
 public class WeeklyBriefingService {
 
     public static final String CATEGORY = "WEEKLY_BRIEFING";
-    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     private final EvidenceStatisticsCalculator statisticsCalculator;
     private final GoalRepository goalRepo;
@@ -57,16 +54,11 @@ public class WeeklyBriefingService {
     private final InsightRepository insightRepo;
     private final InsightEvidenceRepository evidenceRepo;
     private final UserRepository userRepo;
-    private final RestTemplate restTemplate;
     private final GraphProjectorService graphProjector;
     private final FeedbackLearningService feedbackLearningService;
     private final GoalBlockerAnalyzer blockerAnalyzer;
-
-    @Value("${openai.api-key:}")
-    private String openaiApiKey;
-
-    @Value("${openai.model:gpt-4o-mini}")
-    private String openaiModel;
+    private final LlmClient llmClient;
+    private final TransactionTemplate transactionTemplate;
 
     public InsightDto getLatest(Long userId) {
         return insightRepo.findFirstByUserIdAndCategoryOrderByCreatedAtDesc(userId, CATEGORY)
@@ -74,13 +66,15 @@ public class WeeklyBriefingService {
                 .orElse(null);
     }
 
-    @Transactional
+    /**
+     * 지난주 브리핑 생성. 통계·LLM 호출은 트랜잭션 밖에서 하고, (force 시 기존 삭제 +) 저장만 한 트랜잭션으로 묶는다.
+     */
     public InsightDto generate(Long userId, boolean force) {
         AskPeriod period = lastWeekPeriod();
         String weekLabel = weekLabel(period.getStart());
         String title = weekLabel + " 주간 브리핑";
 
-        var existing = insightRepo.findByUserIdAndCategory(userId, CATEGORY).stream()
+        List<Insight> existing = insightRepo.findByUserIdAndCategory(userId, CATEGORY).stream()
                 .filter(i -> title.equals(i.getTitle()))
                 .toList();
 
@@ -88,63 +82,76 @@ public class WeeklyBriefingService {
             return toDtoWithEvidences(existing.get(0));
         }
 
-        if (force) {
-            for (Insight old : existing) {
-                evidenceRepo.deleteByInsightId(old.getId());
-                insightRepo.delete(old);
-                graphProjector.deleteInsight(userId, old.getId());
-            }
-        }
-
         EvidenceStatistics stats = statisticsCalculator.calculate(userId, period);
         List<Goal> activeGoals = goalRepo.findByUserId(userId).stream()
                 .filter(g -> "ACTIVE".equalsIgnoreCase(g.getStatus()))
                 .toList();
         List<GoalProgressSnapshot> goalSnapshots = activeGoals.stream()
-                .map(g -> {
-                    var progress = progressCalculator.calculate(g);
-                    return new GoalProgressSnapshot(g, progress);
-                })
+                .map(g -> new GoalProgressSnapshot(g, progressCalculator.calculate(g)))
                 .toList();
         List<DetectedPattern> patterns = patternDetector.detect(userId, stats, period.getEnd());
 
         String feedbackGuidance = feedbackLearningService.buildGuidance(userId);
-        String summary = callLlmOrFallback(period, weekLabel, stats, goalSnapshots, patterns, feedbackGuidance);
+        String context = buildContext(period, weekLabel, stats, goalSnapshots, patterns);
+        Optional<LlmClient.ChatResult> llm = llmClient.chat(userId, LlmPurpose.WEEKLY_BRIEFING,
+                LlmPrompts.withFeedbackGuidance(LlmPrompts.WEEKLY_BRIEFING_SYSTEM, feedbackGuidance), context);
+        String summary = llm.map(LlmClient.ChatResult::content)
+                .orElseGet(() -> buildFallback(weekLabel, stats, goalSnapshots, patterns));
         BigDecimal confidence = computeConfidence(stats);
 
-        Insight insight = insightRepo.save(Insight.builder()
-                .user(User.builder().id(userId).build())
-                .question(null)
-                .category(CATEGORY)
-                .title(title)
-                .summary(summary)
-                .confidence(confidence)
-                .modelProvider(openaiApiKey != null && !openaiApiKey.isBlank() ? "OpenAI" : "Fallback")
-                .modelName(openaiModel)
-                .isSaved(true)
-                .build());
+        List<Long> deletedIds = new ArrayList<>();
+        Insight insight = transactionTemplate.execute(status -> {
+            if (force) {
+                for (Insight old : existing) {
+                    evidenceRepo.deleteByInsightId(old.getId());
+                    insightRepo.delete(old);
+                    deletedIds.add(old.getId());
+                }
+            }
+            Insight saved = insightRepo.save(Insight.builder()
+                    .user(User.builder().id(userId).build())
+                    .question(null)
+                    .category(CATEGORY)
+                    .title(title)
+                    .summary(summary)
+                    .confidence(confidence)
+                    .modelProvider(llm.map(LlmClient.ChatResult::provider).orElse("Fallback"))
+                    .modelName(llm.map(LlmClient.ChatResult::model).orElse(llmClient.defaultModel()))
+                    .isSaved(true)
+                    .build());
+            saveEvidences(saved, stats, goalSnapshots, patterns, period);
+            return saved;
+        });
 
-        saveEvidences(insight, stats, goalSnapshots, patterns, period);
+        // 그래프 반영 (실패해도 무시)
+        deletedIds.forEach(id -> graphProjector.deleteInsight(userId, id));
         graphProjector.projectInsight(userId, insight);
         return toDtoWithEvidences(insight);
     }
 
-    @Transactional
+    /**
+     * 전체 사용자 브리핑. 사용자별로 격리되어 한 사용자의 실패가 나머지를 막지 않는다.
+     */
     public int generateForAllUsers() {
         int count = 0;
+        int failures = 0;
         for (User user : userRepo.findAll()) {
             try {
                 generate(user.getId(), false);
                 count++;
             } catch (Exception e) {
+                failures++;
                 log.error("Weekly briefing failed for user {}", user.getId(), e);
             }
+        }
+        if (failures > 0) {
+            log.warn("Weekly briefing finished with {} failed user(s)", failures);
         }
         return count;
     }
 
     private AskPeriod lastWeekPeriod() {
-        LocalDate today = LocalDate.now(KST);
+        LocalDate today = AppTimeZones.todayKst();
         LocalDate thisMonday = today.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));
         LocalDate lastMonday = thisMonday.minusWeeks(1);
         LocalDate lastSunday = lastMonday.plusDays(6);
@@ -255,66 +262,6 @@ public class WeeklyBriefingService {
                 ? String.format(" (기준선 대비 %+.0f%%)", m.getChangeRate())
                 : "";
         return m.getLabel() + ": " + m.getCurrentValue() + m.getUnit() + change;
-    }
-
-    private String callLlmOrFallback(AskPeriod period, String weekLabel, EvidenceStatistics stats,
-                                     List<GoalProgressSnapshot> goals, List<DetectedPattern> patterns,
-                                     String feedbackGuidance) {
-        String context = buildContext(period, weekLabel, stats, goals, patterns);
-        if (openaiApiKey == null || openaiApiKey.isBlank()) {
-            return buildFallback(weekLabel, stats, goals, patterns);
-        }
-        try {
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.setBearerAuth(openaiApiKey);
-
-            String systemPrompt = """
-                    당신은 Personal Insight OS의 주간 브리핑 코치이자 스포츠 캐스터입니다.
-                    제공된 통계·목표·패턴만 근거로, 한 주의 데이터를 하나의 이야기처럼 풀어내는 한국어 주간 브리핑을 작성하세요.
-
-                    규칙:
-                    1. 근거에 없는 수치나 추측을 만들지 마세요.
-                    2. 첫 문단은 스포츠 중계처럼 이번 주의 하이라이트를 생생하게 요약하는 내러티브로 시작하세요.
-                    3. 지표 나열이 아니라 "수면 부족이 회복 저하로 이어지고, 훈련 강도에 영향을 준" 식으로 지표 간 인과 흐름을 엮으세요.
-                    4. 구성: (1) 이번 주 스토리 (2) 운동·수면·회복에서 좋았던 점과 아쉬웠던 점 (3) 목표 진행 (4) 다음 주 행동 1~3개
-                    5. 행동은 구체적이고 실행 가능하게 쓰세요.
-                    6. 300~500자 분량으로 간결하게 작성하세요.
-                    7. WRONG 피드백이 달린 과거 해석은 반복하지 말고, IMPORTANT는 우선 반영하세요.
-                    """;
-            if (feedbackGuidance != null && !feedbackGuidance.isBlank()) {
-                systemPrompt = systemPrompt + "\n[사용자 피드백 학습]\n" + feedbackGuidance;
-            }
-
-            Map<String, Object> body = Map.of(
-                    "model", openaiModel,
-                    "messages", List.of(
-                            Map.of("role", "system", "content", systemPrompt),
-                            Map.of("role", "user", "content", context)
-                    ),
-                    "max_tokens", 700,
-                    "temperature", 0.3
-            );
-
-            @SuppressWarnings("unchecked")
-            var response = restTemplate.postForObject(
-                    "https://api.openai.com/v1/chat/completions",
-                    new HttpEntity<>(body, headers),
-                    Map.class
-            );
-            if (response != null) {
-                @SuppressWarnings("unchecked")
-                var choices = (List<Map<String, Object>>) response.get("choices");
-                if (choices != null && !choices.isEmpty()) {
-                    @SuppressWarnings("unchecked")
-                    var message = (Map<String, String>) choices.get(0).get("message");
-                    return message.get("content").trim();
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Weekly briefing LLM failed, using fallback", e);
-        }
-        return buildFallback(weekLabel, stats, goals, patterns);
     }
 
     private String buildContext(AskPeriod period, String weekLabel, EvidenceStatistics stats,

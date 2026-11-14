@@ -13,7 +13,7 @@ import java.util.*;
 
 @Component
 public class FinanceExcelParser {
-    private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
+    private static final ZoneId SEOUL = com.pios.common.AppTimeZones.KST;
     private static final List<String> REQUIRED_HEADERS = List.of(
             "날짜", "자산", "분류", "소분류", "내용", "금액(원)", "수입/지출", "메모", "화폐"
     );

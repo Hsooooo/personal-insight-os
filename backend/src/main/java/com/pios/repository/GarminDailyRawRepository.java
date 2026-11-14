@@ -1,5 +1,6 @@
 package com.pios.repository;
 
+import java.util.List;
 import com.pios.domain.GarminDailyRaw;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -10,4 +11,5 @@ import java.util.Optional;
 @Repository
 public interface GarminDailyRawRepository extends JpaRepository<GarminDailyRaw, Long> {
     Optional<GarminDailyRaw> findByUserIdAndMetricDateAndDataType(Long userId, LocalDate metricDate, String dataType);
+    List<GarminDailyRaw> findByUserIdAndMetricDateIn(Long userId, java.util.Collection<LocalDate> metricDates);
 }

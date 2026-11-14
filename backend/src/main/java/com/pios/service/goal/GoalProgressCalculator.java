@@ -118,7 +118,7 @@ public class GoalProgressCalculator {
             return null;
         }
         double avgSeconds = sleeps.stream()
-                .filter(s -> s.getTotalSleepSeconds() != null)
+                .filter(s -> s.getTotalSleepSeconds() != null && s.getTotalSleepSeconds() > 0)
                 .mapToInt(GarminSleepSession::getTotalSleepSeconds)
                 .average()
                 .orElse(Double.NaN);

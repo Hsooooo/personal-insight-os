@@ -1,5 +1,6 @@
 package com.pios.controller;
 
+import com.pios.dto.BriefingGenerateRequest;
 import com.pios.dto.ApiResponse;
 import com.pios.dto.InsightDto;
 import com.pios.service.briefing.WeeklyBriefingService;
@@ -24,8 +25,8 @@ public class BriefingController {
     @PostMapping("/generate")
     public ApiResponse<InsightDto> generate(
             @AuthenticationPrincipal Long userId,
-            @RequestBody(required = false) Map<String, Object> body) {
-        boolean force = body != null && Boolean.TRUE.equals(body.get("force"));
+            @RequestBody(required = false) BriefingGenerateRequest body) {
+        boolean force = body != null && Boolean.TRUE.equals(body.getForce());
         return ApiResponse.ok(weeklyBriefingService.generate(userId, force));
     }
 }

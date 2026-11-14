@@ -1,0 +1,18 @@
+# 로컬 개발 전용 프로필: SPRING_PROFILES_ACTIVE=local
+# docker-compose의 postgres 기본값과 맞춘 개발용 자격증명. 운영에서는 절대 사용하지 말 것.
+spring:
+  datasource:
+    password: ${SPRING_DATASOURCE_PASSWORD:pios123}
+
+neo4j:
+  uri: ${SPRING_NEO4J_URI:bolt://localhost:7687}
+  password: ${SPRING_NEO4J_AUTHENTICATION_PASSWORD:pios1234}
+
+pios:
+  mock-data-enabled: ${PIOS_MOCK_DATA_ENABLED:true}
+  # 로컬 개발용 시크릿 기본값 (32자 이상). 운영 값과 절대 공유하지 말 것
+  mcp-internal-secret: ${PIOS_MCP_INTERNAL_SECRET:local-dev-mcp-internal-secret-change-me-0001}
+  encryption-key: ${PIOS_ENCRYPTION_KEY:local-dev-encryption-key-change-me-000000001}
+
+jwt:
+  secret: ${JWT_SECRET:local-dev-jwt-secret-change-me-0000000000000001}

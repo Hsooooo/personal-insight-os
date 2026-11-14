@@ -1,5 +1,6 @@
 package com.pios.controller;
 
+import org.springframework.core.task.TaskRejectedException;
 import com.pios.dto.ApiResponse;
 import com.pios.service.GarminSyncService.TooFrequentSyncException;
 import com.pios.service.GraphProjectorService;
@@ -34,12 +35,13 @@ public class AdminController {
     private final Set<Long> running = ConcurrentHashMap.newKeySet();
 
     public AdminController(GraphProjectorService graphProjector,
-                           @Qualifier("syncTaskExecutor") TaskExecutor taskExecutor) {
+                           @Qualifier("backgroundTaskExecutor") TaskExecutor taskExecutor) {
         this.graphProjector = graphProjector;
         this.taskExecutor = taskExecutor;
     }
 
     /**
+     * 현재 사용자 본인의 그래프 재투영(백필). 역할(admin) 모델이 없어 사용자 범위로만 동작한다.
      * 그래프 전체 재투영은 무거우므로 요청 스레드에서 돌리지 않고 백그라운드로 실행한다.
      */
     @PostMapping("/backfill")
@@ -67,6 +69,10 @@ public class AdminController {
                     running.remove(userId);
                 }
             });
+        } catch (TaskRejectedException e) {
+            running.remove(userId);
+            lastRequestedAt.remove(userId);
+            throw new TooFrequentSyncException("Background queue is full. Try again later");
         } catch (RuntimeException e) {
             running.remove(userId);
             throw e;

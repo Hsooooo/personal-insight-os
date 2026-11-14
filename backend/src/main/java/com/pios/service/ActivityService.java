@@ -1,5 +1,6 @@
 package com.pios.service;
 
+import com.pios.common.NotFoundException;
 import com.pios.domain.Activity;
 import com.pios.domain.Exercise;
 import com.pios.domain.GarminActivityLap;
@@ -43,21 +44,13 @@ public class ActivityService {
     }
 
     public ActivityDto getActivity(Long userId, Long activityId) {
-        var activity = activityRepo.findById(activityId)
-                .orElseThrow(() -> new IllegalArgumentException("Activity not found"));
-        if (!activity.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        var activity = findOwned(userId, activityId);
         return toDto(activity);
     }
 
     @Transactional
     public ActivityDto updateUserTag(Long userId, Long activityId, String userTag) {
-        var activity = activityRepo.findById(activityId)
-                .orElseThrow(() -> new IllegalArgumentException("Activity not found"));
-        if (!activity.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        var activity = findOwned(userId, activityId);
         String normalizedTag = userTag != null && !userTag.isBlank() ? userTag.trim() : null;
         activity.setUserTag(normalizedTag);
         var saved = activityRepo.save(activity);
@@ -142,11 +135,7 @@ public class ActivityService {
 
     @Transactional
     public ActivityDto updateWeightTraining(Long userId, Long activityId, WeightTrainingRequest request) {
-        Activity activity = activityRepo.findById(activityId)
-                .orElseThrow(() -> new IllegalArgumentException("Activity not found"));
-        if (!activity.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        Activity activity = findOwned(userId, activityId);
         if (!"MANUAL".equals(activity.getSourceType())) {
             throw new IllegalArgumentException("Only manually created activities can be updated");
         }
@@ -228,11 +217,7 @@ public class ActivityService {
 
     @Transactional
     public void deleteWeightTraining(Long userId, Long activityId) {
-        Activity activity = activityRepo.findById(activityId)
-                .orElseThrow(() -> new IllegalArgumentException("Activity not found"));
-        if (!activity.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        Activity activity = findOwned(userId, activityId);
         if (!"MANUAL".equals(activity.getSourceType())) {
             throw new IllegalArgumentException("Only manually created activities can be deleted");
         }
@@ -241,6 +226,11 @@ public class ActivityService {
         graphProjectorService.deleteActivity(userId, activityId);
 
         activityRepo.delete(activity);
+    }
+
+    private Activity findOwned(Long userId, Long activityId) {
+        return activityRepo.findByIdAndUserId(activityId, userId)
+                .orElseThrow(() -> new NotFoundException("Activity not found"));
     }
 
     private Pageable buildPageable(ActivityFilterRequest filter, Pageable pageable) {
@@ -268,11 +258,7 @@ public class ActivityService {
     }
 
     public List<GarminActivityLapDto> getActivityLaps(Long userId, Long activityId) {
-        var activity = activityRepo.findById(activityId)
-                .orElseThrow(() -> new IllegalArgumentException("Activity not found"));
-        if (!activity.getUser().getId().equals(userId)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        var activity = findOwned(userId, activityId);
         return lapRepo.findByActivityIdOrderByLapIndexAsc(activityId).stream()
                 .map(this::toLapDto)
                 .toList();

@@ -1,5 +1,7 @@
 package com.pios.dto.finance;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -13,5 +15,7 @@ public class RecurringBillVersionDto {
     private Integer version;
     private BigDecimal expectedAmount;
     private boolean active;
+    @Valid
+    @Size(max = 100)
     private List<RecurringBillItemDto> items;
 }

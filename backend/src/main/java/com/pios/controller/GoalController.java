@@ -1,5 +1,9 @@
 package com.pios.controller;
 
+import org.springframework.validation.annotation.Validated;
+import com.pios.dto.ValidationGroups;
+import jakarta.validation.groups.Default;
+import jakarta.validation.Valid;
 import com.pios.dto.ApiResponse;
 import com.pios.dto.GoalDto;
 import com.pios.service.GoalService;
@@ -24,7 +28,7 @@ public class GoalController {
     @PostMapping
     public ApiResponse<GoalDto> create(
             @AuthenticationPrincipal Long userId,
-            @RequestBody GoalDto dto) {
+            @Validated({Default.class, ValidationGroups.Create.class}) @RequestBody GoalDto dto) {
         return ApiResponse.ok(goalService.createGoal(userId, dto));
     }
 
@@ -39,7 +43,7 @@ public class GoalController {
     public ApiResponse<GoalDto> update(
             @AuthenticationPrincipal Long userId,
             @PathVariable Long goalId,
-            @RequestBody GoalDto dto) {
+            @Valid @RequestBody GoalDto dto) {
         return ApiResponse.ok(goalService.updateGoal(userId, goalId, dto));
     }
 

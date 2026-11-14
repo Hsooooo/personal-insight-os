@@ -27,6 +27,7 @@ public class HealthController {
             @AuthenticationPrincipal Long userId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+        validateRange(start, end);
         return ApiResponse.ok(healthService.getMetrics(userId, start, end));
     }
 
@@ -35,6 +36,18 @@ public class HealthController {
             @AuthenticationPrincipal Long userId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+        validateRange(start, end);
         return ApiResponse.ok(healthService.getSleep(userId, start, end));
+    }
+
+    private static final long MAX_RANGE_DAYS = 3 * 366;
+
+    private static void validateRange(LocalDate start, LocalDate end) {
+        if (end.isBefore(start)) {
+            throw new IllegalArgumentException("end must be on or after start");
+        }
+        if (java.time.temporal.ChronoUnit.DAYS.between(start, end) > MAX_RANGE_DAYS) {
+            throw new IllegalArgumentException("date range must not exceed " + MAX_RANGE_DAYS + " days");
+        }
     }
 }
