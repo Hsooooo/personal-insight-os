@@ -2,28 +2,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Target, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { Target, Plus, Trash2, Pencil, AlertTriangle, Flag } from 'lucide-react';
 import type { Goal } from '@/types';
 import { QueryError } from '@/components/common/QueryError';
-
-const GOAL_TEMPLATES = [
-  { value: 'WEEKLY_RUN_DISTANCE', label: '주간 러닝 거리', unit: 'km', placeholder: '40' },
-  { value: 'WEEKLY_ACTIVITY_COUNT', label: '주간 운동 횟수', unit: '회', placeholder: '4' },
-  { value: 'SLEEP_HOURS', label: '평균 수면 시간', unit: 'h', placeholder: '7.5' },
-  { value: 'WEIGHT_KG', label: '체중', unit: 'kg', placeholder: '70' },
-] as const;
+import { GoalForm } from '@/components/goals/GoalForm';
+import { GOAL_TEMPLATES, dDayLabel, daysUntil, goalProgressText, raceDistanceLabel } from '@/components/goals/raceGoal';
 
 function paceBadgeVariant(pace?: string | null): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (pace) {
@@ -64,46 +50,38 @@ function warningLabel(warning?: string | null): string | null {
 export default function Goals() {
   const queryClient = useQueryClient();
   const [isAdding, setIsAdding] = useState(false);
-  const [newGoal, setNewGoal] = useState({
-    title: '',
-    goalType: 'WEEKLY_RUN_DISTANCE',
-    description: '',
-    targetValue: '',
-    startDate: '',
-    targetDate: '',
-  });
+  const [editing, setEditing] = useState<Goal | null>(null);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['goals'],
     queryFn: api.goals.list,
   });
 
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['goals'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+  };
+
   const createMutation = useMutation({
     mutationFn: api.goals.create,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      invalidate();
       setIsAdding(false);
-      setNewGoal({
-        title: '',
-        goalType: 'WEEKLY_RUN_DISTANCE',
-        description: '',
-        targetValue: '',
-        startDate: '',
-        targetDate: '',
-      });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, goal }: { id: number; goal: Partial<Goal> }) => api.goals.update(id, goal),
+    onSuccess: () => {
+      invalidate();
+      setEditing(null);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => api.goals.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['goals'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    },
+    onSuccess: invalidate,
   });
-
-  const selectedTemplate = GOAL_TEMPLATES.find((t) => t.value === newGoal.goalType);
 
   return (
     <div className="space-y-6">
@@ -112,115 +90,39 @@ export default function Goals() {
           <h2 className="text-3xl font-bold tracking-tight">Goals</h2>
           <p className="text-muted-foreground">실제 데이터와 연결된 목표 진행률을 추적합니다</p>
         </div>
-        <Button onClick={() => setIsAdding(true)}>
+        <Button
+          onClick={() => {
+            setEditing(null);
+            setIsAdding(true);
+          }}
+        >
           <Plus className="mr-2 h-4 w-4" />
           Add Goal
         </Button>
       </div>
 
       {isAdding && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">New Goal</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                createMutation.mutate({
-                  title: newGoal.title,
-                  goalType: newGoal.goalType,
-                  description: newGoal.description || undefined,
-                  targetValue: newGoal.targetValue ? Number(newGoal.targetValue) : undefined,
-                  targetUnit: selectedTemplate?.unit,
-                  startDate: newGoal.startDate || undefined,
-                  targetDate: newGoal.targetDate || undefined,
-                });
-              }}
-              className="space-y-3"
-            >
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="goal-title">Title</Label>
-                  <Input
-                    id="goal-title"
-                    value={newGoal.title}
-                    onChange={(e) => setNewGoal({ ...newGoal, title: e.target.value })}
-                    placeholder="e.g., 주간 러닝 40km"
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="goal-type">Type</Label>
-                  <Select
-                    value={newGoal.goalType}
-                    onValueChange={(value) => setNewGoal({ ...newGoal, goalType: value })}
-                  >
-                    <SelectTrigger id="goal-type">
-                      <SelectValue placeholder="목표 유형" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {GOAL_TEMPLATES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="goal-target">Target ({selectedTemplate?.unit || 'value'})</Label>
-                  <Input
-                    id="goal-target"
-                    type="number"
-                    step="0.1"
-                    value={newGoal.targetValue}
-                    onChange={(e) => setNewGoal({ ...newGoal, targetValue: e.target.value })}
-                    placeholder={selectedTemplate?.placeholder}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="goal-start">Start date</Label>
-                  <Input
-                    id="goal-start"
-                    type="date"
-                    value={newGoal.startDate}
-                    onChange={(e) => setNewGoal({ ...newGoal, startDate: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="goal-target-date">Target date</Label>
-                  <Input
-                    id="goal-target-date"
-                    type="date"
-                    value={newGoal.targetDate}
-                    onChange={(e) => setNewGoal({ ...newGoal, targetDate: e.target.value })}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="goal-description">Description</Label>
-                <Input
-                  id="goal-description"
-                  value={newGoal.description}
-                  onChange={(e) => setNewGoal({ ...newGoal, description: e.target.value })}
-                  placeholder="Describe your goal"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={createMutation.isPending}>
-                  Create Goal
-                </Button>
-                <Button variant="outline" type="button" onClick={() => setIsAdding(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+        <GoalForm
+          heading="New Goal"
+          submitLabel="Create Goal"
+          pending={createMutation.isPending}
+          error={createMutation.error?.message}
+          onSubmit={(goal) => createMutation.mutate(goal)}
+          onCancel={() => setIsAdding(false)}
+        />
+      )}
+
+      {editing && (
+        <GoalForm
+          key={editing.id}
+          heading={`Edit: ${editing.title}`}
+          submitLabel="Save"
+          initial={editing}
+          pending={updateMutation.isPending}
+          error={updateMutation.error?.message}
+          onSubmit={(goal) => updateMutation.mutate({ id: editing.id, goal })}
+          onCancel={() => setEditing(null)}
+        />
       )}
 
       {isLoading ? (
@@ -234,7 +136,18 @@ export default function Goals() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {data?.length ? (
-            data.map((goal) => <GoalCard key={goal.id} goal={goal} onDelete={(id) => deleteMutation.mutate(id)} />)
+            data.map((goal) => (
+              <GoalCard
+                key={goal.id}
+                goal={goal}
+                onEdit={(g) => {
+                  setIsAdding(false);
+                  setEditing(g);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onDelete={(id) => deleteMutation.mutate(id)}
+              />
+            ))
           ) : (
             <Card className="md:col-span-2">
               <CardContent className="py-12 text-center">
@@ -249,42 +162,69 @@ export default function Goals() {
   );
 }
 
-function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: (id: number) => void }) {
-  const percent = Math.min(Math.max(goal.progressPercent ?? 0, 0), 100);
+function GoalCard({
+  goal,
+  onEdit,
+  onDelete,
+}: {
+  goal: Goal;
+  onEdit: (goal: Goal) => void;
+  onDelete: (id: number) => void;
+}) {
+  const percent = Math.min(Math.max(Number(goal.progressPercent ?? 0), 0), 100);
   const warn = warningLabel(goal.warning);
   const template = GOAL_TEMPLATES.find((t) => t.value === goal.goalType);
+  const isRace = goal.goalType === 'RACE';
+  const dDay = isRace ? dDayLabel(daysUntil(goal.targetDate)) : null;
+  const raceIncomplete = isRace && (goal.raceDistanceKm == null || goal.targetValue == null || !goal.targetDate);
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between pb-2">
         <div className="flex items-center gap-2">
-          <Target className="h-5 w-5 text-indigo-500" />
+          {isRace ? (
+            <Flag className="h-5 w-5 text-amber-500" aria-hidden="true" />
+          ) : (
+            <Target className="h-5 w-5 text-indigo-500" aria-hidden="true" />
+          )}
           <CardTitle className="text-base">{goal.title}</CardTitle>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(goal.id)} aria-label={`목표 ${goal.title} 삭제`}>
-          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-        </Button>
+        <div className="flex shrink-0 items-center">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onEdit(goal)} aria-label={`목표 ${goal.title} 수정`}>
+            <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onDelete(goal.id)} aria-label={`목표 ${goal.title} 삭제`}>
+            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         {goal.description && <p className="text-sm text-muted-foreground">{goal.description}</p>}
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">{template?.label || goal.goalType}</Badge>
+          {isRace && goal.raceDistanceKm != null && <Badge variant="outline">{raceDistanceLabel(goal.raceDistanceKm)}</Badge>}
+          {dDay && (
+            <Badge variant="outline">
+              {dDay} · {goal.targetDate}
+            </Badge>
+          )}
           <Badge variant={goal.status === 'ACTIVE' ? 'default' : 'secondary'}>{goal.status}</Badge>
           {goal.progressSupported && (
             <Badge variant={paceBadgeVariant(goal.paceStatus)}>{paceLabel(goal.paceStatus)}</Badge>
           )}
         </div>
 
-        {goal.progressSupported && goal.targetValue != null ? (
+        {raceIncomplete ? (
+          <p className="text-xs text-muted-foreground">
+            대회 거리·목표 기록·대회일을 입력하면 예상 기록을 계산합니다.{' '}
+            <button type="button" className="underline underline-offset-2" onClick={() => onEdit(goal)}>
+              지금 입력
+            </button>
+          </p>
+        ) : goal.progressSupported && goal.targetValue != null ? (
           <div className="space-y-2">
             <div className="flex items-baseline justify-between text-sm">
-              <span className="text-muted-foreground">
-                {goal.currentValue ?? '-'}
-                {goal.targetUnit ? ` ${goal.targetUnit}` : ''}
-                {' / '}
-                {goal.targetValue}
-                {goal.targetUnit ? ` ${goal.targetUnit}` : ''}
-              </span>
+              <span className="text-muted-foreground">{goalProgressText(goal)}</span>
               <span className="font-medium">
                 {goal.progressPercent != null ? `${Number(goal.progressPercent).toFixed(0)}%` : '-'}
               </span>
@@ -295,6 +235,9 @@ function GoalCard({ goal, onDelete }: { goal: Goal; onDelete: (id: number) => vo
                 style={{ width: `${percent}%` }}
               />
             </div>
+            {isRace && goal.currentValue == null && (
+              <p className="text-xs text-muted-foreground">최근 6주 러닝 기록이 부족해 예상 기록을 계산하지 못했습니다.</p>
+            )}
             {goal.projectedDate && (
               <p className="text-xs text-muted-foreground">예상 달성일: {goal.projectedDate}</p>
             )}

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import type { Goal } from '@/types';
 import { paceLabel } from './paceLabel';
+import { goalProgressText } from '@/components/goals/raceGoal';
 
 export function GoalProgressCard({ goals }: { goals: Goal[] | undefined }) {
   const navigate = useNavigate();
@@ -44,11 +45,7 @@ export function GoalProgressCard({ goals }: { goals: Goal[] | undefined }) {
                       <div className="h-full rounded-full bg-indigo-500" style={{ width: `${percent}%` }} />
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {goal.currentValue ?? '-'}
-                      {goal.targetUnit ? ` ${goal.targetUnit}` : ''}
-                      {' / '}
-                      {goal.targetValue}
-                      {goal.targetUnit ? ` ${goal.targetUnit}` : ''}
+                      {goalProgressText(goal)}
                       {goal.progressPercent != null ? ` · ${Number(goal.progressPercent).toFixed(0)}%` : ''}
                     </p>
                   </>
@@ -59,7 +56,7 @@ export function GoalProgressCard({ goals }: { goals: Goal[] | undefined }) {
             );
           })
         ) : (
-          <p className="text-sm text-muted-foreground">목표가 없습니다. Goals에서 주간 러닝·수면 목표를 추가해 보세요.</p>
+          <p className="text-sm text-muted-foreground">목표가 없습니다. Goals에서 레이스·주간 러닝·수면 목표를 추가해 보세요.</p>
         )}
       </CardContent>
     </Card>

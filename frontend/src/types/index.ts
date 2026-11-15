@@ -306,6 +306,8 @@ export interface Goal {
   description: string;
   targetValue: number;
   targetUnit: string;
+  /** RACE 목표의 대회 거리(km). targetValue는 목표 기록(초) */
+  raceDistanceKm?: number | null;
   startDate: string;
   targetDate: string;
   status: string;
