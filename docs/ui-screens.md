@@ -328,8 +328,8 @@ flowchart LR
 | 항목 | 내용 |
 |------|------|
 | **목적** | 개인 목표 설정 및 실제 데이터 기반 진행률 추적 |
-| **구성** | 목표 카드 그리드(진행률 바·pace 배지·경고) + 등록 폼(유형 템플릿·목표값·기간) |
-| **목표 유형** | `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
+| **구성** | 목표 카드 그리드(진행률 바·pace 배지·경고·수정/삭제) + 등록/수정 폼(유형 템플릿·목표값·기간, 레이스는 거리·`시:분:초` 목표 기록·대회일) |
+| **목표 유형** | `RACE`(대회 거리·목표 기록·대회일, 예상 기록과 D-day), `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
 | **API 호출** | `GET/POST/PATCH/DELETE /api/goals` |
 
 ---

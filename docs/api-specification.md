@@ -586,6 +586,13 @@ PATCH /api/activities/123/tag
 | `WEEKLY_ACTIVITY_COUNT` | 이번 주 활동 횟수 | 회 |
 | `SLEEP_HOURS` | 최근 7일 평균 수면 | h |
 | `WEIGHT_KG` | 최신 체중 | kg |
+| `RACE` | 예상 완주 기록 — 최근 42일 러닝 중 최고 기록을 Riegel 공식(`T × (D대회/D)^1.06`)으로 대회 거리에 환산. 3km 미만 또는 대회 거리의 25% 미만 러닝은 제외 | s (초) |
+
+**RACE 목표 필드**: `raceDistanceKm`(대회 거리, 필수), `targetValue`(목표 기록, 초), `targetDate`(대회일). `progressPercent = 목표 기록 / 예상 기록 × 100` (100% 이상이면 현재 기록으로 달성 가능). `paceStatus`: 예상 ≤ 목표 `AHEAD`, 목표의 103% 이내 `ON_TRACK`, 그 외 `BEHIND`, 거리·목표 기록·러닝 기록이 없으면 `INSUFFICIENT_DATA`
+
+```json
+{ "title": "동아마라톤 3:30 under", "goalType": "RACE", "raceDistanceKm": 42.195, "targetValue": 12600, "targetUnit": "s", "targetDate": "2027-03-21" }
+```
 
 **응답 추가 필드**: `progressSupported`, `currentValue`, `progressPercent`, `paceStatus` (`ON_TRACK`/`BEHIND`/`AHEAD`/`INSUFFICIENT_DATA`/`UNSUPPORTED`), `projectedDate`, `warning` (`OVERTRAINING_HINT`/`UNDERTRAINING_HINT`), `blockers` (이번 주 방해 요인 문자열 배열, 최대 2개)
 

@@ -97,7 +97,7 @@ PRM 응답 예:
 | `pios_get_insights` | 인사이트 목록 (category/feedback_status/limit) | `GET /api/insights` | read | read-only |
 | `pios_ask_coach` | 자연어 코칭 질문 (RAG, 결과는 인사이트로 저장) | `POST /api/ask` | read | 비멱등 |
 | `pios_get_graph` | 개인 지식 그래프 (days 0=전체, view) | `GET /api/graph` | read | read-only |
-| `pios_create_or_update_goal` | 목표 생성(POST) / 수정(PATCH, 바꿀 필드만) | `POST /api/goals`, `PATCH /api/goals/{id}` | write | 비파괴, 비멱등 |
+| `pios_create_or_update_goal` | 목표 생성(POST) / 수정(PATCH, 바꿀 필드만). 레이스는 `goal_type=RACE` + `race_distance_km` + `target_value`(초) + `target_date` | `POST /api/goals`, `PATCH /api/goals/{id}` | write | 비파괴, 비멱등 |
 | `pios_save_insight` | 인사이트 저장 | `POST /api/insights/{id}/save` | write | 멱등 |
 | `pios_submit_feedback` | 인사이트 피드백 (CORRECT/UNCLEAR/WRONG/IMPORTANT) | `POST /api/insights/{id}/feedback` | write | 멱등 |
 | `pios_trigger_sync` | Garmin 동기화 (INCREMENTAL/FULL, 30초 rate limit) | `POST /api/data-sources/garmin/sync` | write | open-world |

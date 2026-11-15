@@ -115,6 +115,7 @@ erDiagram
         text description
         numeric target_value
         varchar target_unit
+        numeric race_distance_km
         date start_date
         date target_date
         varchar status
@@ -202,7 +203,7 @@ erDiagram
 | 20 | `oauth_authorization_codes` | 인가 코드 (SHA-256 hex, 단일 사용 `used_at`, TTL 5분) (V25) | 일시적 |
 | 21 | `oauth_refresh_tokens` | refresh token (SHA-256 hex, 사용 시 회전, `used_at`로 재사용 탐지, `grant_id` FK) (V25) | 1~N / grant |
 
-> 마이그레이션은 V1~V26이 적용됩니다. 상세 DDL은 `backend/src/main/resources/db/migration/`.
+> 마이그레이션은 V1~V27이 적용됩니다. 상세 DDL은 `backend/src/main/resources/db/migration/`.
 
 ### OAuth 스키마 (V25)
 
@@ -215,6 +216,10 @@ oauth_authorization_requests (id VARCHAR(64) PK; code_challenge, scope, resource
 - 코드/refresh token은 원문을 저장하지 않고 `code_hash`/`token_hash`(UNIQUE)만 저장합니다. grant 삭제 시 하위 코드/토큰은 `ON DELETE CASCADE`.
 - 만료 행은 `OAuthCleanupService`가 정리합니다 (`expires_at` 인덱스 사용).
 - access token은 JWT(stateless)라 별도 테이블이 없으며, MCP 서버가 introspect로 검증합니다.
+
+### V27: 레이스 목표
+
+- `goals.race_distance_km NUMERIC(7,3)` 추가 — `goal_type='RACE'`의 대회 거리(km). 목표 기록은 `target_value`(초, `target_unit='s'`), 대회일은 `target_date`
 
 ### V26: 동기화 안정성 / 성능 / 데이터 정리
 

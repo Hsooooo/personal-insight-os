@@ -387,7 +387,7 @@ public AskResponse ask(Long userId, AskRequest request) {
 | 항목 | 내용 |
 |------|------|
 | **구현 위치** | `GoalProgressCalculator`, `GoalBlockerAnalyzer`, `GoalService`, `Goals.tsx` |
-| **유형** | `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
+| **유형** | `RACE`(대회 거리·목표 기록·대회일, 예상 기록과 D-day), `WEEKLY_RUN_DISTANCE`, `WEEKLY_ACTIVITY_COUNT`, `SLEEP_HOURS`, `WEIGHT_KG` |
 | **출력** | `currentValue`, `progressPercent`, `paceStatus`, `projectedDate`, `warning`, `blockers` |
 | **방해 요인** | 활성 목표에 대해 수면/부하/진행 부족을 규칙으로 상위 1~2개 `blockers` 노출 |
 

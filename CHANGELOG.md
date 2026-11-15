@@ -51,6 +51,9 @@
 - access 토큰 localStorage 저장 중단(메모리 보관, 새로고침 시 refresh 쿠키로 재발급), MCP API 키 원문 localStorage 저장 제거
 - 인증 없이 허용하는 경로를 `login`/`register`/`refresh`로 축소, 회원가입 기본 비활성화 (`PIOS_REGISTRATION_ENABLED`)
 
+### Added (Goals)
+- **레이스 목표(`RACE`)** — Goals에서 대회 거리(5K/10K/하프/풀/직접 입력), 목표 기록(`시:분:초`), 대회일을 설정. 최근 6주 러닝 최고 기록을 Riegel 공식으로 환산한 예상 기록, 목표 대비 %, D-day 표시. 기존 목표 수정 UI 추가. Flyway V27(`goals.race_distance_km`), MCP `pios_create_or_update_goal`에 `race_distance_km`
+
 ### Fixed
 - backend Dockerfile의 `garminconnect>=0.3.0`이 셸 리다이렉트로 해석되던 문제 → `garminconnect==0.3.2` 고정
 - Garmin 동기화를 청크 단위 트랜잭션으로 분리 (Garmin 호출 중 DB 커넥션 점유 제거, 실패 상태 롤백 방지), 사용자별 Garmin 세션 토큰 캐시(`garmin_tokens` 볼륨)로 청크마다 재로그인 제거

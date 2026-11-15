@@ -61,7 +61,7 @@ flowchart TB
 
     subgraph 데이터["💾 데이터 계층"]
         direction TB
-        PG[(PostgreSQL + pgvector<br/>Flyway V1~V26)]
+        PG[(PostgreSQL + pgvector<br/>Flyway V1~V27)]
         NEO[(Neo4j<br/>외부/클로드 인스턴스)]
     end
 
