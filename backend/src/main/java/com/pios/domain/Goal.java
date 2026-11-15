@@ -36,6 +36,10 @@ public class Goal {
     @Column(name = "target_unit")
     private String targetUnit;
 
+    /** RACE 목표의 대회 거리(km). 목표 기록은 targetValue(초) */
+    @Column(name = "race_distance_km", precision = 7, scale = 3)
+    private BigDecimal raceDistanceKm;
+
     @Column(name = "start_date")
     private LocalDate startDate;
 

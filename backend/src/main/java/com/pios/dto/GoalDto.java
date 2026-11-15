@@ -1,8 +1,10 @@
 package com.pios.dto;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -30,6 +32,11 @@ public class GoalDto {
     private BigDecimal targetValue;
     @Size(max = 50)
     private String targetUnit;
+    /** RACE 목표의 대회 거리(km). targetValue는 목표 기록(초) */
+    @Positive
+    @DecimalMax("400")
+    @Digits(integer = 4, fraction = 3)
+    private BigDecimal raceDistanceKm;
     private LocalDate startDate;
     private LocalDate targetDate;
     @Pattern(regexp = "[A-Z_]{1,30}", message = "must be an upper-case status code (e.g. ACTIVE)")

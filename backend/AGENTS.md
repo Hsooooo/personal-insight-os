@@ -4,7 +4,7 @@
 
 ## 스택
 
-Java 21, Spring Boot 3.5.x (parent 3.5.16), Spring Security + JWT(jjwt), Spring Data JPA, Flyway(V1~V26), Neo4j Java Driver, Apache POI, Lombok, Maven. LLM 호출은 `service/llm/LlmClient`(OpenAI 호환 REST).
+Java 21, Spring Boot 3.5.x (parent 3.5.16), Spring Security + JWT(jjwt), Spring Data JPA, Flyway(V1~V27), Neo4j Java Driver, Apache POI, Lombok, Maven. LLM 호출은 `service/llm/LlmClient`(OpenAI 호환 REST).
 
 ## 패키지 구조 (`src/main/java/com/pios`)
 
@@ -34,7 +34,7 @@ Dockerfile: Maven 빌더 → `eclipse-temurin:21-jre-alpine` + python3/`garminco
 
 ## DB
 
-- Flyway(`classpath:db/migration`), `ddl-auto: validate`. 새 마이그레이션은 **V27**부터.
+- Flyway(`classpath:db/migration`), `ddl-auto: validate`. 새 마이그레이션은 **V28**부터.
 - 주요 테이블과 DDL은 `../docs/database-schema.md`.
 
 ## 구현 노트

@@ -11,7 +11,9 @@ public enum GoalType {
     WEEKLY_RUN_DISTANCE("km", "주간 러닝 거리"),
     WEEKLY_ACTIVITY_COUNT("회", "주간 운동 횟수"),
     SLEEP_HOURS("h", "평균 수면 시간"),
-    WEIGHT_KG("kg", "체중");
+    WEIGHT_KG("kg", "체중"),
+    /** 대회 목표: raceDistanceKm + 목표 기록 targetValue(초) + 대회일 targetDate */
+    RACE("s", "레이스");
 
     private final String defaultUnit;
     private final String label;

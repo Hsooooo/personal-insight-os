@@ -41,6 +41,7 @@ public class GoalService {
                 .description(dto.getDescription())
                 .targetValue(dto.getTargetValue())
                 .targetUnit(unit)
+                .raceDistanceKm(dto.getRaceDistanceKm())
                 .startDate(dto.getStartDate())
                 .targetDate(dto.getTargetDate())
                 .status("ACTIVE")
@@ -64,6 +65,7 @@ public class GoalService {
         if (dto.getGoalType() != null) goal.setGoalType(dto.getGoalType());
         if (dto.getTargetValue() != null) goal.setTargetValue(dto.getTargetValue());
         if (dto.getTargetUnit() != null) goal.setTargetUnit(dto.getTargetUnit());
+        if (dto.getRaceDistanceKm() != null) goal.setRaceDistanceKm(dto.getRaceDistanceKm());
         if (dto.getStartDate() != null) goal.setStartDate(dto.getStartDate());
         if (dto.getTargetDate() != null) goal.setTargetDate(dto.getTargetDate());
         if (dto.getStatus() != null) goal.setStatus(dto.getStatus());
@@ -89,7 +91,8 @@ public class GoalService {
         return GoalDto.builder()
                 .id(g.getId()).title(g.getTitle()).goalType(g.getGoalType())
                 .description(g.getDescription()).targetValue(g.getTargetValue())
-                .targetUnit(g.getTargetUnit()).startDate(g.getStartDate())
+                .targetUnit(g.getTargetUnit()).raceDistanceKm(g.getRaceDistanceKm())
+                .startDate(g.getStartDate())
                 .targetDate(g.getTargetDate()).status(g.getStatus())
                 .progressSupported(progress.isSupported())
                 .currentValue(progress.getCurrentValue())

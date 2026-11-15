@@ -28,6 +28,14 @@ public class GoalProgressCalculator {
             "VIRTUAL_RUN", "INDOOR_RUNNING", "RUN"
     );
 
+    static final int RACE_LOOKBACK_DAYS = 42;
+    private static final double RIEGEL_EXPONENT = 1.06;
+    private static final double RACE_MIN_RUN_METERS = 3000;
+    /** 대회 거리의 이 비율 이상인 러닝만 예측에 사용 (풀코스면 10.5km 이상) */
+    private static final double RACE_MIN_DISTANCE_RATIO = 0.25;
+    /** 예상 기록이 목표의 3% 이내면 순항 */
+    private static final double RACE_ON_TRACK_RATIO = 1.03;
+
     private final ActivityRepository activityRepo;
     private final GarminDailyHealthMetricRepository healthRepo;
     private final GarminSleepSessionRepository sleepRepo;
@@ -39,6 +47,9 @@ public class GoalProgressCalculator {
     }
 
     private ProgressResult calculateTracked(Goal goal, GoalType type) {
+        if (type == GoalType.RACE) {
+            return calculateRace(goal);
+        }
         LocalDate today = AppTimeZones.todayKst();
         LocalDate start = goal.getStartDate() != null ? goal.getStartDate() : today.minusDays(6);
         LocalDate end = today;
@@ -54,6 +65,7 @@ public class GoalProgressCalculator {
             case WEEKLY_ACTIVITY_COUNT -> BigDecimal.valueOf(countActivities(goal.getUser().getId(), start, end));
             case SLEEP_HOURS -> avgSleepHours(goal.getUser().getId(), start, end);
             case WEIGHT_KG -> latestWeight(goal.getUser().getId());
+            case RACE -> throw new IllegalStateException("RACE는 calculateRace에서 처리");
         };
 
         if (current == null || goal.getTargetValue() == null
@@ -84,6 +96,55 @@ public class GoalProgressCalculator {
                 .projectedDate(projectedDate)
                 .warning(warning)
                 .build();
+    }
+
+    /**
+     * 레이스 목표: 최근 {@value #RACE_LOOKBACK_DAYS}일 러닝 중 가장 좋은 기록을 Riegel 공식(T2 = T1 × (D2/D1)^1.06)으로
+     * 대회 거리에 환산한 예상 기록을 currentValue(초)로 둔다. progressPercent = 목표 기록 / 예상 기록 × 100
+     * (100% 이상이면 지금 컨디션으로 목표 달성 가능). 너무 짧은 러닝은 장거리 예측이 과하게 낙관적이라 제외한다.
+     */
+    private ProgressResult calculateRace(Goal goal) {
+        BigDecimal distanceKm = goal.getRaceDistanceKm();
+        BigDecimal target = goal.getTargetValue();
+        if (distanceKm == null || distanceKm.signum() <= 0 || target == null || target.signum() <= 0) {
+            return ProgressResult.builder().supported(true).paceStatus("INSUFFICIENT_DATA").build();
+        }
+        LocalDate today = AppTimeZones.todayKst();
+        double raceMeters = distanceKm.doubleValue() * 1000.0;
+        double minMeters = Math.max(RACE_MIN_RUN_METERS, raceMeters * RACE_MIN_DISTANCE_RATIO);
+
+        Double best = activityRepo.findRecentByUserId(goal.getUser().getId(),
+                        today.minusDays(RACE_LOOKBACK_DAYS).atStartOfDay()).stream()
+                .filter(this::isRunning)
+                .filter(a -> a.getDistanceMeters() != null && a.getDurationSeconds() != null)
+                .filter(a -> a.getDurationSeconds() > 0 && a.getDistanceMeters().doubleValue() >= minMeters)
+                .map(a -> predictSeconds(a.getDurationSeconds(), a.getDistanceMeters().doubleValue(), raceMeters))
+                .min(Double::compare)
+                .orElse(null);
+        if (best == null) {
+            return ProgressResult.builder().supported(true).paceStatus("INSUFFICIENT_DATA").build();
+        }
+
+        BigDecimal predicted = BigDecimal.valueOf(Math.round(best));
+        BigDecimal percent = target.multiply(BigDecimal.valueOf(100)).divide(predicted, 1, RoundingMode.HALF_UP);
+        String pace;
+        if (predicted.compareTo(target) <= 0) {
+            pace = "AHEAD";
+        } else if (predicted.doubleValue() <= target.doubleValue() * RACE_ON_TRACK_RATIO) {
+            pace = "ON_TRACK";
+        } else {
+            pace = "BEHIND";
+        }
+        return ProgressResult.builder()
+                .supported(true)
+                .currentValue(predicted)
+                .progressPercent(percent)
+                .paceStatus(pace)
+                .build();
+    }
+
+    static double predictSeconds(double seconds, double meters, double raceMeters) {
+        return seconds * Math.pow(raceMeters / meters, RIEGEL_EXPONENT);
     }
 
     private BigDecimal sumRunDistanceKm(Long userId, LocalDate start, LocalDate end) {
