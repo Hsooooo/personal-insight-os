@@ -47,7 +47,7 @@
 │       │       └── pattern/        # ThinPatternDetector
 │       ├── main/resources/
 │       │   ├── application.yml, application-local.yml   # local 프로필: 개발용 기본 시크릿
-│       │   └── db/migration/       # Flyway V1 ~ V27
+│       │   └── db/migration/       # Flyway V1 ~ V28
 │       └── test/java/com/pios/     # JUnit 5 (controller, oauth, security, service)
 │
 ├── mcp/                            # MCP 서버 (Python 3.12, mcp SDK 2.x)

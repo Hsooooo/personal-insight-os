@@ -33,7 +33,7 @@
 ### Backend
 - **Spring Boot 3.5.x** (parent 3.5.16) + **Java 21**
 - **Spring Security** + JWT (jjwt) + 자체 **OAuth 2.1 Authorization Server** (`com.pios.oauth`)
-- **Spring Data JPA** (Hibernate), **Flyway** — 마이그레이션 V1~V27 (`backend/src/main/resources/db/migration`)
+- **Spring Data JPA** (Hibernate), **Flyway** — 마이그레이션 V1~V28 (`backend/src/main/resources/db/migration`)
 - **Neo4j Java Driver** — 그래프 데이터 접근 (선택)
 - **LlmClient** (`service/llm`) — OpenAI 호환 REST 호출 (OpenAI Java SDK 사용 안 함)
 - **Apache POI** — 가계 엑셀 import
@@ -88,7 +88,7 @@
 │       ├── oauth/              # controller/domain/dto/repository/service (Authorization Server)
 │       ├── security/           # SecurityConfig, JwtAuthenticationFilter, McpAccessPolicy, InternalSecretVerifier, LoginAttemptService ...
 │       └── service/            # 비즈니스 로직 + 하위 패키지 alert/ ask/ briefing/ finance/ garmin/ goal/ llm/ pattern/
-│   └── src/main/resources/     # application.yml, application-local.yml, db/migration/V1~V27
+│   └── src/main/resources/     # application.yml, application-local.yml, db/migration/V1~V28
 │   └── src/test/java/com/pios/ # JUnit 5 (controller/oauth/security/service)
 └── frontend/                   # React + Vite
     ├── Dockerfile, nginx.conf  # 정적 SPA만 서빙 (:8080). /api 프록시 없음
@@ -251,7 +251,7 @@ npm run build      # tsc + vite build
 - **언어**: UI 텍스트는 영문 메뉴명 + 한국어 사용자 문구 혼용
 
 ### 데이터베이스
-- **PostgreSQL**: Flyway 마이그레이션 (`db/migration/V{version}__{name}.sql`), 현재 최신 V27
+- **PostgreSQL**: Flyway 마이그레이션 (`db/migration/V{version}__{name}.sql`), 현재 최신 V28
 - **Neo4j**: Cypher로 노드/관계 생성, `GraphNodeMapping`으로 PostgreSQL row ↔ Neo4j node 매핑
 
 ---
@@ -325,7 +325,7 @@ CI(`.github/workflows/ci.yml`)가 push/PR마다 위 세 가지와 스크립트 �
 2. `App.tsx`에 `lazy` 라우트 추가, 필요시 `components/layout/Sidebar.tsx` 메뉴 추가
 
 ### DB 스키마 변경 시
-1. `backend/src/main/resources/db/migration/`에 새 Flyway 파일 추가 (다음 버전: **V28**, 예 `V28__add_new_table.sql`)
+1. `backend/src/main/resources/db/migration/`에 새 Flyway 파일 추가 (다음 버전: **V29**, 예 `V29__add_new_table.sql`)
 2. `domain/` Entity 수정, `ddl-auto: validate` 유지
 
 ### 문서 최신화 규칙 (필수)

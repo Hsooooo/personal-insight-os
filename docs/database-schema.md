@@ -203,7 +203,7 @@ erDiagram
 | 20 | `oauth_authorization_codes` | 인가 코드 (SHA-256 hex, 단일 사용 `used_at`, TTL 5분) (V25) | 일시적 |
 | 21 | `oauth_refresh_tokens` | refresh token (SHA-256 hex, 사용 시 회전, `used_at`로 재사용 탐지, `grant_id` FK) (V25) | 1~N / grant |
 
-> 마이그레이션은 V1~V27이 적용됩니다. 상세 DDL은 `backend/src/main/resources/db/migration/`.
+> 마이그레이션은 V1~V28이 적용됩니다. 상세 DDL은 `backend/src/main/resources/db/migration/`.
 
 ### OAuth 스키마 (V25)
 
@@ -219,7 +219,7 @@ oauth_authorization_requests (id VARCHAR(64) PK; code_challenge, scope, resource
 
 ### V27: 레이스 목표
 
-- `goals.race_distance_km NUMERIC(7,3)` 추가 — `goal_type='RACE'`의 대회 거리(km). 목표 기록은 `target_value`(초, `target_unit='s'`), 대회일은 `target_date`
+- `goals.race_distance_km` 추가 (V28에서 `NUMERIC(8,4)`로 확장 — 하프 21.0975km) — `goal_type='RACE'`의 대회 거리(km). 목표 기록은 `target_value`(초, `target_unit='s'`), 대회일은 `target_date`
 
 ### V26: 동기화 안정성 / 성능 / 데이터 정리
 

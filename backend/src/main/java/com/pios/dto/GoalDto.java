@@ -35,7 +35,7 @@ public class GoalDto {
     /** RACE 목표의 대회 거리(km). targetValue는 목표 기록(초) */
     @Positive
     @DecimalMax("400")
-    @Digits(integer = 4, fraction = 3)
+    @Digits(integer = 4, fraction = 4)
     private BigDecimal raceDistanceKm;
     private LocalDate startDate;
     private LocalDate targetDate;
