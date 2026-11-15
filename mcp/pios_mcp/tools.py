@@ -137,6 +137,17 @@ def _minutes(seconds: Any) -> int:
         return 0
 
 
+def _fmt_seconds(value: Any) -> str:
+    """초 → H:MM:SS (레이스 기록 표시용)"""
+    try:
+        total = int(round(float(value)))
+    except (TypeError, ValueError):
+        return "-"
+    h, rem = divmod(total, 3600)
+    m, sec = divmod(rem, 60)
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m}:{sec:02d}"
+
+
 def _as_list(data: Any) -> list[dict[str, Any]]:
     if isinstance(data, list):
         return [x for x in data if isinstance(x, dict)]
@@ -478,6 +489,11 @@ def register_tools(mcp: MCPServer, rt: ToolRuntime) -> None:  # noqa: C901 - 도
             progress = ""
             if g.get("progressPercent") is not None:
                 progress = f" | 진행: {g['progressPercent']}% ({_get(g, 'paceStatus')})"
+            if g.get("goalType") == "RACE":
+                progress += (
+                    f" | 거리: {_get(g, 'raceDistanceKm')}km | 목표 기록: {_fmt_seconds(g.get('targetValue'))}"
+                    f" | 예상 기록: {_fmt_seconds(g.get('currentValue'))}"
+                )
             lines.append(
                 f"- [{_get(g, 'id')}] {_get(g, 'title')} ({_get(g, 'goalType')})\n"
                 f"  상태: {_get(g, 'status')} | 목표: {_get(g, 'targetValue')} {_get(g, 'targetUnit', '')} | "
@@ -650,11 +666,15 @@ def register_tools(mcp: MCPServer, rt: ToolRuntime) -> None:  # noqa: C901 - 도
             Optional[str],
             Field(
                 max_length=64,
-                description="생성 시 필수. 자동 진행률 템플릿: WEEKLY_RUN_DISTANCE, WEEKLY_ACTIVITY_COUNT, SLEEP_HOURS, WEIGHT_KG (그 외 문자열은 진행률 미추적)",
+                description="생성 시 필수. 자동 진행률 템플릿: RACE, WEEKLY_RUN_DISTANCE, WEEKLY_ACTIVITY_COUNT, SLEEP_HOURS, WEIGHT_KG (그 외 문자열은 진행률 미추적). RACE는 race_distance_km + target_value(목표 기록, 초) + target_date(대회일)",
             ),
         ] = None,
         target_value: Optional[float] = None,
         target_unit: Annotated[Optional[str], Field(max_length=32)] = None,
+        race_distance_km: Annotated[
+            Optional[float],
+            Field(gt=0, le=400, description="RACE 목표의 대회 거리(km). 예: 하프 21.0975, 풀 42.195"),
+        ] = None,
         description: Annotated[Optional[str], Field(max_length=2000)] = None,
         start_date: DateParam = None,
         target_date: DateParam = None,
@@ -686,6 +706,8 @@ def register_tools(mcp: MCPServer, rt: ToolRuntime) -> None:  # noqa: C901 - 도
             body["targetValue"] = target_value
         if target_unit:
             body["targetUnit"] = target_unit.strip()
+        if race_distance_km is not None:
+            body["raceDistanceKm"] = race_distance_km
         if description is not None:
             body["description"] = description
         if sd:
