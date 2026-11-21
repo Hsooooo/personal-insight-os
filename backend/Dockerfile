@@ -1,4 +1,4 @@
-FROM maven:3.9.9-eclipse-temurin-21 AS builder
+FROM maven:3.9-eclipse-temurin-26 AS builder
 WORKDIR /app
 # pom.xml만 먼저 복사해 의존성 레이어를 캐시한다
 COPY pom.xml .
@@ -6,7 +6,7 @@ RUN mvn -B -q dependency:go-offline
 COPY src ./src
 RUN mvn -B -q clean package -DskipTests
 
-FROM eclipse-temurin:21.0.10_7-jre-alpine
+FROM eclipse-temurin:24.0.2_12-jre-alpine
 WORKDIR /app
 
 # Python3 + pip (garminconnect). wget(busybox)은 HEALTHCHECK용으로 기본 포함
